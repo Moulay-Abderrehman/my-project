@@ -496,78 +496,6 @@ class InviterEmployeView(APIView):
         }, status=201)
 # fin
 
-# ─── INVITATION EMPLOYE (par l'entreprise) ────────────────────────────────────
-'''class InviterEmployeView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        if request.user.role != 'entreprise':
-            return Response(
-                {'error': "Seul un compte Entreprise peut inviter des employés."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
-        serializer = InvitationEmployeSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        email_employe = serializer.validated_data['email']
-
-        # Générer le token d'invitation
-        token = generer_token_invitation()
-        expire = timezone.now() + timedelta(hours=48)
-
-        # Chercher si l'utilisateur existe déjà
-        user_existant = Utilisateur.objects.filter(email=email_employe).first()
-        if user_existant:
-            # Lier directement si l'email existe
-            user_existant.entreprise = request.user
-            user_existant.role = 'employe'
-            user_existant.save(update_fields=['entreprise', 'role'])
-            lien = "Compte déjà existant, lié à votre entreprise."
-        else:
-            # Créer un placeholder avec token invitation
-            # On stocke le token sur l'utilisateur entreprise en attendant l'activation
-            # On crée un utilisateur temporaire (is_active=False)
-            temp_user = Utilisateur.objects.create(
-                telephone=f"INVITE_{token[:10]}",
-                nom='',
-                prenom='',
-                email=email_employe,
-                invitation_email=email_employe,
-                token_invitation=token,
-                token_invitation_expire=expire,
-                entreprise=request.user,
-                role='employe',
-                is_active=False,
-            )
-            temp_user.set_unusable_password()
-            temp_user.save()
-
-            lien = f"{settings.FRONTEND_URL}/activer-employe?token={token}"
-
-        # Envoyer l'email d'invitation
-        try:
-            send_mail(
-                subject=f'Invitation à rejoindre {request.user.prenom} {request.user.nom} sur FinanceApp',
-                message=(
-                    f"Bonjour,\n\n"
-                    f"Vous avez été invité(e) par {request.user.prenom} {request.user.nom} "
-                    f"à rejoindre leur espace Entreprise sur FinanceApp.\n\n"
-                    f"Cliquez sur le lien ci-dessous pour créer votre compte :\n"
-                    f"{lien}\n\n"
-                    f"Ce lien expire dans 48 heures.\n\n"
-                    f"L'équipe FinanceApp"
-                ),
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[email_employe],
-                fail_silently=False,
-            )
-        except Exception as e:
-            print(f"[EMAIL] Erreur envoi invitation: {e}")
-
-        enregistrer_log(request.user, "INVITATION", f"Invitation envoyée à {email_employe}", request)
-        return Response({'message': f'Invitation envoyée à {email_employe}.'})
-'''
-
 class MesEmployesView(generics.ListAPIView):
     """
     Retourne la liste des employés liés au compte entreprise connecté.
@@ -659,132 +587,7 @@ class ActiverCompteEmployeView(APIView):
 
 
 
-
-'''
 # ─── CONNEXION GOOGLE OAUTH ───────────────────────────────────────────────────
-class GoogleAuthView(APIView):
-    """
-    Reçoit le code OAuth Google depuis le frontend.
-    1. Échange le code contre un token Google
-    2. Récupère le profil (email, nom, google_id, photo)
-    3. Crée ou met à jour l'utilisateur dans notre base
-    4. Retourne nos tokens JWT + données user
-    """
-    permission_classes = [AllowAny]
- 
-    def post(self, request):
-        import requests as req_lib
-        import os
- 
-        code         = request.data.get('code', '').strip()
-        redirect_uri = request.data.get('redirect_uri', '').strip()
- 
-        if not code:
-            return Response({'error': 'Code Google manquant.'}, status=400)
- 
-        # ── Étape 1 : échanger le code contre un token Google ─────────────────
-        GOOGLE_CLIENT_ID     = os.environ.get('GOOGLE_CLIENT_ID', '')
-        GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
- 
-        if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
-            return Response(
-                {'error': 'Google OAuth n\'est pas configuré sur le serveur. '
-                          'Ajoutez GOOGLE_CLIENT_ID et GOOGLE_CLIENT_SECRET dans le .env backend.'},
-                status=500
-            )
- 
-        token_resp = req_lib.post('https://oauth2.googleapis.com/token', data={
-            'code':          code,
-            'client_id':     GOOGLE_CLIENT_ID,
-            'client_secret': GOOGLE_CLIENT_SECRET,
-            'redirect_uri':  redirect_uri,
-            'grant_type':    'authorization_code',
-        }, timeout=10)
- 
-        if token_resp.status_code != 200:
-            return Response(
-                {'error': 'Impossible d\'échanger le code Google. Réessayez.'},
-                status=400
-            )
- 
-        token_data   = token_resp.json()
-        access_token = token_data.get('access_token')
- 
-        # ── Étape 2 : récupérer le profil Google ──────────────────────────────
-        profile_resp = req_lib.get(
-            'https://www.googleapis.com/oauth2/v2/userinfo',
-            headers={'Authorization': f'Bearer {access_token}'},
-            timeout=10
-        )
- 
-        if profile_resp.status_code != 200:
-            return Response({'error': 'Impossible de récupérer le profil Google.'}, status=400)
- 
-        profile    = profile_resp.json()
-        google_id  = profile.get('id')
-        email      = (profile.get('email') or '').lower()
-        prenom     = profile.get('given_name') or profile.get('name', 'Utilisateur').split()[0]
-        nom        = profile.get('family_name') or (profile.get('name', '').split()[-1] if ' ' in profile.get('name', '') else 'Google')
-        photo      = profile.get('picture', '')
-        email_ok   = profile.get('verified_email', False)
- 
-        if not email or not google_id:
-            return Response({'error': 'Profil Google incomplet (email ou ID manquant).'}, status=400)
- 
-        # ── Étape 3 : créer ou mettre à jour l'utilisateur ────────────────────
-        user = None
- 
-        # Chercher par google_id
-        try:
-            user = Utilisateur.objects.get(google_id=google_id)
-            # Mettre à jour les infos
-            user.email        = email
-            user.email_verifie = email_ok
-            user.google_photo = photo
-            user.save(update_fields=['email', 'email_verifie', 'google_photo'])
-        except Utilisateur.DoesNotExist:
-            pass
- 
-        # Sinon chercher par email (compte existant créé manuellement)
-        if not user:
-            try:
-                user = Utilisateur.objects.get(email__iexact=email)
-                # Lier le compte Google à ce compte existant
-                user.google_id    = google_id
-                user.email_verifie = email_ok
-                user.google_photo = photo
-                user.save(update_fields=['google_id', 'email_verifie', 'google_photo'])
-            except Utilisateur.DoesNotExist:
-                pass
- 
-        # Sinon créer un nouveau compte
-        if not user:
-            user = Utilisateur.objects.create_google_user(
-                email=email,
-                google_id=google_id,
-                nom=nom,
-                prenom=prenom,
-                google_photo=photo,
-                email_verifie=email_ok,
-            )
-            # Solde + abonnement essai
-            from transactions.models import Solde
-            Solde.objects.get_or_create(utilisateur=user)
-            creer_abonnement_essai(user)
- 
-        # ── Étape 4 : générer nos tokens JWT ──────────────────────────────────
-        refresh = RefreshToken.for_user(user)
-        enregistrer_log(user, "CONNEXION_GOOGLE", f"Connexion Google : {email}", request)
- 
-        return Response({
-            "refresh": str(refresh),
-            "access":  str(refresh.access_token),
-            "user":    UtilisateurSerializer(user).data,
-        })
- 
-'''
-
-# backend/comptes/views.py - Modifier GoogleAuthView
 
 class GoogleAuthView(APIView):
     permission_classes = [AllowAny]
@@ -908,7 +711,6 @@ class GoogleAuthView(APIView):
             "need_password_setup": False,
         })
 
-# backend/comptes/views.py - Ajouter cette nouvelle vue
 
 class GoogleSetPasswordView(APIView):
     """

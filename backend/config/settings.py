@@ -122,13 +122,6 @@ GOOGLE_CLIENT_ID     = config('GOOGLE_CLIENT_ID', default='')
 GOOGLE_CLIENT_SECRET = config('GOOGLE_CLIENT_SECRET', default='')
 
 # ── Email SMTP ──────────────
-# Pour configurer :
-# 1. Allez dans votre compte Google → Sécurité → Validation en 2 étapes → Mots de passe d'application
-# 2. Créez un mot de passe pour "Mail" et copiez-le dans EMAIL_HOST_PASSWORD dans .env
-# settings.py
-
-
-
 # ── EMAIL - Configuration SMTP (CRITIQUE POUR ENVOI D'EMAILS) ─────────────────
 EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
 EMAIL_HOST = os.getenv('EMAIL_HOST')
@@ -139,42 +132,18 @@ EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
 EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'False') == 'True'
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', f"FinanceApp <{EMAIL_HOST_USER}>")
 
-'''
-1.
-EMAIL_BACKEND       = config('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
-EMAIL_HOST          = config('EMAIL_HOST',    default='smtp.gmail.com')
-EMAIL_PORT          = config('EMAIL_PORT',    default=587, cast=int)
-EMAIL_USE_TLS       = config('EMAIL_USE_TLS', default=True, cast=bool)
-
-# Ici, le nom entre parenthèses doit être EXACTEMENT celui du fichier .env
-EMAIL_HOST_USER     = config('EMAIL_HOST_USER')
-EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
-# Très important pour que l'expéditeur soit reconnu par Gmail
-DEFAULT_FROM_EMAIL  = EMAIL_HOST_USER
+# ========== SSO CONFIGURATION ==========
+SSO_ENABLED = os.getenv('SSO_ENABLED', 'False') == 'True'
+SSO_CLIENT_ID = os.getenv('SSO_CLIENT_ID', '')
+SSO_CLIENT_SECRET = os.getenv('SSO_CLIENT_SECRET', '')
+SSO_AUTHORIZATION_URL = os.getenv('SSO_AUTHORIZATION_URL', '')
+SSO_TOKEN_URL = os.getenv('SSO_TOKEN_URL', '')
+SSO_API_BASE_URL = os.getenv('SSO_API_BASE_URL', '')
+SSO_REDIRECT_URI = os.getenv('SSO_REDIRECT_URI', '')
+SSO_JWKS_URL = os.getenv('SSO_JWKS_URL', '')
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 
 
-2.
-EMAIL_BACKEND       = config('EMAIL_BACKEND',       default='django.core.mail.backends.console.EmailBackend')
-EMAIL_HOST          = config('EMAIL_HOST',          default='smtp.gmail.com')
-EMAIL_PORT          = config('EMAIL_PORT',          default=587, cast=int)
-EMAIL_USE_TLS       = config('EMAIL_USE_TLS',       default=True, cast=bool)
-EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='moulayabdrahman73@gmail.com')
-#EMAIL_HOST_USER     = config('EMAIL_HOST_USER')
-EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
-#DEFAULT_FROM_EMAIL  = EMAIL_HOST_USER'''
-
-
-
-'''
-3.
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
-EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
-DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='FinanceApp <noreply@financeapp.com>')
-'''
 # ── URL FRONTEND (pour les liens d'invitation) ────────────────────────────────
 FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3000')
 

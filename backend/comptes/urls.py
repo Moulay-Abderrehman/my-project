@@ -43,4 +43,5 @@ urlpatterns = [
 
     path('auth/sso/', SSORedirectView.as_view(), name='sso-redirect'),
     path('auth/sso/callback/', SSOCallbackView.as_view(), name='sso-callback'),
-]
+    
+    ]
