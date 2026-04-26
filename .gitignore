@@ -1,0 +1,18 @@
+# Dossiers des dépendances
+backend/venv/
+frontend/node_modules/
+
+# Python caches
+**/__pycache__/
+*.pyc
+
+# Variables d'environnement (Sécurité !)
+.env
+backend/.env
+frontend/.env.local
+
+# Build de React
+frontend/build/
+
+# Base de données locale
+*.sqlite3
