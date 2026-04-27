@@ -1,10 +1,18 @@
 // frontend/src/api/axios.js
 import axios from 'axios';
 
+// Utiliser la variable d'environnement pour l'URL de l'API
+// En développement: fallback vers localhost
+// En production: utilise REACT_APP_API_URL du fichier .env.production
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api',
+  baseURL: API_URL,
   headers: { 'Content-Type': 'application/json' },
 });
+
+// Debug: afficher l'URL utilisée (utile pour vérifier la configuration)
+console.log(` [API] Configurée avec: ${API_URL}`);
 
 // ── Intercepteur requête : injecte le token JWT ──────────────────────────────
 api.interceptors.request.use(
@@ -32,22 +40,22 @@ api.interceptors.response.use(
       if (refresh) {
         try {
           const { data } = await axios.post(
-            'http://localhost:8000/api/token/refresh/',
+            `${API_URL}/token/refresh/`,
             { refresh },
           );
           localStorage.setItem('access_token', data.access);
           original.headers.Authorization = `Bearer ${data.access}`;
-          return api(original); // Rejouer la requête originale
+          return api(original);
         } catch (refreshError) {
           // Refresh expiré → déconnexion forcée
           localStorage.clear();
-          window.location.href = '/connexion';
+          window.location.href = '/';
           return Promise.reject(refreshError);
         }
       } else {
         // Pas de refresh token → déconnexion
         localStorage.clear();
-        window.location.href = '/connexion';
+        window.location.href = '/';
       }
     }
 

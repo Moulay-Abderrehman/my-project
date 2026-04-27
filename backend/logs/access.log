@@ -71,3 +71,4 @@
 {"ts": "2026-04-27T20:20:20Z", "method": "GET", "path": "/api/notifications/non-lues/", "status": 200, "ip": "127.0.0.1", "user": "moulayabdrehman73@gmail.com", "duration_ms": 180, "app": "financeapp-moulay"}
 {"ts": "2026-04-27T20:20:20Z", "method": "GET", "path": "/api/abonnements/detail/", "status": 200, "ip": "127.0.0.1", "user": "moulayabdrehman73@gmail.com", "duration_ms": 210, "app": "financeapp-moulay"}
 {"ts": "2026-04-27T20:21:40Z", "method": "POST", "path": "/api/comptes/deconnexion/", "status": 200, "ip": "127.0.0.1", "user": "moulayabdrehman73@gmail.com", "duration_ms": 185, "app": "financeapp-moulay"}
+{"ts": "2026-04-27T20:34:23Z", "method": "GET", "path": "/admin/comptes/utilisateur/", "status": 200, "ip": "127.0.0.1", "user": null, "duration_ms": 787, "app": "financeapp-moulay"}
