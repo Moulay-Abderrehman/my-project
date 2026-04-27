@@ -1,65 +1,8 @@
-# frontend/netlify.toml
-# Configuration pour le déploiement sur Netlify
-
 [build]
-  # Commande de build
   command = "npm run build"
-  
-  # Dossier à publier
   publish = "build"
-  
-  # Répertoire de base (si ton frontend est dans un sous-dossier)
-  # base = "frontend"
 
-[build.environment]
-  # Version de Node.js
-  NODE_VERSION = "20"
-  
-  # Variables d'environnement pour le build
-  REACT_APP_API_URL = "https://ton-backend.onrender.com/api"
-  REACT_APP_GOOGLE_CLIENT_ID = "863785783831-j6fgdsrdl8f38io36jcjhabr9k8t0sg5.apps.googleusercontent.com"
-
-# Redirections pour React Router (SPA)
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-
-# Redirection pour l'API (proxy - optionnel)
-# Décommente si tu veux proxifier l'API via Netlify
-# [[redirects]]
-#   from = "/api/*"
-#   to = "https://ton-backend.onrender.com/api/:splat"
-#   status = 200
-#   force = true
-
-# Headers de sécurité
-[[headers]]
-  for = "/*"
-  [headers.values]
-    X-Frame-Options = "DENY"
-    X-XSS-Protection = "1; mode=block"
-    X-Content-Type-Options = "nosniff"
-    Referrer-Policy = "strict-origin-when-cross-origin"
-
-# Cache pour les fichiers statiques
-[[headers]]
-  for = "/static/*"
-  [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
-
-[[headers]]
-  for = "/assets/*"
-  [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
-
-# Cache pour les fichiers HTML (ne pas cacher)
-[[headers]]
-  for = "/*.html"
-  [headers.values]
-    Cache-Control = "public, max-age=0, must-revalidate"
-
-# Configuration des fonctions Netlify (optionnel)
-# [functions]
-#   directory = "netlify/functions"
-#   node_bundler = "esbuild"
