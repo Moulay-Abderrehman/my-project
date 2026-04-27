@@ -1,12 +1,17 @@
-# backend/render.yaml
+# render.yaml (à la racine du projet)
+
 services:
   - type: web
     name: financeapp-backend
     runtime: python
-    repo: https://github.com/ton-compte/financeapp  # Remplace par ton repo
+    repo: https://github.com/Moulay-Abderrehman/my-project
     plan: free
     region: frankfurt
-    buildCommand: pip install -r requirements.txt
+    rootDir: backend
+    buildCommand: |
+      pip install -r requirements.txt
+      python manage.py collectstatic --noinput
+      python manage.py migrate
     startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
     envVars:
       - key: DJANGO_SETTINGS_MODULE
@@ -34,6 +39,7 @@ services:
     plan: free
     region: frankfurt
     maxmemoryPolicy: noeviction
+    ipAllowList: []  # ← Ajouter cette ligne pour le plan gratuit
 
 databases:
   - name: financeapp-db
