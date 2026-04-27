@@ -1,45 +1,25 @@
-# render.yaml (à la racine du projet)
-
 services:
   - type: web
     name: financeapp-backend
     runtime: python
-    repo: https://github.com/Moulay-Abderrehman/my-project
     plan: free
     region: frankfurt
     rootDir: backend
-    buildCommand: |
-      pip install -r requirements.txt
-      python manage.py collectstatic --noinput
-      python manage.py migrate
+    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate
     startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
     envVars:
       - key: DJANGO_SETTINGS_MODULE
         value: config.settings_production
-      - key: PYTHON_VERSION
-        value: 3.10.12
       - key: SECRET_KEY
         generateValue: true
       - key: DEBUG
-        value: False
+        value: false
       - key: ALLOWED_HOSTS
         value: .onrender.com,localhost,127.0.0.1
       - key: DATABASE_URL
         fromDatabase:
           name: financeapp-db
           property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: financeapp-redis
-          property: connectionString
-
-  - type: redis
-    name: financeapp-redis
-    plan: free
-    region: frankfurt
-    maxmemoryPolicy: noeviction
-    ipAllowList: []  # ← Ajouter cette ligne pour le plan gratuit
 
 databases:
   - name: financeapp-db
