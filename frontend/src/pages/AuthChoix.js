@@ -9,7 +9,7 @@ const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
 export default function AuthChoix() {
   const navigate = useNavigate();
   const [mode, setMode] = useState('choix'); // 'choix' | 'sso'
-  const [domaine, setDomaine] = useState('');
+  const [domaine, setDomaine] = useState('financeapp.com'); // ← MODIFICATION
   const [loadingGoogle, setLoadingGoogle] = useState(false);
   const [loadingSSO, setLoadingSSO] = useState(false);
 
@@ -287,7 +287,7 @@ export default function AuthChoix() {
                 Connexion SSO
               </h2>
               <p style={{ fontSize: 13, color: '#64748b', marginBottom: 24 }}>
-                Entrez votre domaine ou email professionnel
+                Connexion sécurisée via <strong>financeapp.com</strong>  {/* ← MODIFICATION */}
               </p>
 
               <form onSubmit={continuerSSO} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -344,7 +344,7 @@ export default function AuthChoix() {
               </form>
 
               <p style={{ marginTop: 20, fontSize: 12, color: '#94a3b8', textAlign: 'center' }}>
-                Vous serez redirigé vers le portail d'authentification de votre entreprise.
+                Vous serez redirigé vers le portail d'authentification de FinanceApp.  {/* ← MODIFICATION */}
               </p>
             </>
           )}

@@ -60,13 +60,16 @@ class DemanderCodeSouscriptionView(APIView):
                          "Utilisez l'email enregistré lors de l'inscription."
             }, status=400)
 
-        # Générer et envoyer le code
-        from comptes.utils import generer_code_reset, sauvegarder_code_reset, envoyer_email_reset
+        # Générer le code
+        from comptes.utils import generer_code_reset, sauvegarder_code_reset
         code = generer_code_reset(6)
         sauvegarder_code_reset(f"abo:{email}", code, ttl=300)
 
         montant = TARIFS[type_utilisateur][type_abonnement]
-        ok = envoyer_email_reset(email, code)
+        
+        # Utiliser la nouvelle fonction email dédiée à l'abonnement
+        from comptes.utils import envoyer_email_abonnement
+        ok = envoyer_email_abonnement(email, code, type_utilisateur, montant)
 
         if not ok:
             return Response({
@@ -145,12 +148,8 @@ class SouscriptionView(APIView):
         )
 
         # Mettre à jour le rôle utilisateur
-        '''user.role = type_utilisateur
-        user.save(update_fields=['role'])'''
-        # ── CRITIQUE : mettre à jour le role de l'utilisateur ─────────────────
-        # C'est ce qui permet d'accéder à la page Employés
         ancien_role = user.role
-        user.role   = type_utilisateur   # 'standard' ou 'entreprise'
+        user.role   = type_utilisateur
         user.save(update_fields=['role'])
 
         # Notification
@@ -205,6 +204,3 @@ class PaiementListView(generics.ListAPIView):
             return self.request.user.abonnement.paiements.all().order_by('-date_paiement')
         except Abonnement.DoesNotExist:
             return Paiement.objects.none()
-
-
-

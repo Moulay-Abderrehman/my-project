@@ -7,8 +7,8 @@ import { useNavigate } from 'react-router-dom';
 
 // ── Tarifs selon type utilisateur ────────────────────────────────────────────
 const TARIFS = {
-  standard:   { mensuel: 500,  annuel: 5000  },
-  entreprise: { mensuel: 2000, annuel: 20000 },
+  standard:   { mensuel: 1500,  annuel: 15000  },
+  entreprise: { mensuel: 2500, annuel: 25000 },
 };
 
 export default function Profil() {

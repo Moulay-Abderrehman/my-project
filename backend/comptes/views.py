@@ -29,8 +29,11 @@ from .utils import (
     generer_code_reset, sauvegarder_code_reset,
     verifier_code_reset, envoyer_email_reset,
     creer_abonnement_essai, envoyer_email_invitation,
+    envoyer_email_verification_compte,  # NOUVELLE IMPORT
 )
 from logs.utils import enregistrer_log
+
+
 # Ajouter:
 def _est_compte_entreprise(user) -> bool:
     """
@@ -65,81 +68,17 @@ def generer_token_invitation():
     return secrets.token_urlsafe(32)
 
 
+# ─── NOUVELLE FONCTION : Email confirmation création de compte ───────────────
 def envoyer_email_confirmation(user):
-    """Envoie un code de confirmation à l'email de l'utilisateur"""
+    """Envoie un code de confirmation à l'email de l'utilisateur pour la création de compte"""
     code = generer_code_6chiffres()
     user.code_confirmation = code
     user.code_confirmation_expire = timezone.now() + timedelta(minutes=5)
     user.save(update_fields=['code_confirmation', 'code_confirmation_expire'])
     
-    sujet = "FinanceApp — Code de confirmation"
-    message_texte = f"Votre code de confirmation est : {code}\nValable 5 minutes."
-    
-    message_html = f"""
-    <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:30px;background:#f8fafc;border-radius:16px;">
-        <div style="text-align:center;margin-bottom:24px;">
-            <div style="display:inline-block;background:linear-gradient(135deg,#0c2e7c,#1e4db7);border-radius:12px;padding:12px 28px;">
-                <span style="color:#fff;font-weight:800;font-size:20px;">FinanceApp</span>
-            </div>
-        </div>
-        <div style="background:#fff;border-radius:12px;padding:28px;box-shadow:0 2px 12px rgba(0,0,0,0.07);">
-            <h2 style="margin:0 0 12px;color:#1e293b;">Confirmation de votre compte</h2>
-            <p style="color:#64748b;font-size:14px;margin:0 0 20px;">
-                Bonjour <strong>{user.prenom} {user.nom}</strong>,<br>
-                Voici votre code de confirmation :
-            </p>
-            <div style="text-align:center;background:#eef2ff;border-radius:12px;padding:20px;margin-bottom:20px;">
-                <span style="font-size:36px;font-weight:800;letter-spacing:10px;color:#0c2e7c;">{code}</span>
-            </div>
-            <p style="color:#94a3b8;font-size:12px;margin:0;">
-                Code valable 5 minutes. Si vous n'avez pas créé de compte, ignorez cet email.
-            </p>
-        </div>
-        <p style="text-align:center;margin-top:16px;color:#94a3b8;font-size:11px;">© 2025 FinanceApp</p>
-    </div>
-    """
-    
-    try:
-        send_mail(
-            subject=sujet,
-            message=message_texte,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[user.email],
-            html_message=message_html,
-            fail_silently=False,
-        )
-        print(f"[EMAIL] ✅ Code envoyé à {user.email}")
-        return True
-    except Exception as e:
-        print(f"[EMAIL] ❌ Erreur envoi à {user.email}: {e}")
-        return False
-    
+    # Utiliser la nouvelle fonction dédiée à la vérification de compte
+    return envoyer_email_verification_compte(user)
 
-   # remplacer
-'''
-def envoyer_email_confirmation(user):
-    code = generer_code_6chiffres()
-    user.code_confirmation = code
-    user.code_confirmation_expire = timezone.now() + timedelta(minutes=5)
-    user.save(update_fields=['code_confirmation', 'code_confirmation_expire'])
-    try:
-        send_mail(
-            subject='FinanceApp — Votre code de confirmation',
-            message=(
-                f"Bonjour {user.prenom},\n\n"
-                f"Votre code de confirmation est : {code}\n"
-                f"Ce code expire dans 5 minutes.\n\n"
-                f"Si vous n'avez pas demandé ce code, ignorez cet email.\n\n"
-                f"L'équipe FinanceApp"
-            ),
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[user.email],
-            fail_silently=False,
-        )
-    except Exception as e:
-        # On log mais on ne bloque pas l'inscription
-        print(f"[EMAIL] Erreur envoi email confirmation: {e}")
-'''
 
 # ─── INSCRIPTION ──────────────────────────────────────────────────────────────
 class InscriptionView(generics.CreateAPIView):
@@ -178,7 +117,7 @@ class InscriptionView(generics.CreateAPIView):
         return Response(
             {
                 "message": "Compte créé avec succès. Vérifiez votre email pour confirmer votre adresse.",
-                 "user_id": str(user.id),  # <-- AJOUTER
+                "user_id": str(user.id),
                 "user": UtilisateurSerializer(user).data,
             },
             status=status.HTTP_201_CREATED
@@ -186,34 +125,8 @@ class InscriptionView(generics.CreateAPIView):
 
 
 # ─── VERIFICATION EMAIL ────────────────────────────────────────────────────────
-'''class VerifierEmailView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        code = request.data.get('code', '').strip()
-        user = request.user
-
-        if not user.code_confirmation:
-            return Response({'error': 'Aucun code en attente.'}, status=400)
-
-        if timezone.now() > user.code_confirmation_expire:
-            return Response({'error': 'Le code a expiré. Demandez un nouveau code.'}, status=400)
-
-        if user.code_confirmation != code:
-            return Response({'error': 'Code incorrect.'}, status=400)
-
-        user.email_verifie = True
-        user.code_confirmation = ''
-        user.code_confirmation_expire = None
-        user.save(update_fields=['email_verifie', 'code_confirmation', 'code_confirmation_expire'])
-
-        enregistrer_log(user, "EMAIL", "Email vérifié avec succès", request)
-        return Response({'message': 'Email vérifié avec succès !'})
-'''
-# backend/comptes/views.py - Modifier VerifierEmailView
-
 class VerifierEmailView(APIView):
-    permission_classes = [AllowAny]  # Changé de IsAuthenticated à AllowAny
+    permission_classes = [AllowAny]
 
     def post(self, request):
         code = request.data.get('code', '').strip()
@@ -243,19 +156,25 @@ class VerifierEmailView(APIView):
 
         enregistrer_log(user, "EMAIL", "Email vérifié avec succès", request)
         return Response({'message': 'Email vérifié avec succès !'})
-    
 
 
 # ─── RENVOYER CODE CONFIRMATION ───────────────────────────────────────────────
 class RenvoyerCodeView(APIView):
-    permission_classes = [AllowAny]  # Changé de IsAuthenticated à AllowAny permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def post(self, request):
-        user = request.user
-        if not user.email:
-            return Response({'error': 'Aucun email associé à ce compte.'}, status=400)
+        email = request.data.get('email')
+        if not email:
+            return Response({'error': 'Email requis.'}, status=400)
+
+        try:
+            user = Utilisateur.objects.get(email=email)
+        except Utilisateur.DoesNotExist:
+            return Response({'error': 'Email non trouvé.'}, status=404)
+
         if user.email_verifie:
             return Response({'error': 'Email déjà vérifié.'}, status=400)
+
         envoyer_email_confirmation(user)
         return Response({'message': 'Un nouveau code a été envoyé à votre email.'})
 
@@ -345,7 +264,15 @@ class MotDePasseOublieView(APIView):
             # Sécurité : ne pas révéler si l'email existe
             return Response({'message': 'Si cet email est enregistré, un code vous a été envoyé.'})
 
-        envoyer_email_confirmation(user)
+        # Utiliser envoyer_email_reset pour la réinitialisation (pas envoyer_email_confirmation)
+        code = generer_code_6chiffres()
+        user.code_confirmation = code
+        user.code_confirmation_expire = timezone.now() + timedelta(minutes=5)
+        user.save(update_fields=['code_confirmation', 'code_confirmation_expire'])
+        
+        # Envoyer email de réinitialisation avec la fonction dédiée
+        envoyer_email_reset(email, code)
+        
         enregistrer_log(user, "SECURITE", "Demande réinitialisation mot de passe", request)
         return Response({'message': 'Un code de réinitialisation a été envoyé à votre email.'})
 
@@ -496,6 +423,7 @@ class InviterEmployeView(APIView):
         }, status=201)
 # fin
 
+
 class MesEmployesView(generics.ListAPIView):
     """
     Retourne la liste des employés liés au compte entreprise connecté.
@@ -584,11 +512,7 @@ class ActiverCompteEmployeView(APIView):
             "user": UtilisateurSerializer(user).data,
         })
     
-
-
-
 # ─── CONNEXION GOOGLE OAUTH ───────────────────────────────────────────────────
-
 class GoogleAuthView(APIView):
     permission_classes = [AllowAny]
 
@@ -655,7 +579,6 @@ class GoogleAuthView(APIView):
             user.email_verifie = email_ok
             user.google_photo = photo
             user.save(update_fields=['email', 'email_verifie', 'google_photo'])
-            # Vérifier si l'utilisateur a déjà un mot de passe
             if not user.has_usable_password():
                 need_password_setup = True
         except Utilisateur.DoesNotExist:
@@ -684,23 +607,19 @@ class GoogleAuthView(APIView):
                 google_photo=photo,
                 email_verifie=email_ok,
             )
-            # Nouvel utilisateur → besoin de définir un mot de passe
             need_password_setup = True
             
-            # Solde + abonnement essai
             from transactions.models import Solde
             Solde.objects.get_or_create(utilisateur=user)
             from .utils import creer_abonnement_essai
             creer_abonnement_essai(user)
 
-        # Si l'utilisateur n'a pas de mot de passe, on demande d'en créer un
         if need_password_setup:
             return Response({
                 "need_password_setup": True,
                 "user": UtilisateurSerializer(user).data,
             })
 
-        # Sinon connexion normale
         refresh = RefreshToken.for_user(user)
         enregistrer_log(user, "CONNEXION_GOOGLE", f"Connexion Google : {email}", request)
 
@@ -738,11 +657,9 @@ class GoogleSetPasswordView(APIView):
         except Utilisateur.DoesNotExist:
             return Response({'error': 'Utilisateur Google introuvable.'}, status=404)
 
-        # Définir le mot de passe
         user.set_password(password)
         user.save()
 
-        # Générer les tokens JWT
         refresh = RefreshToken.for_user(user)
 
         enregistrer_log(user, "GOOGLE_PASSWORD", "Mot de passe défini après connexion Google", request)
@@ -753,4 +670,3 @@ class GoogleSetPasswordView(APIView):
             "access": str(refresh.access_token),
             "user": UtilisateurSerializer(user).data,
         })
-
