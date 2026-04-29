@@ -1,15 +1,28 @@
 import os
 from pathlib import Path
 from datetime import timedelta
+<<<<<<< HEAD
 from dotenv import load_dotenv
 import dj_database_url
+=======
+from dotenv import load_dotenv #ajoute
+import dj_database_url
+
+>>>>>>> travail-email
 
 # Build paths
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+<<<<<<< HEAD
 # Charger .env (développement local uniquement)
 if os.path.exists(BASE_DIR / '.env'):
     load_dotenv(BASE_DIR / '.env')
+=======
+# ── Sécurité ──────────────────────────────────────────────────────────────────
+SECRET_KEY = config('SECRET_KEY')
+DEBUG = config('DEBUG', default=False, cast=bool)
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
+>>>>>>> travail-email
 
 # ========== SÉCURITÉ ==========
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-default-key-for-render')
@@ -41,8 +54,14 @@ INSTALLED_APPS = [
 
 # ========== MIDDLEWARE ==========
 MIDDLEWARE = [
+<<<<<<< HEAD
     'corsheaders.middleware.CorsMiddleware',
+=======
+    'comptes.security_middleware.SecurityMiddleware',
+>>>>>>> travail-email
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',   
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -78,6 +97,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
+<<<<<<< HEAD
 # ========== BASE DE DONNÉES ==========
 if 'DATABASE_URL' in os.environ:
     # Production sur Render
@@ -99,6 +119,16 @@ else:
             'PORT': os.getenv('DB_PORT', '5432'),
         }
     }
+=======
+# ── Base de données ───────────────────────────────────────────────────────────
+# En local  → lit DATABASE_URL dans backend/.env  (sqlite:///db.sqlite3)
+# Sur Render → lit DATABASE_URL depuis le Dashboard (postgresql://...)
+DATABASE_URL = config('DATABASE_URL', default=f'sqlite:///{BASE_DIR / "db.sqlite3"}')
+DATABASES = {
+    'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600)
+}
+>>>>>>> travail-email
+
 
 AUTH_USER_MODEL = 'comptes.Utilisateur'
 
@@ -117,11 +147,21 @@ REST_FRAMEWORK = {
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(hours=24),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'USER_ID_FIELD': 'id',  # ← Important : 'id' pas 'user_id'
+    'USER_ID_CLAIM': 'user_id',   # ← Le claim dans le token
 }
 
+<<<<<<< HEAD
 # ========== CORS ==========
 CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,https://*.onrender.com').split(',')
 CORS_ALLOW_CREDENTIALS = True
+=======
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+CORS_ALLOW_CREDENTIALS = False #True
+>>>>>>> travail-email
 
 # ========== CELERY ==========
 CELERY_BROKER_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
@@ -133,6 +173,8 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+ 
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -142,9 +184,23 @@ TIME_ZONE = 'Africa/Nouakchott'
 USE_I18N = True
 USE_TZ = True
 
+<<<<<<< HEAD
 # ========== GOOGLE OAUTH ==========
 GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '')
 GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET', '')
+=======
+# ── Validation mots de passe ──────────────────────────────────────────────────
+AUTH_PASSWORD_VALIDATORS = [
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
+]
+
+# ── Google OAuth (lire depuis .env) ─────────────────────────────────────────
+GOOGLE_CLIENT_ID     = config('GOOGLE_CLIENT_ID', default='')
+GOOGLE_CLIENT_SECRET = config('GOOGLE_CLIENT_SECRET', default='')
+>>>>>>> travail-email
 
 # ========== EMAIL ==========
 EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
@@ -165,4 +221,81 @@ SSO_TOKEN_URL = os.getenv('SSO_TOKEN_URL', '')
 SSO_API_BASE_URL = os.getenv('SSO_API_BASE_URL', '')
 SSO_REDIRECT_URI = os.getenv('SSO_REDIRECT_URI', '')
 SSO_JWKS_URL = os.getenv('SSO_JWKS_URL', '')
+<<<<<<< HEAD
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+=======
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+
+
+# ── URL FRONTEND (pour les liens d'invitation) ────────────────────────────────
+FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3000')
+
+'''
+# ── SSL Fix pour Django EmailBackend ─────────────────────────────────────────
+import ssl
+from django.core.mail.backends import smtp as django_smtp
+
+# Créer un contexte SSL permissif
+_ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+_ssl_context.check_hostname = False
+_ssl_context.verify_mode = ssl.CERT_NONE
+
+# Patcher le EmailBackend de Django pour utiliser ce contexte
+_original_open = django_smtp.EmailBackend.open
+
+def _patched_open(self):
+    if self.connection:
+        return False
+    import smtplib
+    self.connection = smtplib.SMTP_SSL(
+        self.host, self.port,
+        context=_ssl_context,
+        timeout=self.timeout,
+    )
+    self.connection.ehlo()
+    if self.username and self.password:
+        self.connection.login(self.username, self.password)
+    return True
+
+django_smtp.EmailBackend.open = _patched_open'''
+
+
+
+# backend/config/settings.py
+
+# ========== CORRECTION SSL POUR GMAIL (PORT 587 STARTTLS) ==========
+import ssl
+import smtplib
+from django.core.mail.backends import smtp as django_smtp
+
+# Sauvegarder la méthode originale
+_original_open = django_smtp.EmailBackend.open
+
+def _patched_open(self):
+    if self.connection:
+        return False
+    
+    # Connexion normale (pas SSL direct)
+    self.connection = smtplib.SMTP(self.host, self.port, timeout=self.timeout)
+    self.connection.ehlo()
+    
+    # Si TLS est activé (STARTTLS)
+    if self.use_tls:
+        # Créer un contexte SSL permissif pour le développement
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        self.connection.starttls(context=context)
+        self.connection.ehlo()
+    
+    # Authentification
+    if self.username and self.password:
+        self.connection.login(self.username, self.password)
+    
+    return True
+
+# Appliquer le patch
+django_smtp.EmailBackend.open = _patched_open
+
+print("✅ Patch SSL appliqué pour Gmail (STARTTLS port 587)")
+>>>>>>> travail-email

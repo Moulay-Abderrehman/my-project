@@ -591,6 +591,13 @@ class GoogleAuthView(APIView):
                 user.google_id = google_id
                 user.email_verifie = email_ok
                 user.google_photo = photo
+                #ajoute
+                 # Mettre à jour nom/prénom si vide
+                if not user.nom or user.nom == '':
+                    user.nom = nom
+                if not user.prenom or user.prenom == '':
+                    user.prenom = prenom
+                    #fin
                 user.save(update_fields=['google_id', 'email_verifie', 'google_photo'])
                 if not user.has_usable_password():
                     need_password_setup = True
@@ -652,7 +659,7 @@ class GoogleSetPasswordView(APIView):
         if len(password) < 6:
             return Response({'error': 'Le mot de passe doit contenir au moins 6 caractères.'}, status=400)
 
-        try:
+        '''try:
             user = Utilisateur.objects.get(id=user_id, google_id__isnull=False)
         except Utilisateur.DoesNotExist:
             return Response({'error': 'Utilisateur Google introuvable.'}, status=404)
@@ -662,11 +669,27 @@ class GoogleSetPasswordView(APIView):
 
         refresh = RefreshToken.for_user(user)
 
-        enregistrer_log(user, "GOOGLE_PASSWORD", "Mot de passe défini après connexion Google", request)
+        #enregistrer_log(user, "GOOGLE_PASSWORD", "Mot de passe défini après connexion Google", request)
 
         return Response({
             "message": "Mot de passe créé avec succès.",
             "refresh": str(refresh),
             "access": str(refresh.access_token),
             "user": UtilisateurSerializer(user).data,
-        })
+        })'''
+
+        try:
+            user = Utilisateur.objects.get(id=user_id, google_id__isnull=False)
+            user.set_password(password)
+            user.save()
+            
+            refresh = RefreshToken.for_user(user)
+            
+            return Response({
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+                'user': UtilisateurSerializer(user).data,
+                'message': 'Mot de passe créé avec succès'
+            })
+        except Utilisateur.DoesNotExist:
+            return Response({'error': 'Utilisateur non trouvé'}, status=404)

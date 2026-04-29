@@ -153,7 +153,7 @@ function GoogleSetPassword({ userId, email }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (password.length < 6) {
       toast.error('Le mot de passe doit contenir au moins 6 caractères.');
       return;

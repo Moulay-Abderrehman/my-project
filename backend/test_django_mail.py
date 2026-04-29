@@ -17,3 +17,4 @@ try:
     print('Email envoyé avec succès !')
 except Exception as e:
     print(f'ERREUR: {e}')
+
