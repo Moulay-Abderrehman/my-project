@@ -10,3 +10,6 @@ gunicorn
 whitenoise
 python-dotenv
 dj-database-url
+requests 
+urllib3 
+certifi 
