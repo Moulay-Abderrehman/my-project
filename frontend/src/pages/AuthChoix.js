@@ -51,8 +51,8 @@ export default function AuthChoix() {
     
     try {
       // Appeler l'API backend pour obtenir l'URL de redirection SSO
-      const response = await api.get(`/comptes/auth/sso/?domain=${dom}`);
-      
+      const response = await api.get(`/comptes/auth/sso/?domain=${dom}`);      
+      console.log('[SSO] Réponse:', response.data);
       if (response.data && response.data.auth_url) {
         // Rediriger vers le serveur SSO
         window.location.href = response.data.auth_url;
@@ -61,7 +61,8 @@ export default function AuthChoix() {
         setLoadingSSO(false);
       }
     } catch (error) {
-      console.error('Erreur SSO:', error);
+      console.error('[SSO] Erreur détaillée:', error);
+      console.error('[SSO] Response:', error.response);
       toast.error(error.response?.data?.error || 'Impossible de contacter le serveur SSO. Réessayez plus tard.');
       setLoadingSSO(false);
     }

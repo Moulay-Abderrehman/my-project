@@ -92,13 +92,15 @@ REST_FRAMEWORK = {
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(hours=24),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'USER_ID_FIELD': 'id',  # ← Important : 'id' pas 'user_id'
+    'USER_ID_CLAIM': 'user_id',   # ← Le claim dans le token
 }
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
-CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_CREDENTIALS = False #True
 
 # ── CELERY ────────────────────────────────────────────────────────────────────
 CELERY_BROKER_URL = config('REDIS_URL', default='redis://localhost:6379/0')
@@ -148,7 +150,7 @@ FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 # ── URL FRONTEND (pour les liens d'invitation) ────────────────────────────────
 FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3000')
 
-
+'''
 # ── SSL Fix pour Django EmailBackend ─────────────────────────────────────────
 import ssl
 from django.core.mail.backends import smtp as django_smtp
@@ -175,4 +177,44 @@ def _patched_open(self):
         self.connection.login(self.username, self.password)
     return True
 
+django_smtp.EmailBackend.open = _patched_open'''
+
+
+
+# backend/config/settings.py
+
+# ========== CORRECTION SSL POUR GMAIL (PORT 587 STARTTLS) ==========
+import ssl
+import smtplib
+from django.core.mail.backends import smtp as django_smtp
+
+# Sauvegarder la méthode originale
+_original_open = django_smtp.EmailBackend.open
+
+def _patched_open(self):
+    if self.connection:
+        return False
+    
+    # Connexion normale (pas SSL direct)
+    self.connection = smtplib.SMTP(self.host, self.port, timeout=self.timeout)
+    self.connection.ehlo()
+    
+    # Si TLS est activé (STARTTLS)
+    if self.use_tls:
+        # Créer un contexte SSL permissif pour le développement
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        self.connection.starttls(context=context)
+        self.connection.ehlo()
+    
+    # Authentification
+    if self.username and self.password:
+        self.connection.login(self.username, self.password)
+    
+    return True
+
+# Appliquer le patch
 django_smtp.EmailBackend.open = _patched_open
+
+print("✅ Patch SSL appliqué pour Gmail (STARTTLS port 587)")

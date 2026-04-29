@@ -1,9 +1,19 @@
 // frontend/src/api/axios.js
 import axios from 'axios';
 
-const api = axios.create({
+/*const api = axios.create({
   baseURL: 'http://localhost:8000/api',
   headers: { 'Content-Type': 'application/json' },
+});*/
+
+const API_BASE_URL = 'http://localhost:8000/api';
+console.log('[API] Base URL configurée:', API_BASE_URL);
+
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  headers: { 'Content-Type': 'application/json' },
+  // 🔥 Désactiver toute tentative de HTTPS
+  withCredentials: false,
 });
 
 // ── Intercepteur requête : injecte le token JWT ──────────────────────────────
@@ -13,6 +23,8 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // Log pour déboguer
+    console.log('[API Request]', config.method?.toUpperCase(), config.baseURL + config.url);
     return config;
   },
   (error) => Promise.reject(error),
@@ -40,14 +52,16 @@ api.interceptors.response.use(
           return api(original); // Rejouer la requête originale
         } catch (refreshError) {
           // Refresh expiré → déconnexion forcée
+          console.error('Refresh token invalide, déconnexion...');
           localStorage.clear();
-          window.location.href = '/connexion';
+          sessionStorage.clear();
+          window.location.href = '/';
           return Promise.reject(refreshError);
         }
       } else {
-        // Pas de refresh token → déconnexion
         localStorage.clear();
-        window.location.href = '/connexion';
+        sessionStorage.clear();
+        window.location.href = '/';
       }
     }
 
