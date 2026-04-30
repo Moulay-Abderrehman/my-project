@@ -13,3 +13,4 @@ dj-database-url
 requests 
 urllib3 
 certifi 
+google-auth
