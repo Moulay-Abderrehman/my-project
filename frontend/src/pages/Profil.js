@@ -165,7 +165,7 @@ export default function Profil() {
     
     setLoadingCode(true);
     try {
-      const res = await api.post('/abonnements/demander-code/', {
+      await api.post('/abonnements/demander-code/', {
         email: emailAbo,
         type_abonnement: typeAbo,
         type_utilisateur: typeUser,

@@ -192,7 +192,7 @@ function TransactionModal({ transaction, onClose, onSuccess, categories }) {
 
 // ── Page principale ────────────────────────────────────────────────────────────
 export default function Transactions() {
-  const navigate = useNavigate();
+ // const navigate = useNavigate();
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);

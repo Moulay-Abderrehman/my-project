@@ -67,7 +67,7 @@ export default function GoogleCallback() {
         setTimeout(() => navigate('/'), 3000);
       }
     })();
-  }, []);
+  }, [chargerAbonnement, chargerNotifs, navigate, params]);;
 
   // Page de création de mot de passe
   if (needPassword) {

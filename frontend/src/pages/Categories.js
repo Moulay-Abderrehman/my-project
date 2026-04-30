@@ -17,7 +17,7 @@ export default function Categories() {
   const [form, setForm] = useState({ nom: '', icone: '📦', couleur: '#6366f1', type: 'les_deux' });
 
   // Droits selon plan
-  const planNom  = abonnement?.plan_nom || 'essai';
+  // const planNom  = abonnement?.plan_nom || 'essai';
   const enEssai  = estEnEssai();
   const expire   = estExpire();
   const peutCreer = !enEssai && !expire && abonnement?.est_actif;
@@ -195,7 +195,7 @@ export default function Categories() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#f8fafc', borderRadius: 10, padding: '10px 14px', border: `2px solid ${form.couleur}33` }}>
               <div style={{ width: 32, height: 32, borderRadius: 8, background: form.couleur, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>{form.icone}</div>
               <span style={{ fontWeight: 600, color: '#1e293b' }}>{form.nom || 'Aperçu...'}</span>
-              <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto', background: `${form.couleur}22`, borderRadius: 4, padding: '2px 8px', color: form.couleur }}>
+              <span style={{ fontSize: 11, marginLeft: 'auto', background: `${form.couleur}22`, borderRadius: 4, padding: '2px 8px', color: form.couleur }}>
                 {form.type === 'entree' ? '↑ Entrée' : form.type === 'sortie' ? '↓ Sortie' : '↕ Les deux'}
               </span>
             </div>

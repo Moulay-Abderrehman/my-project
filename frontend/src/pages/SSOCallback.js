@@ -44,8 +44,9 @@ export default function SSOCallback() {
         navigate('/dashboard');
       } catch (err) {
         console.error('[SSOCallback] Erreur parsing:', err);
+        setErreur('Les données utilisateur sont corrompues.'); //ajoute
         toast.error('Erreur lors de la connexion SSO');
-        navigate('/');
+        setTimeout(() => navigate('/'), 3000);  //navigate('/');
       }
       return;
     }
