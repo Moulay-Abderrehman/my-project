@@ -22,4 +22,4 @@ frontend/.env.production
 # ─── Système ──────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
-*.log
+*.logfrontend/build/ 
