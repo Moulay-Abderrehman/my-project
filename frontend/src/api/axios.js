@@ -1,33 +1,22 @@
 // frontend/src/api/axios.js
 import axios from 'axios';
 
-<<<<<<< HEAD
 // Utiliser la variable d'environnement pour l'URL de l'API
 // En développement: fallback vers localhost
 // En production: utilise REACT_APP_API_URL du fichier .env.production
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
+console.log('[API] Base URL configurée:', API_URL);
+
 const api = axios.create({
   baseURL: API_URL,
-=======
-/*const api = axios.create({
-  baseURL: 'http://localhost:8000/api',
->>>>>>> travail-email
-  headers: { 'Content-Type': 'application/json' },
-});*/
-
-const API_BASE_URL = 'http://localhost:8000/api';
-console.log('[API] Base URL configurée:', API_BASE_URL);
-
-const api = axios.create({
-  baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },
   // 🔥 Désactiver toute tentative de HTTPS
   withCredentials: false,
 });
 
 // Debug: afficher l'URL utilisée (utile pour vérifier la configuration)
-console.log(` [API] Configurée avec: ${API_URL}`);
+console.log(`[API] Configurée avec: ${API_URL}`);
 
 // ── Intercepteur requête : injecte le token JWT ──────────────────────────────
 api.interceptors.request.use(
@@ -67,19 +56,13 @@ api.interceptors.response.use(
           // Refresh expiré → déconnexion forcée
           console.error('Refresh token invalide, déconnexion...');
           localStorage.clear();
-<<<<<<< HEAD
-=======
           sessionStorage.clear();
->>>>>>> travail-email
           window.location.href = '/';
           return Promise.reject(refreshError);
         }
       } else {
         localStorage.clear();
-<<<<<<< HEAD
-=======
         sessionStorage.clear();
->>>>>>> travail-email
         window.location.href = '/';
       }
     }
