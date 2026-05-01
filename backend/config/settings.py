@@ -4,8 +4,6 @@ from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
 import dj_database_url
-from dotenv import load_dotenv #ajoute
-import dj_database_url
 
 
 # Build paths
@@ -49,7 +47,6 @@ MIDDLEWARE = [
     'comptes.security_middleware.SecurityMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',   
-    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -66,6 +63,7 @@ except ImportError:
     pass
 
 ROOT_URLCONF = 'config.urls'
+AUTH_USER_MODEL = 'comptes.Utilisateur'
 
 TEMPLATES = [
     {
@@ -108,7 +106,7 @@ else:
     }
 
 
-AUTH_USER_MODEL = 'comptes.Utilisateur'
+
 
 # ========== REST FRAMEWORK ==========
 REST_FRAMEWORK = {
@@ -133,33 +131,20 @@ SIMPLE_JWT = {
 # ========== CORS ==========
 # ========== CONFIGURATION CORS FINALE ET CORRECTE ==========
 
-# 1. Origines exactes autorisées (développement + production)
+# ── CORS ────────────────────────────────────────────────────
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "https://tresorery-finance-app.netlify.app",
 ]
-
-# 2. Pour autoriser tous les sous-domaines Render (previews, branches, etc.)
-CORS_ALLOWED_ORIGIN_REGEXES = [
-    r"^https://.*\.onrender\.com$",
-]
-
-# 3. Permet l'envoi de cookies / tokens d'authentification
+CORS_ALLOWED_ORIGIN_REGEXES = [r"^https://.*\.onrender\.com$"]
 CORS_ALLOW_CREDENTIALS = True
-
-# 4. Autorise tous les en-têtes nécessaires pour les requêtes API
 CORS_ALLOW_HEADERS = [
-    'accept',
-    'accept-encoding',
-    'authorization',
-    'content-type',
-    'dnt',
-    'origin',
-    'user-agent',
-    'x-csrftoken',
-    'x-requested-with',
+    'accept', 'accept-encoding', 'authorization', 'content-type',
+    'dnt', 'origin', 'user-agent', 'x-csrftoken', 'x-requested-with',
 ]
+CORS_ALLOW_METHODS = ['DELETE', 'GET', 'OPTIONS', 'PATCH', 'POST', 'PUT']
+
 
 # 5. Autorise toutes les méthodes HTTP nécessaires
 CORS_ALLOW_METHODS = [
@@ -261,7 +246,7 @@ django_smtp.EmailBackend.open = _patched_open'''
 # backend/config/settings.py
 
 # ========== CORRECTION SSL POUR GMAIL (PORT 587 STARTTLS) ==========
-import ssl
+'''import ssl
 import smtplib
 from django.core.mail.backends import smtp as django_smtp
 
@@ -295,3 +280,4 @@ def _patched_open(self):
 django_smtp.EmailBackend.open = _patched_open
 
 print("✅ Patch SSL appliqué pour Gmail (STARTTLS port 587)")
+'''
