@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
@@ -130,13 +131,21 @@ SIMPLE_JWT = {
 
 
 # ========== CORS ==========
-CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,https://*.onrender.com').split(',')
-CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
+# ========== CONFIGURATION CORS FINALE ==========
+# Origines exactes autorisées (développement local + frontend Netlify)
+CORS_ALLOWED_ORIGINS = os.getenv(
+    'CORS_ALLOWED_ORIGINS',
+    'http://localhost:3000,http://127.0.0.1:3000,https://tresorery-finance-app.netlify.app'
+).split(',')
+
+# Autorise tous les sous-domaines Render (pratique pour les previews/branches)
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.onrender\.com$",
 ]
-CORS_ALLOW_CREDENTIALS = False #True
+
+# Permet l'envoi de cookies/tokens d'authentification
+CORS_ALLOW_CREDENTIALS = True
+
 
 # ========== CELERY ==========
 CELERY_BROKER_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
