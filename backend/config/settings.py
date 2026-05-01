@@ -131,21 +131,45 @@ SIMPLE_JWT = {
 
 
 # ========== CORS ==========
-# ========== CONFIGURATION CORS FINALE ==========
-# Origines exactes autorisées (développement local + frontend Netlify)
-CORS_ALLOWED_ORIGINS = os.getenv(
-    'CORS_ALLOWED_ORIGINS',
-    'http://localhost:3000,http://127.0.0.1:3000,https://tresorery-finance-app.netlify.app'
-).split(',')
+# ========== CONFIGURATION CORS FINALE ET CORRECTE ==========
 
-# Autorise tous les sous-domaines Render (pratique pour les previews/branches)
+# 1. Origines exactes autorisées (développement + production)
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://tresorery-finance-app.netlify.app",
+]
+
+# 2. Pour autoriser tous les sous-domaines Render (previews, branches, etc.)
 CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^https://.*\.onrender\.com$",
 ]
 
-# Permet l'envoi de cookies/tokens d'authentification
+# 3. Permet l'envoi de cookies / tokens d'authentification
 CORS_ALLOW_CREDENTIALS = True
 
+# 4. Autorise tous les en-têtes nécessaires pour les requêtes API
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+# 5. Autorise toutes les méthodes HTTP nécessaires
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
 
 # ========== CELERY ==========
 CELERY_BROKER_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
