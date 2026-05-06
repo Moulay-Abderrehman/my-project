@@ -71,9 +71,7 @@
 {"ts": "2026-04-27T20:20:20Z", "method": "GET", "path": "/api/notifications/non-lues/", "status": 200, "ip": "127.0.0.1", "user": "moulayabdrehman73@gmail.com", "duration_ms": 180, "app": "financeapp-moulay"}
 {"ts": "2026-04-27T20:20:20Z", "method": "GET", "path": "/api/abonnements/detail/", "status": 200, "ip": "127.0.0.1", "user": "moulayabdrehman73@gmail.com", "duration_ms": 210, "app": "financeapp-moulay"}
 {"ts": "2026-04-27T20:21:40Z", "method": "POST", "path": "/api/comptes/deconnexion/", "status": 200, "ip": "127.0.0.1", "user": "moulayabdrehman73@gmail.com", "duration_ms": 185, "app": "financeapp-moulay"}
-<<<<<<< HEAD
 {"ts": "2026-04-27T20:34:23Z", "method": "GET", "path": "/admin/comptes/utilisateur/", "status": 200, "ip": "127.0.0.1", "user": null, "duration_ms": 787, "app": "financeapp-moulay"}
-=======
 {"ts": "2026-04-29T02:27:13Z", "method": "GET", "path": "/admin/", "status": 200, "ip": "127.0.0.1", "user": null, "duration_ms": 400, "app": "financeapp-moulay"}
 {"ts": "2026-04-29T02:27:15Z", "method": "GET", "path": "/admin/abonnements/abonnement/", "status": 200, "ip": "127.0.0.1", "user": null, "duration_ms": 167, "app": "financeapp-moulay"}
 {"ts": "2026-04-29T02:27:15Z", "method": "GET", "path": "/admin/jsi18n/", "status": 200, "ip": "127.0.0.1", "user": null, "duration_ms": 137, "app": "financeapp-moulay"}
@@ -209,4 +207,7 @@
 {"ts": "2026-04-29T06:48:06Z", "method": "GET", "path": "/api/notifications/non-lues/", "status": 200, "ip": "127.0.0.1", "user": "moulayabdrehman73@gmail.com", "duration_ms": 198, "app": "financeapp-moulay"}
 {"ts": "2026-04-29T06:48:06Z", "method": "GET", "path": "/api/transactions/dashboard/", "status": 200, "ip": "127.0.0.1", "user": "moulayabdrehman73@gmail.com", "duration_ms": 206, "app": "financeapp-moulay"}
 {"ts": "2026-04-29T06:48:06Z", "method": "GET", "path": "/api/transactions/dashboard/", "status": 200, "ip": "127.0.0.1", "user": "moulayabdrehman73@gmail.com", "duration_ms": 173, "app": "financeapp-moulay"}
->>>>>>> travail-email
+{"ts": "2026-05-04T15:53:08Z", "method": "GET", "path": "/media/media/profile/80ab096f-c170-47c1-b887-86b52676dc07.jpeg", "status": 404, "ip": "127.0.0.1", "user": "anonymous", "duration_ms": 163, "app": "financeapp-moulay"}
+{"ts": "2026-05-04T15:53:08Z", "method": "GET", "path": "/media/media/profile/80ab096f-c170-47c1-b887-86b52676dc07.jpeg", "status": 404, "ip": "127.0.0.1", "user": "anonymous", "duration_ms": 265, "app": "financeapp-moulay"}
+{"ts": "2026-05-04T15:53:20Z", "method": "GET", "path": "/media/media/profile/80ab096f-c170-47c1-b887-86b52676dc07.jpeg", "status": 404, "ip": "127.0.0.1", "user": "anonymous", "duration_ms": 8, "app": "financeapp-moulay"}
+{"ts": "2026-05-04T15:53:20Z", "method": "GET", "path": "/media/media/profile/80ab096f-c170-47c1-b887-86b52676dc07.jpeg", "status": 404, "ip": "127.0.0.1", "user": "anonymous", "duration_ms": 12, "app": "financeapp-moulay"}

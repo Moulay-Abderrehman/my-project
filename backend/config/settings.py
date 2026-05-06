@@ -1,5 +1,6 @@
 import os
 import re
+import smtplib
 from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
@@ -43,8 +44,8 @@ INSTALLED_APPS = [
 
 # ========== MIDDLEWARE ==========
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',
     'comptes.security_middleware.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',   
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -212,7 +213,7 @@ SSO_JWKS_URL = os.getenv('SSO_JWKS_URL', '')
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 
 
-'''
+
 # ── SSL Fix pour Django EmailBackend ─────────────────────────────────────────
 import ssl
 from django.core.mail.backends import smtp as django_smtp
@@ -239,8 +240,8 @@ def _patched_open(self):
         self.connection.login(self.username, self.password)
     return True
 
-django_smtp.EmailBackend.open = _patched_open'''
-
+django_smtp.EmailBackend.open = _patched_open
+print("✅ Patch SSL appliqué pour Gmail (mode permissif)")
 
 
 # backend/config/settings.py
