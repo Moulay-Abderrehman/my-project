@@ -215,7 +215,37 @@ FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 
 
 # ── SSL Fix pour Django EmailBackend ─────────────────────────────────────────
+
+# ========== CORRECTION SSL POUR GMAIL (PORT 587 STARTTLS) ==========
 import ssl
+import smtplib
+from django.core.mail.backends import smtp as django_smtp
+
+_original_open = django_smtp.EmailBackend.open
+
+def _patched_open(self):
+    if self.connection:
+        return False
+    
+    self.connection = smtplib.SMTP(self.host, self.port, timeout=self.timeout)
+    self.connection.ehlo()
+    
+    if self.use_tls:
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        self.connection.starttls(context=context)
+        self.connection.ehlo()
+    
+    if self.username and self.password:
+        self.connection.login(self.username, self.password)
+    
+    return True
+
+django_smtp.EmailBackend.open = _patched_open
+print("✅ Patch SSL appliqué pour Gmail (STARTTLS port 587)")
+
+'''import ssl
 from django.core.mail.backends import smtp as django_smtp
 
 # Créer un contexte SSL permissif
@@ -242,43 +272,4 @@ def _patched_open(self):
 
 django_smtp.EmailBackend.open = _patched_open
 print("✅ Patch SSL appliqué pour Gmail (mode permissif)")
-
-
-# backend/config/settings.py
-
-# ========== CORRECTION SSL POUR GMAIL (PORT 587 STARTTLS) ==========
-'''import ssl
-import smtplib
-from django.core.mail.backends import smtp as django_smtp
-
-# Sauvegarder la méthode originale
-_original_open = django_smtp.EmailBackend.open
-
-def _patched_open(self):
-    if self.connection:
-        return False
-    
-    # Connexion normale (pas SSL direct)
-    self.connection = smtplib.SMTP(self.host, self.port, timeout=self.timeout)
-    self.connection.ehlo()
-    
-    # Si TLS est activé (STARTTLS)
-    if self.use_tls:
-        # Créer un contexte SSL permissif pour le développement
-        context = ssl.create_default_context()
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
-        self.connection.starttls(context=context)
-        self.connection.ehlo()
-    
-    # Authentification
-    if self.username and self.password:
-        self.connection.login(self.username, self.password)
-    
-    return True
-
-# Appliquer le patch
-django_smtp.EmailBackend.open = _patched_open
-
-print("✅ Patch SSL appliqué pour Gmail (STARTTLS port 587)")
 '''
