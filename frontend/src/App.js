@@ -23,6 +23,9 @@ import Notifications      from './pages/Notifications';
 import Employes           from './pages/Employes';
 import Layout             from './components/Layout';
 
+// ── KYC (un seul workflow unifié) ────────────────────────────────────────────
+import KYCFlow from './pages/KYCFlow';
+
 // ─── Écran de chargement ──────────────────────────────────────────────────────
 function LoadingScreen() {
   return (
@@ -120,7 +123,10 @@ function App() {
           <Route path="/auth/google/callback" element={<GoogleCallback />} />
           {/*} Dans les routes*/}
           <Route path="/auth/sso/callback" element={<SSOCallback />} />
-          
+ 
+          {/* ── KYC (route unifiée) ─────────────────────────────────────── */}
+          <Route path="/kyc" element={<KYCFlow />} />
+
 
           {/* ── Routes protégées ────────────────────────────────────────── */}
           <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
@@ -135,7 +141,7 @@ function App() {
             {/* ── Page Employés : entreprise uniquement ─────────────────── */}
             <Route path="employes" element={
               <EntrepriseRoute><Employes /></EntrepriseRoute>
-            } />
+            } />         
           </Route>
 
           {/* Fallback */}

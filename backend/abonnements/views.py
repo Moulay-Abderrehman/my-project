@@ -97,7 +97,6 @@ class SouscriptionView(APIView):
         code             = request.data.get('code_confirmation', '').strip()
         type_abonnement  = request.data.get('type_abonnement', '')
         type_utilisateur = request.data.get('type_utilisateur', '')
-
         if not all([email, code, type_abonnement, type_utilisateur]):
             return Response({'error': 'Tous les champs sont obligatoires.'}, status=400)
 
@@ -153,6 +152,7 @@ class SouscriptionView(APIView):
         user.save(update_fields=['role'])
 
         # Notification
+        '''        
         from notifications.models import Notification
         Notification.objects.create(
             utilisateur=user,
@@ -163,6 +163,23 @@ class SouscriptionView(APIView):
                 f"📅 Fin   : {date_fin.strftime('%d/%m/%Y')}\n"
                 f"💰 Montant : {montant} MRU\n"
                 f"⏳ Durée : {'30 jours' if type_abonnement == 'mensuel' else '365 jours'}"
+            ),
+        )'''
+        from notifications.models import Notification
+
+        duree_label = "30 jours" if type_abonnement == "mensuel" else "365 jours"
+
+        Notification.objects.create(
+            utilisateur=user,
+            type='info',
+            message=(
+                f"ABONNEMENT_ACTIVE|"
+                f"plan:{type_utilisateur.capitalize()}|"
+                f"type:{type_abonnement.capitalize()}|"
+                f"debut:{date_debut.strftime('%d/%m/%Y')}|"
+                f"fin:{date_fin.strftime('%d/%m/%Y')}|"
+                f"montant:{montant}|"
+                f"duree:{duree_label}"
             ),
         )
 

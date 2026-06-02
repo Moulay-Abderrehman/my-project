@@ -1,9 +1,7 @@
 // frontend/src/api/axios.js
 import axios from 'axios';
 
-// Utiliser la variable d'environnement pour l'URL de l'API
-// En développement: fallback vers localhost
-// En production: utilise REACT_APP_API_URL du fichier .env.production
+
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
 console.log('[API] Base URL configurée:', API_URL);
@@ -29,7 +27,11 @@ api.interceptors.request.use(
     console.log('[API Request]', config.method?.toUpperCase(), config.baseURL + config.url);
     return config;
   },
-  (error) => Promise.reject(error),
+  /*(error) => Promise.reject(error),*/
+  (error) => {
+    console.error('[API]  Erreur de requête:', error);
+    return Promise.reject(error);
+  }
 );
 
 // ── Intercepteur réponse : refresh automatique du token si 401 ───────────────

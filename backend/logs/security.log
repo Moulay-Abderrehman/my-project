@@ -17,3 +17,92 @@
 {"ts": "2026-04-29T06:27:50Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
 {"ts": "2026-04-29T06:47:08Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
 {"ts": "2026-04-29T06:47:08Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-15T01:54:49Z", "event": "LOGIN_FAILURE", "ip": "127.0.0.1", "status": 400, "path": "/api/comptes/auth/google/", "app": "financeapp-moulay"}
+{"ts": "2026-05-15T01:54:49Z", "event": "LOGIN_FAILURE", "ip": "127.0.0.1", "status": 400, "path": "/api/comptes/auth/google/", "app": "financeapp-moulay"}
+{"ts": "2026-05-15T01:54:50Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-15T01:54:50Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-15T01:59:20Z", "event": "LOGIN_FAILURE", "ip": "127.0.0.1", "status": 400, "path": "/api/comptes/auth/google/", "app": "financeapp-moulay"}
+{"ts": "2026-05-15T01:59:20Z", "event": "LOGIN_FAILURE", "ip": "127.0.0.1", "status": 400, "path": "/api/comptes/auth/google/", "app": "financeapp-moulay"}
+{"ts": "2026-05-15T02:04:01Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-15T02:04:01Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-15T02:04:01Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-15T05:11:49Z", "event": "LOGIN_FAILURE", "ip": "127.0.0.1", "status": 400, "path": "/api/comptes/auth/google/", "app": "financeapp-moulay"}
+{"ts": "2026-05-15T05:11:49Z", "event": "LOGIN_FAILURE", "ip": "127.0.0.1", "status": 400, "path": "/api/comptes/auth/google/", "app": "financeapp-moulay"}
+{"ts": "2026-05-15T05:11:51Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-15T05:11:51Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-15T13:26:04Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-15T13:26:04Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-15T13:26:13Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-15T13:26:13Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-15T22:48:50Z", "event": "UNAUTHORIZED", "ip": "127.0.0.1", "path": "/api/comptes/deconnexion/", "app": "financeapp-moulay"}
+{"ts": "2026-05-15T22:48:50Z", "event": "UNAUTHORIZED", "ip": "127.0.0.1", "path": "/api/comptes/deconnexion/", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T01:12:17Z", "event": "XSS", "ip": "127.0.0.1", "method": "POST", "path": "/admin/comptes/utilisateur/62b41a36-822a-46c7-86fc-2edd2a674b5e/change/", "app": "financeapp-moulay", "blocked": true}
+{"ts": "2026-05-19T01:12:30Z", "event": "XSS", "ip": "127.0.0.1", "method": "POST", "path": "/admin/comptes/utilisateur/62b41a36-822a-46c7-86fc-2edd2a674b5e/change/", "app": "financeapp-moulay", "blocked": true}
+{"ts": "2026-05-19T03:43:47Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T03:43:47Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T03:44:00Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T03:44:00Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T03:44:00Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T03:44:00Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T19:19:22Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T19:19:22Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T19:19:35Z", "event": "LOGIN_FAILURE", "ip": "127.0.0.1", "status": 400, "path": "/api/comptes/auth/google/", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T19:19:35Z", "event": "LOGIN_FAILURE", "ip": "127.0.0.1", "status": 400, "path": "/api/comptes/auth/google/", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T19:19:37Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T19:19:37Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T19:34:12Z", "event": "LOGIN_FAILURE", "ip": "127.0.0.1", "status": 400, "path": "/api/comptes/auth/google/", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T19:34:13Z", "event": "LOGIN_FAILURE", "ip": "127.0.0.1", "status": 400, "path": "/api/comptes/auth/google/", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T19:34:14Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T19:34:14Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:25:58Z", "event": "LOGIN_FAILURE", "ip": "127.0.0.1", "status": 400, "path": "/api/comptes/auth/google/", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:25:58Z", "event": "LOGIN_FAILURE", "ip": "127.0.0.1", "status": 400, "path": "/api/comptes/auth/google/", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:26:00Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:26:00Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:28:30Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:28:30Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:30:16Z", "event": "LOGIN_FAILURE", "ip": "127.0.0.1", "status": 400, "path": "/api/comptes/auth/google/", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:30:16Z", "event": "LOGIN_FAILURE", "ip": "127.0.0.1", "status": 400, "path": "/api/comptes/auth/google/", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:30:19Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:30:19Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:31:11Z", "event": "LOGIN_FAILURE", "ip": "127.0.0.1", "status": 400, "path": "/api/comptes/auth/google/", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:31:11Z", "event": "LOGIN_FAILURE", "ip": "127.0.0.1", "status": 400, "path": "/api/comptes/auth/google/", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:31:13Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:31:13Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:35:27Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:35:28Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:35:28Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:35:28Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:37:40Z", "event": "LOGIN_FAILURE", "ip": "127.0.0.1", "status": 400, "path": "/api/comptes/auth/google/", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:37:40Z", "event": "LOGIN_FAILURE", "ip": "127.0.0.1", "status": 400, "path": "/api/comptes/auth/google/", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:37:42Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:37:42Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:41:36Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:41:36Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:41:36Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:41:36Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:45:47Z", "event": "LOGIN_FAILURE", "ip": "127.0.0.1", "status": 400, "path": "/api/comptes/auth/google/", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:45:48Z", "event": "LOGIN_FAILURE", "ip": "127.0.0.1", "status": 400, "path": "/api/comptes/auth/google/", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:45:49Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:45:49Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:48:19Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:48:19Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:48:56Z", "event": "LOGIN_FAILURE", "ip": "127.0.0.1", "status": 400, "path": "/api/comptes/auth/google/", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T20:48:56Z", "event": "LOGIN_FAILURE", "ip": "127.0.0.1", "status": 400, "path": "/api/comptes/auth/google/", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T21:00:18Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T21:00:18Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T22:34:13Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-19T22:34:13Z", "event": "LOGIN_SUCCESS", "ip": "127.0.0.1", "user": "anonymous", "app": "financeapp-moulay"}
+{"ts": "2026-05-22T20:49:28Z", "event": "UNAUTHORIZED", "ip": "127.0.0.1", "path": "/api/abonnements/detail/", "app": "financeapp-moulay"}
+{"ts": "2026-05-22T20:49:28Z", "event": "UNAUTHORIZED", "ip": "127.0.0.1", "path": "/api/transactions/dashboard/", "app": "financeapp-moulay"}
+{"ts": "2026-05-22T20:49:28Z", "event": "UNAUTHORIZED", "ip": "127.0.0.1", "path": "/api/notifications/non-lues/", "app": "financeapp-moulay"}
+{"ts": "2026-05-22T20:49:28Z", "event": "UNAUTHORIZED", "ip": "127.0.0.1", "path": "/api/abonnements/detail/", "app": "financeapp-moulay"}
+{"ts": "2026-05-22T20:49:28Z", "event": "UNAUTHORIZED", "ip": "127.0.0.1", "path": "/api/transactions/dashboard/", "app": "financeapp-moulay"}
+{"ts": "2026-05-22T20:49:28Z", "event": "UNAUTHORIZED", "ip": "127.0.0.1", "path": "/api/notifications/non-lues/", "app": "financeapp-moulay"}
+{"ts": "2026-05-22T20:49:28Z", "event": "UNAUTHORIZED", "ip": "127.0.0.1", "path": "/api/abonnements/detail/", "app": "financeapp-moulay"}
+{"ts": "2026-05-22T20:49:28Z", "event": "UNAUTHORIZED", "ip": "127.0.0.1", "path": "/api/transactions/dashboard/", "app": "financeapp-moulay"}
+{"ts": "2026-05-22T20:49:28Z", "event": "UNAUTHORIZED", "ip": "127.0.0.1", "path": "/api/notifications/non-lues/", "app": "financeapp-moulay"}
+{"ts": "2026-05-22T20:49:28Z", "event": "UNAUTHORIZED", "ip": "127.0.0.1", "path": "/api/transactions/dashboard/", "app": "financeapp-moulay"}
+{"ts": "2026-05-22T20:49:28Z", "event": "UNAUTHORIZED", "ip": "127.0.0.1", "path": "/api/abonnements/detail/", "app": "financeapp-moulay"}
+{"ts": "2026-05-22T20:49:28Z", "event": "UNAUTHORIZED", "ip": "127.0.0.1", "path": "/api/notifications/non-lues/", "app": "financeapp-moulay"}
+{"ts": "2026-05-23T22:14:17Z", "event": "UNAUTHORIZED", "ip": "127.0.0.1", "path": "/api/budgets/b1bd1e93-a279-4c96-9782-9bb5d48ea587/depense/", "app": "financeapp-moulay"}
+{"ts": "2026-05-23T22:14:17Z", "event": "UNAUTHORIZED", "ip": "127.0.0.1", "path": "/api/budgets/b1bd1e93-a279-4c96-9782-9bb5d48ea587/depense/", "app": "financeapp-moulay"}

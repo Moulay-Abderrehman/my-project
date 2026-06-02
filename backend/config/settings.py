@@ -119,6 +119,12 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10,
+    # Taille max upload — IMPORTANT pour les images de documents (5 Mo)
+    'DEFAULT_PARSER_CLASSES': [
+        'rest_framework.parsers.JSONParser',
+        'rest_framework.parsers.MultiPartParser',  # ← Pour les fichiers images
+        'rest_framework.parsers.FormParser',
+    ],
 }
 
 SIMPLE_JWT = {
@@ -128,6 +134,8 @@ SIMPLE_JWT = {
     'USER_ID_CLAIM': 'user_id',   # ← Le claim dans le token
 }
 
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024   # 10 Mo
+FILE_UPLOAD_MAX_MEMORY_SIZE  = 10 * 1024 * 1024  # 10 Mo
 
 # ========== CORS ==========
 # ========== CONFIGURATION CORS FINALE ET CORRECTE ==========
@@ -212,7 +220,17 @@ SSO_REDIRECT_URI = os.getenv('SSO_REDIRECT_URI', '')
 SSO_JWKS_URL = os.getenv('SSO_JWKS_URL', '')
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 
+# KYC / OCR / FACE CONFIG
+# API OCR (Railway)
+OCR_API_URL = os.getenv("OCR_API_URL")
+OCR_API_KEY = os.getenv("OCR_API_KEY")
 
+# Nova Face API
+NOVA_API_BASE = os.getenv("NOVA_API_BASE")
+NOVA_API_KEY = os.getenv("NOVA_API_KEY")
+
+# Upload taille max (5MB)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
 
 # ── SSL Fix pour Django EmailBackend ─────────────────────────────────────────
 
@@ -243,7 +261,7 @@ def _patched_open(self):
     return True
 
 django_smtp.EmailBackend.open = _patched_open
-print("✅ Patch SSL appliqué pour Gmail (STARTTLS port 587)")
+#print("Patch SSL appliqué pour Gmail (STARTTLS port 587)")
 
 '''import ssl
 from django.core.mail.backends import smtp as django_smtp

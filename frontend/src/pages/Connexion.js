@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
+import api from '../api/axios';
 
 export default function Connexion() {
   const navigate = useNavigate();
@@ -10,7 +11,7 @@ export default function Connexion() {
   const [loading, setLoading] = useState(false);
   const [showPwd, setShowPwd] = useState(false);
 
-  const handleSubmit = async (e) => {
+  /*const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
@@ -28,8 +29,85 @@ export default function Connexion() {
     } finally {
       setLoading(false);
     }
-  };
+  };*/
 
+const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const response = await api.post('/comptes/connexion/', {
+        email: form.email,
+        password: form.password
+      });
+      
+      // ═══════════════════════════════════════════════════════════════════
+      // CAS 1: KYC requis (compte existe mais KYC non complété)
+      // ═══════════════════════════════════════════════════════════════════
+      if (response.data.error === 'kyc_required') {
+        toast.error(response.data.message || 'Veuillez compléter la vérification d\'identité.');
+        
+        const userId = response.data.user_id;
+        
+        if (userId) {
+          localStorage.setItem('temp_user_id', userId);
+          // ✅ CORRECTION: Rediriger vers /kyc avec userId
+          navigate('/kyc', { state: { userId: userId } });
+        } else {
+          navigate('/inscription');
+        }
+        return;
+      }
+      
+      // ═══════════════════════════════════════════════════════════════════
+      // CAS 2: Connexion normale (KYC déjà fait)
+      // ═══════════════════════════════════════════════════════════════════
+      if (response.data.access && response.data.refresh) {
+        localStorage.setItem('access_token', response.data.access);
+        localStorage.setItem('refresh_token', response.data.refresh);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+        
+        // Nettoyer les données temporaires
+        localStorage.removeItem('temp_user_id');
+        localStorage.removeItem('temp_session_token');
+
+        await connexion(form.email, form.password);
+        toast.success('Connexion réussie !');
+        navigate('/dashboard')
+        
+        /*toast.success('Connexion réussie !');
+        navigate('/dashboard');
+        return;*/
+      }
+      
+    } catch (err) {
+      const errorData = err.response?.data;
+      
+      // ✅ CORRECTION: Gérer le cas KYC requis (erreur 403)
+      if (err.response?.status === 403 && errorData?.error === 'kyc_required') {
+        toast.error(errorData.message);
+        
+        const userId = errorData.user_id;
+        
+        if (userId) {
+          localStorage.setItem('temp_user_id', userId);
+          navigate('/kyc', { state: { userId: userId } });
+        } else {
+          navigate('/inscription');
+        }
+        return;
+      }
+      
+      // Autres erreurs
+      if (errorData) {
+        const msgs = errorData.non_field_errors || errorData.detail || Object.values(errorData).flat();
+        (Array.isArray(msgs) ? msgs : [msgs]).forEach(m => toast.error(String(m)));
+      } else {
+        toast.error('Email ou mot de passe incorrect.');
+      }
+    } finally {
+      setLoading(false);
+    }
+};
   // ── Styles champs (fond blanc, texte sombre) ──────────────────────────────
   const inp = {
     width: '100%', padding: '13px 14px', borderRadius: 12,

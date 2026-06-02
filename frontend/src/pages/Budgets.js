@@ -11,23 +11,16 @@ function SuccessModal({ message, onClose }) {
     return () => clearTimeout(t);
   }, [onClose]);
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 9999,
-      background: 'rgba(15,23,42,0.3)', backdropFilter: 'blur(4px)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-    }}>
-      <div style={{
-        background: '#fff', borderRadius: 20, padding: '40px 48px', textAlign: 'center',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.18)',
-      }}>
-        <div style={{ fontSize: 56, marginBottom: 12 }}>✅</div>
-        <p style={{ margin: 0, fontSize: 18, fontWeight: 600, color: '#1e293b' }}>{message}</p>
+    <div className="modal-overlay">
+      <div className="success-modal">
+        <i className='bx bx-check-circle'></i>
+        <p>{message}</p>
       </div>
     </div>
   );
 }
 
-// ── Modale dépense budget ─────────────────────────────────────────────────────
+// ── Modale dépense budget (INDÉPENDANTE des transactions manuelles) ───────────
 function DepenseModal({ budget, onClose, onSuccess }) {
   const [montant, setMontant] = useState('');
   const [description, setDescription] = useState('');
@@ -35,146 +28,251 @@ function DepenseModal({ budget, onClose, onSuccess }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    const montantValue = parseFloat(montant);
+    if (isNaN(montantValue) || montantValue <= 0) {
+      toast.error('Veuillez entrer un montant valide');
+      return;
+    }
+
     setLoading(true);
     try {
-      await api.post(`/budgets/${budget.id}/depense/`, { montant: parseFloat(montant), description });
-      onSuccess('Dépense enregistrée !');
+      const response = await api.post(`/budgets/${budget.id}/depense/`, {
+        montant: montantValue,
+        description: description.trim() || ''
+      });
+      
+      if (response.data) {
+        onSuccess('Dépense enregistrée !');
+      }
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Erreur');
+      console.error('Erreur détail:', err.response?.data);
+      const errorMsg = err.response?.data?.error || 
+                       err.response?.data?.detail ||
+                       'Erreur lors de l\'enregistrement';
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }
   };
 
+  const reste = parseFloat(budget.montant_prevu) - parseFloat(budget.montant_depense);
+  const isDepasse = reste < 0;
+
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 9999,
-      background: 'rgba(15,23,42,0.45)', backdropFilter: 'blur(4px)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-    }}>
-      <div style={{
-        background: '#fff', borderRadius: 18, padding: 32, width: 380,
-        boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
-      }}>
-        <h3 style={{ margin: '0 0 6px', color: '#1e293b' }}>💸 Dépense budget</h3>
-        <p style={{ margin: '0 0 20px', fontSize: 13, color: '#64748b' }}>
-          Budget : <strong>{budget.categorie_nom}</strong> • Reste : <strong style={{ color: '#10b981' }}>
-            {(parseFloat(budget.montant_prevu) - parseFloat(budget.montant_depense)).toLocaleString()} MRU
-          </strong>
-        </p>
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <input type="number" placeholder="Montant (MRU)" value={montant} onChange={e => setMontant(e.target.value)}
-            required min="0.01" step="0.01"
-            style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14 }} />
-          <input placeholder="Description" value={description} onChange={e => setDescription(e.target.value)}
-            style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14 }} />
-          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-            <button type="submit" disabled={loading} style={{
-              flex: 1, background: 'linear-gradient(135deg,#ef4444,#dc2626)', color: '#fff',
-              border: 'none', borderRadius: 10, padding: '11px', cursor: 'pointer', fontWeight: 600, fontSize: 14,
-            }}>{loading ? 'En cours...' : '✅ Confirmer la dépense'}</button>
-            <button type="button" onClick={onClose} style={{
-              flex: 1, background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 10,
-              padding: '11px', cursor: 'pointer', fontSize: 14, color: '#64748b',
-            }}>Annuler</button>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-container compact" onClick={e => e.stopPropagation()}>
+        <div className="modal-header compact">
+          <div className="modal-header-icon" style={{ background: '#ef444415', color: '#ef4444' }}>
+            <i className='bx bx-money'></i>
+          </div>
+          <div>
+            <h3>Nouvelle dépense de budget</h3>
+            <p>{budget.categorie_nom}</p>
+          </div>
+          <button onClick={onClose} className="modal-close">
+            <i className='bx bx-x'></i>
+          </button>
+        </div>
+
+        <div className="budget-info-row compact">
+          <div className="budget-info-item">
+            <span className="info-label">Budget restant</span>
+            <span className="info-value" style={{ color: isDepasse ? '#ef4444' : '#10b981' }}>
+              {Math.abs(reste).toLocaleString()} MRU {isDepasse ? '(dépassé)' : ''}
+            </span>
+          </div>
+          <div className="budget-info-item">
+            <span className="info-label">Budget total</span>
+            <span className="info-value">{parseFloat(budget.montant_prevu).toLocaleString()} MRU</span>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div className="form-group compact">
+            <div className="input-with-icon">
+              <i className='bx bx-pound'></i>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={montant}
+                onChange={e => setMontant(e.target.value)}
+                placeholder="Montant de la dépense"
+                required
+                autoFocus
+              />
+            </div>
+          </div>
+
+          <div className="form-group compact">
+            <div className="input-with-icon">
+              <i className='bx bx-note'></i>
+              <input
+                type="text"
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                placeholder="Description (optionnel)"
+                maxLength="200"
+              />
+            </div>
+          </div>
+
+          <div className="modal-actions compact">
+            <button 
+              type="submit" 
+              disabled={loading || !montant} 
+              className="btn-primary" 
+              style={{ background: 'linear-gradient(135deg,#ef4444,#dc2626)' }}
+            >
+              {loading ? (
+                <><div className="spinner"></div> Enregistrement...</>
+              ) : (
+                <><i className='bx bx-check'></i> Enregistrer la dépense</>
+              )}
+            </button>
+            <button type="button" onClick={onClose} className="btn-secondary" disabled={loading}>
+              Annuler
+            </button>
           </div>
         </form>
+
+        <div className="info-banner compact" style={{ marginTop: '12px', background: '#f0fdf4', borderColor: '#bbf7d0', borderRadius: 10, padding: 8, fontSize: 11, color: '#166534' }}>
+          <i className='bx bx-info-circle'></i>
+          <span>Cette dépense est propre à ce budget et n'affecte pas vos transactions manuelles.</span>
+        </div>
+
+        {isDepasse && (
+          <div className="warning-banner compact" style={{ marginTop: '12px', background: '#fef2f2', borderColor: '#fecaca' }}>
+            <i className='bx bx-error-circle' style={{ color: '#ef4444' }}></i>
+            <span style={{ color: '#dc2626', fontSize: '0.7rem' }}>Attention : Budget déjà dépassé !</span>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// ── Modale transactions d'un budget ──────────────────────────────────────────
-function BudgetTransactionsModal({ budget, onClose }) {
-  const [transactions, setTransactions] = useState([]);
+// ── Modale dépenses d'un budget (AFFICHE UNIQUEMENT LES DÉPENSES DE BUDGET) ───
+function BudgetDepensesModal({ budget, onClose }) {
+  const [depenses, setDepenses] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get(`/budgets/${budget.id}/`)
-      .then(res => setTransactions(res.data.transactions || []))
-      .catch(() => toast.error('Erreur chargement transactions'))
+    api.get(`/budgets/${budget.id}/depenses/`)
+      .then(res => setDepenses(res.data || []))
+      .catch(() => toast.error('Erreur chargement des dépenses'))
       .finally(() => setLoading(false));
   }, [budget.id]);
 
   const couleur = budget.couleur || '#6366f1';
+  const reste = parseFloat(budget.montant_prevu) - parseFloat(budget.montant_depense);
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 9999,
-      background: 'rgba(15,23,42,0.45)', backdropFilter: 'blur(4px)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-    }}>
-      <div style={{
-        background: '#fff', borderRadius: 20, padding: 0, width: '90%', maxWidth: 540, maxHeight: '80vh',
-        boxShadow: '0 24px 80px rgba(0,0,0,0.22)', display: 'flex', flexDirection: 'column', overflow: 'hidden',
-      }}>
-        <div style={{
-          background: `linear-gradient(135deg, ${couleur}22, ${couleur}11)`,
-          borderBottom: `3px solid ${couleur}`,
-          padding: '22px 28px',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        }}>
-          <div>
-            <h3 style={{ margin: 0, color: '#1e293b', fontWeight: 800, fontSize: 18 }}>📋 {budget.categorie_nom}</h3>
-            <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>Dépenses effectuées dans ce budget</p>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-container large" onClick={e => e.stopPropagation()}>
+        <div className="modal-header" style={{ borderBottomColor: couleur }}>
+          <div className="modal-header-icon" style={{ background: `${couleur}15`, color: couleur }}>
+            <i className='bx bx-list-ul'></i>
           </div>
-          <button onClick={onClose} style={{
-            background: '#f1f5f9', border: 'none', borderRadius: 10, padding: '8px 12px',
-            cursor: 'pointer', fontSize: 18, color: '#64748b',
-          }}>✕</button>
+          <div>
+            <h3>{budget.categorie_nom}</h3>
+            <p>Dépenses du budget (indépendantes des transactions)</p>
+          </div>
+          <button onClick={onClose} className="modal-close">
+            <i className='bx bx-x'></i>
+          </button>
         </div>
 
-        <div style={{ display: 'flex', padding: '14px 28px', gap: 16, borderBottom: '1px solid #f1f5f9' }}>
-          {[
-            { l: 'Prévu', v: `${parseFloat(budget.montant_prevu).toLocaleString()} MRU`, c: '#1e293b' },
-            { l: 'Dépensé', v: `${parseFloat(budget.montant_depense).toLocaleString()} MRU`, c: couleur },
-            { l: 'Reste', v: `${(parseFloat(budget.montant_prevu) - parseFloat(budget.montant_depense)).toLocaleString()} MRU`, c: '#10b981' },
-          ].map(s => (
-            <div key={s.l} style={{ flex: 1, textAlign: 'center' }}>
-              <p style={{ margin: 0, fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>{s.l}</p>
-              <p style={{ margin: '4px 0 0', fontWeight: 700, fontSize: 15, color: s.c }}>{s.v}</p>
+        <div className="stats-row compact">
+          <div className="stat-card-mini">
+            <i className='bx bx-target-lock' style={{ color: '#1e293b' }}></i>
+            <div>
+              <span className="stat-mini-label">Prévu</span>
+              <span className="stat-mini-value">{parseFloat(budget.montant_prevu).toLocaleString()} MRU</span>
             </div>
-          ))}
+          </div>
+          <div className="stat-card-mini">
+            <i className='bx bx-trending-down' style={{ color: couleur }}></i>
+            <div>
+              <span className="stat-mini-label">Dépensé (budget)</span>
+              <span className="stat-mini-value">{parseFloat(budget.montant_depense).toLocaleString()} MRU</span>
+            </div>
+          </div>
+          <div className="stat-card-mini">
+            <i className='bx bx-wallet' style={{ color: '#10b981' }}></i>
+            <div>
+              <span className="stat-mini-label">Reste</span>
+              <span className="stat-mini-value">{reste.toLocaleString()} MRU</span>
+            </div>
+          </div>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+        <div className="transactions-list">
+          <div className="transactions-header">
+            <i className='bx bx-history'></i>
+            <span>Historique des dépenses du budget</span>
+          </div>
+          
           {loading ? (
-            <div style={{ textAlign: 'center', padding: '32px', color: '#94a3b8' }}>⏳ Chargement...</div>
-          ) : transactions.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '48px', color: '#94a3b8' }}>
-              <div style={{ fontSize: 36, marginBottom: 8 }}>💤</div>
-              <p>Aucune dépense pour ce budget</p>
+            <div className="loading-state">
+              <div className="spinner large"></div>
+              <p>Chargement...</p>
             </div>
-          ) : transactions.map(t => (
-            <div key={t.id} style={{
-              display: 'flex', alignItems: 'center', padding: '12px 28px',
-              borderBottom: '1px solid #f8fafc', gap: 12,
-            }}>
-              <div style={{
-                width: 36, height: 36, borderRadius: 10,
-                background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 16, flexShrink: 0,
-              }}>💸</div>
-              <div style={{ flex: 1 }}>
-                <p style={{ margin: 0, fontWeight: 600, fontSize: 13, color: '#1e293b' }}>
-                  {t.description || 'Dépense budget'}
-                </p>
-                <p style={{ margin: '2px 0 0', fontSize: 12, color: '#94a3b8' }}>
-                  {new Date(t.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                </p>
+          ) : depenses.length === 0 ? (
+            <div className="empty-transactions compact">
+              <i className='bx bx-receipt'></i>
+              <p>Aucune dépense enregistrée pour ce budget</p>
+              <span>Cliquez sur "Dépenser" pour ajouter une dépense</span>
+            </div>
+          ) : (
+            depenses.map(d => (
+              <div key={d.id} className="transaction-row compact">
+                <div className="transaction-icon">
+                  <i className='bx bx-shopping-bag'></i>
+                </div>
+                <div className="transaction-info">
+                  <div className="transaction-desc">{d.description || 'Dépense budget'}</div>
+                  <div className="transaction-date">
+                    <i className='bx bx-calendar'></i>
+                    {new Date(d.date_creation).toLocaleDateString('fr-FR', { 
+                      day: '2-digit', 
+                      month: 'short', 
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </div>
+                </div>
+                <div className="transaction-amount negative">
+                  -{parseFloat(d.montant).toLocaleString()} MRU
+                </div>
               </div>
-              <span style={{ fontWeight: 700, color: '#ef4444', fontSize: 15 }}>
-                -{parseFloat(t.montant).toLocaleString()} MRU
-              </span>
-            </div>
-          ))}
+            ))
+          )}
+        </div>
+
+        <div className="info-banner compact" style={{ 
+          marginTop: 16, 
+          background: '#eff6ff', 
+          borderColor: '#bfdbfe', 
+          borderRadius: 10, 
+          padding: 10, 
+          fontSize: 11, 
+          color: '#1e40af',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8
+        }}>
+          <i className='bx bx-info-circle'></i>
+          <span>Les dépenses affichées sont uniquement celles effectuées depuis ce budget. Les transactions manuelles ne sont pas prises en compte.</span>
         </div>
       </div>
     </div>
   );
 }
 
-// ── Modale création/modification budget ───────────────────────────────────────
+// ── Modale création/modification budget (COMPACTE AVEC FILTRE CATÉGORIES) ───
 function BudgetModal({ budget, categories, onClose, onSuccess }) {
   const [form, setForm] = useState({
     categorie: budget?.categorie || '',
@@ -184,20 +282,26 @@ function BudgetModal({ budget, categories, onClose, onSuccess }) {
     couleur: budget?.couleur || '#6366f1',
   });
   const [loading, setLoading] = useState(false);
+  const [showColorPicker, setShowColorPicker] = useState(false);
 
   const isEdit = !!budget;
 
+  // Filtrer les catégories pour n'afficher que celles de type 'sortie' (dépense)
+  const categoriesSortie = categories.filter(cat => cat.type === 'sortie' || cat.type === 'depense' || cat.type === 'expense');
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.categorie) return toast.error('Veuillez sélectionner une catégorie.');
+    if (!form.categorie) return toast.error('Sélectionnez une catégorie');
+    if (!form.montant_prevu || parseFloat(form.montant_prevu) <= 0) return toast.error('Montant invalide');
+    
     setLoading(true);
     try {
       if (isEdit) {
         await api.patch(`/budgets/${budget.id}/`, form);
-        toast.success('Budget modifié !');
+        toast.success('Budget modifié');
       } else {
         await api.post('/budgets/', form);
-        toast.success('Budget créé !');
+        toast.success('Budget créé');
       }
       onSuccess();
     } catch (err) {
@@ -208,139 +312,110 @@ function BudgetModal({ budget, categories, onClose, onSuccess }) {
     }
   };
 
-  const inp = {
-    width: '100%', padding: '10px 12px', borderRadius: 8,
-    border: '1.5px solid #e2e8f0', fontSize: 14, outline: 'none',
-    boxSizing: 'border-box',
-  };
-
   const COULEURS = ['#6366f1', '#8b5cf6', '#ec4899', '#ef4444', '#f97316', '#f59e0b', '#10b981', '#06b6d4', '#3b82f6', '#64748b'];
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 9999,
-      background: 'rgba(15,23,42,0.5)', backdropFilter: 'blur(4px)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-    }} onClick={onClose}>
-      <div style={{
-        background: '#fff', borderRadius: 20, padding: 32, width: 460,
-        boxShadow: '0 24px 80px rgba(0,0,0,0.22)',
-      }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h3 style={{ margin: 0, color: '#1e293b', fontWeight: 700, fontSize: 18 }}>
-            {isEdit ? '✏️ Modifier le budget' : '➕ Nouveau budget'}
-          </h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#94a3b8' }}>✕</button>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-container compact" onClick={e => e.stopPropagation()}>
+        <div className="modal-header compact">
+          <div className="modal-header-icon" style={{ background: '#6366f115', color: '#6366f1' }}>
+            <i className='bx bx-wallet'></i>
+          </div>
+          <div>
+            <h3>{isEdit ? 'Modifier le budget' : 'Nouveau budget'}</h3>
+          </div>
+          <button onClick={onClose} className="modal-close">
+            <i className='bx bx-x'></i>
+          </button>
         </div>
 
-        {/* Avertissement si pas de catégories */}
-        {categories.length === 0 && (
-          <div style={{
-            padding: '14px 16px', borderRadius: 10,
-            background: '#fff7ed', border: '1.5px solid #fed7aa',
-            color: '#c2410c', fontSize: 14, marginBottom: 20,
-            display: 'flex', alignItems: 'center', gap: 10,
-          }}>
-            <span style={{ fontSize: 20 }}>⚠️</span>
-            <div>
-              <strong>Il faut créer des catégories</strong>
-              <p style={{ margin: '4px 0 0', fontSize: 12, color: '#92400e' }}>
-                Un budget doit être lié à une catégorie.{' '}
-                <a href="/categories" style={{ color: '#6366f1', fontWeight: 600 }}>
-                  Créer une catégorie →
-                </a>
-              </p>
-            </div>
+        {categoriesSortie.length === 0 && (
+          <div className="warning-banner compact">
+            <i className='bx bx-error-circle'></i>
+            <span>Aucune catégorie de dépense disponible</span>
+            <button onClick={() => window.location.href = '/categories'} className="warning-link">
+              Créer <i className='bx bx-right-arrow-alt'></i>
+            </button>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {/* Catégorie */}
-          <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748b', marginBottom: 6, textTransform: 'uppercase' }}>
-              Catégorie *
-            </label>
-            <select name="categorie" value={form.categorie}
+        <form onSubmit={handleSubmit}>
+          <div className="form-group compact">
+            <select
+              value={form.categorie}
               onChange={e => setForm(prev => ({ ...prev, categorie: e.target.value }))}
-              style={{ ...inp, background: '#fff', cursor: 'pointer' }} required
-              disabled={categories.length === 0}
+              required
+              disabled={categoriesSortie.length === 0}
             >
-              <option value="">— Sélectionner une catégorie —</option>
-              {categories.map(c => (
-                <option key={c.id} value={c.id}>
-                  {c.icone} {c.nom}
-                </option>
+              <option value="">Sélectionner une catégorie de dépense</option>
+              {categoriesSortie.map(c => (
+                <option key={c.id} value={c.id}>{c.nom}</option>
               ))}
             </select>
           </div>
 
-          {/* Montant prévu */}
-          <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748b', marginBottom: 6, textTransform: 'uppercase' }}>
-              Montant prévu (MRU) *
-            </label>
-            <input type="number" step="0.01" min="1"
+          <div className="form-group compact">
+            <input
+              type="number"
+              step="0.01"
+              min="1"
               value={form.montant_prevu}
               onChange={e => setForm(prev => ({ ...prev, montant_prevu: e.target.value }))}
-              placeholder="0.00" style={inp} required
-              onFocus={e => e.target.style.borderColor = '#6366f1'}
-              onBlur={e => e.target.style.borderColor = '#e2e8f0'}
+              placeholder="Montant prévu (MRU)"
+              required
             />
           </div>
 
-          {/* Dates */}
-          <div style={{ display: 'flex', gap: 12 }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748b', marginBottom: 6, textTransform: 'uppercase' }}>Du *</label>
-              <input type="date" value={form.date_debut}
+          <div className="form-row compact">
+            <div className="form-group compact">
+              <input
+                type="date"
+                value={form.date_debut}
                 onChange={e => setForm(prev => ({ ...prev, date_debut: e.target.value }))}
-                style={inp} required
-                onFocus={e => e.target.style.borderColor = '#6366f1'}
-                onBlur={e => e.target.style.borderColor = '#e2e8f0'}
+                required
               />
             </div>
-            <div style={{ flex: 1 }}>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748b', marginBottom: 6, textTransform: 'uppercase' }}>Au *</label>
-              <input type="date" value={form.date_fin}
+            <div className="form-group compact">
+              <input
+                type="date"
+                value={form.date_fin}
                 onChange={e => setForm(prev => ({ ...prev, date_fin: e.target.value }))}
-                style={inp} required
-                onFocus={e => e.target.style.borderColor = '#6366f1'}
-                onBlur={e => e.target.style.borderColor = '#e2e8f0'}
+                required
               />
             </div>
           </div>
 
-          {/* Couleur */}
-          <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#64748b', marginBottom: 8, textTransform: 'uppercase' }}>Couleur</label>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {COULEURS.map(c => (
-                <button key={c} type="button" onClick={() => setForm(prev => ({ ...prev, couleur: c }))}
-                  style={{
-                    width: 28, height: 28, borderRadius: '50%', border: `3px solid`,
-                    borderColor: form.couleur === c ? '#1e293b' : 'transparent',
-                    background: c, cursor: 'pointer',
-                    transform: form.couleur === c ? 'scale(1.2)' : 'scale(1)',
-                    transition: 'transform 0.12s',
-                  }} />
-              ))}
-            </div>
+          <div className="color-row compact">
+            <button 
+              type="button" 
+              onClick={() => setShowColorPicker(!showColorPicker)}
+              className="color-trigger"
+              style={{ background: form.couleur }}
+              title="Choisir une couleur"
+            >
+              <i className='bx bx-palette'></i>
+            </button>
+            {showColorPicker && (
+              <div className="color-picker compact">
+                {COULEURS.map(c => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => { setForm(prev => ({ ...prev, couleur: c })); setShowColorPicker(false); }}
+                    className={`color-option ${form.couleur === c ? 'active' : ''}`}
+                    style={{ background: c }}
+                    title={c}
+                  />
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Boutons */}
-          <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-            <button type="submit" disabled={loading || categories.length === 0} style={{
-              flex: 2, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
-              color: '#fff', border: 'none', borderRadius: 10, padding: '12px',
-              cursor: (loading || categories.length === 0) ? 'not-allowed' : 'pointer',
-              fontWeight: 700, fontSize: 14, opacity: (loading || categories.length === 0) ? 0.6 : 1,
-            }}>
-              {loading ? '⏳ En cours...' : (isEdit ? '✅ Modifier' : '✅ Créer le budget')}
+          <div className="modal-actions compact">
+            <button type="submit" disabled={loading || categoriesSortie.length === 0} className="btn-primary">
+              {loading ? <div className="spinner"></div> : <><i className='bx bx-check'></i> {isEdit ? 'Valider' : 'Créer'}</>}
             </button>
-            <button type="button" onClick={onClose} style={{
-              flex: 1, background: '#f1f5f9', border: '1px solid #e2e8f0',
-              borderRadius: 10, padding: '12px', cursor: 'pointer', fontSize: 14, color: '#64748b',
-            }}>Annuler</button>
+            <button type="button" onClick={onClose} className="btn-secondary">Annuler</button>
           </div>
         </form>
       </div>
@@ -356,10 +431,16 @@ export default function Budgets() {
   const [loading, setLoading] = useState(true);
   const [successMsg, setSuccessMsg] = useState('');
   const [depenseModal, setDepenseModal] = useState(null);
-  const [txModal, setTxModal] = useState(null);
+  const [depensesModal, setDepensesModal] = useState(null);
   const [budgetModal, setBudgetModal] = useState(null);
   const [isCreating, setIsCreating] = useState(false);
   const [confirmSupprId, setConfirmSupprId] = useState(null);
+  const [showQuickCreate, setShowQuickCreate] = useState(false);
+  
+  const [filterType, setFilterType] = useState('all');
+
+  const categoriesSortie = categories.filter(cat => cat.type === 'sortie' || cat.type === 'depense' || cat.type === 'expense');
+  const hasCategoriesSortie = categoriesSortie.length > 0;
 
   const chargerDonnees = useCallback(async () => {
     setLoading(true);
@@ -368,7 +449,7 @@ export default function Budgets() {
         api.get('/budgets/'),
         categorieService.getAll(),
       ]);
-      setBudgets(bRes.data.results || bRes.data);
+      setBudgets(bRes.data.results || bRes.data || []);
       setCategories(cRes.data || []);
     } catch (err) {
       if (err.response?.status !== 403) {
@@ -386,205 +467,290 @@ export default function Budgets() {
   const handleSupprimerBudget = async () => {
     try {
       await api.delete(`/budgets/${confirmSupprId}/`);
-      toast.success('Budget supprimé.');
+      toast.success('Budget supprimé');
       setConfirmSupprId(null);
       chargerDonnees();
     } catch {
-      toast.error('Erreur lors de la suppression.');
+      toast.error('Erreur lors de la suppression');
     }
   };
 
-  const totalPrevu = budgets.reduce((s, b) => s + parseFloat(b.montant_prevu || 0), 0);
-  const totalDepense = budgets.reduce((s, b) => s + parseFloat(b.montant_depense || 0), 0);
+  const estBudgetEncours = (budget) => {
+    const aujourdHui = new Date();
+    aujourdHui.setHours(0, 0, 0, 0);
+    const dateDebut = new Date(budget.date_debut);
+    const dateFin = new Date(budget.date_fin);
+    dateDebut.setHours(0, 0, 0, 0);
+    dateFin.setHours(0, 0, 0, 0);
+    return dateDebut <= aujourdHui && dateFin >= aujourdHui;
+  };
+
+  const estBudgetTermine = (budget) => {
+    const aujourdHui = new Date();
+    aujourdHui.setHours(0, 0, 0, 0);
+    const dateFin = new Date(budget.date_fin);
+    dateFin.setHours(0, 0, 0, 0);
+    return dateFin < aujourdHui;
+  };
+
+  const budgetsFiltres = budgets.filter(budget => {
+    if (filterType === 'encours') return estBudgetEncours(budget);
+    if (filterType === 'termine') return estBudgetTermine(budget);
+    return true;
+  });
+
+  const budgetsEncoursCount = budgets.filter(b => estBudgetEncours(b)).length;
+  const budgetsTerminesCount = budgets.filter(b => estBudgetTermine(b)).length;
+
+  const totalPrevu = budgetsFiltres.reduce((s, b) => s + parseFloat(b.montant_prevu || 0), 0);
+  const totalDepense = budgetsFiltres.reduce((s, b) => s + parseFloat(b.montant_depense || 0), 0);
+  const totalReste = totalPrevu - totalDepense;
 
   return (
-    <div style={{ maxWidth: 1100, margin: '0 auto', padding: '8px 0' }}>
+    <div className="budgets-page">
       {successMsg && <SuccessModal message={successMsg} onClose={() => setSuccessMsg('')} />}
 
-      {/* En-tête */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: '#1e293b' }}>🎯 Mes Budgets</h2>
-          <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: 14 }}>
-            Planifiez et contrôlez vos dépenses par catégorie
-          </p>
+      <div className="page-header">
+        <div className="header-left">
+          <div className="header-icon">
+            <i className='bx bx-target-lock'></i>
+          </div>
+          <div>
+            <h1>Budgets</h1>
+            <p>{budgetsFiltres.length} budget(s) • {budgetsEncoursCount} en cours • {budgetsTerminesCount} terminés</p>
+          </div>
         </div>
-        <button onClick={() => { setBudgetModal({}); setIsCreating(true); }} style={{
-          background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
-          color: '#fff', border: 'none', borderRadius: 12, padding: '11px 22px',
-          cursor: 'pointer', fontWeight: 700, fontSize: 14,
-          boxShadow: '0 4px 12px rgba(99,102,241,0.3)',
-        }}>
-          ➕ Nouveau budget
-        </button>
+        {hasCategoriesSortie && (
+          <button onClick={() => { setBudgetModal({}); setIsCreating(true); }} className="create-btn">
+            <i className='bx bx-plus'></i>
+            <span>Nouveau budget</span>
+          </button>
+        )}
       </div>
 
-      {/* Avertissement si pas de catégories */}
-      {!loading && categories.length === 0 && (
-        <div style={{
-          background: '#fff7ed', border: '1.5px solid #fed7aa',
-          borderRadius: 14, padding: '18px 22px', marginBottom: 24,
-          display: 'flex', alignItems: 'center', gap: 14,
-        }}>
-          <span style={{ fontSize: 28 }}>⚠️</span>
-          <div style={{ flex: 1 }}>
-            <strong style={{ color: '#c2410c', fontSize: 15 }}>Il faut créer des catégories</strong>
-            <p style={{ margin: '4px 0 0', color: '#92400e', fontSize: 13 }}>
-              Pour créer un budget, vous devez d'abord créer au moins une catégorie. Les catégories permettent d'organiser vos dépenses.
-            </p>
-          </div>
-          <button onClick={() => navigate('/categories')} style={{
-            background: '#6366f1', color: '#fff', border: 'none',
-            borderRadius: 10, padding: '10px 18px', cursor: 'pointer', fontWeight: 700, fontSize: 13,
-            whiteSpace: 'nowrap',
-          }}>
-            🗂️ Créer des catégories →
+      {budgets.length > 0 && (
+        <div className="filter-tabs">
+          <button onClick={() => setFilterType('all')} className={`filter-btn ${filterType === 'all' ? 'active' : ''}`}>
+            <i className='bx bx-list-ul'></i>
+            <span>Tous ({budgets.length})</span>
+          </button>
+          <button onClick={() => setFilterType('encours')} className={`filter-btn ${filterType === 'encours' ? 'active' : ''}`}>
+            <i className='bx bx-time'></i>
+            <span>En cours ({budgetsEncoursCount})</span>
+          </button>
+          <button onClick={() => setFilterType('termine')} className={`filter-btn ${filterType === 'termine' ? 'active' : ''}`}>
+            <i className='bx bx-check-circle'></i>
+            <span>Terminés ({budgetsTerminesCount})</span>
           </button>
         </div>
       )}
 
-      {/* Stats globales */}
-      {budgets.length > 0 && (
-        <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
-          {[
-            { label: 'Total prévu', val: totalPrevu, color: '#6366f1', icon: '📋' },
-            { label: 'Total dépensé', val: totalDepense, color: '#ef4444', icon: '💸' },
-            { label: 'Restant', val: totalPrevu - totalDepense, color: '#10b981', icon: '💰' },
-          ].map(s => (
-            <div key={s.label} style={{
-              flex: 1, minWidth: 160, background: '#fff', borderRadius: 14, padding: '16px 20px',
-              boxShadow: '0 1px 8px rgba(0,0,0,0.06)', border: `1.5px solid ${s.color}20`,
-            }}>
-              <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>
-                {s.icon} {s.label}
-              </p>
-              <p style={{ margin: '4px 0 0', fontWeight: 800, fontSize: 20, color: s.color }}>
-                {s.val.toLocaleString('fr-FR')} MRU
-              </p>
+      {!loading && hasCategoriesSortie && budgets.length === 0 && !showQuickCreate && (
+        <button onClick={() => setShowQuickCreate(true)} className="quick-create-btn">
+          <i className='bx bx-plus-circle'></i>
+          <span>Créer mon premier budget</span>
+        </button>
+      )}
+
+      {showQuickCreate && (
+        <div className="quick-create-card">
+          <div className="quick-create-header">
+            <i className='bx bx-wallet'></i>
+            <span>Nouveau budget</span>
+            <button onClick={() => setShowQuickCreate(false)} className="quick-close">
+              <i className='bx bx-x'></i>
+            </button>
+          </div>
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = {
+              categorie: formData.get('categorie'),
+              montant_prevu: parseFloat(formData.get('montant_prevu')),
+              date_debut: formData.get('date_debut'),
+              date_fin: formData.get('date_fin'),
+            };
+            try {
+              await api.post('/budgets/', data);
+              toast.success('Budget créé !');
+              setShowQuickCreate(false);
+              chargerDonnees();
+            } catch (err) {
+              toast.error(err.response?.data?.detail || 'Erreur lors de la création');
+            }
+          }} className="quick-create-form">
+            <select name="categorie" required>
+              <option value="">Catégorie de dépense</option>
+              {categoriesSortie.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
+            </select>
+            <input type="number" name="montant_prevu" placeholder="Montant (MRU)" required step="0.01" min="1" />
+            <input type="date" name="date_debut" required />
+            <input type="date" name="date_fin" required />
+            <button type="submit" className="quick-submit">
+              <i className='bx bx-check'></i> Créer
+            </button>
+          </form>
+        </div>
+      )}
+
+      {!loading && !hasCategoriesSortie && (
+        <div className="warning-card compact">
+          <i className='bx bx-category'></i>
+          <div>
+            <strong>Créez des catégories de dépense</strong>
+            <p>Pour créer un budget, vous devez d'abord créer une catégorie de type "Sortie" (dépense).</p>
+          </div>
+          <button onClick={() => navigate('/categories')} className="warning-action-btn">
+            Créer une catégorie <i className='bx bx-right-arrow-alt'></i>
+          </button>
+        </div>
+      )}
+
+      {budgetsFiltres.length > 0 && (
+        <div className="stats-grid">
+          <div className="stat-card">
+            <div className="stat-icon" style={{ background: '#6366f115', color: '#6366f1' }}>
+              <i className='bx bx-chart'></i>
             </div>
-          ))}
+            <div>
+              <span className="stat-label">Total prévu</span>
+              <span className="stat-value">{totalPrevu.toLocaleString('fr-FR')} MRU</span>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-icon" style={{ background: '#ef444415', color: '#ef4444' }}>
+              <i className='bx bx-trending-down'></i>
+            </div>
+            <div>
+              <span className="stat-label">Total dépensé</span>
+              <span className="stat-value">{totalDepense.toLocaleString('fr-FR')} MRU</span>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-icon" style={{ background: '#10b98115', color: '#10b981' }}>
+              <i className='bx bx-wallet'></i>
+            </div>
+            <div>
+              <span className="stat-label">Reste total</span>
+              <span className="stat-value">{totalReste.toLocaleString('fr-FR')} MRU</span>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-icon" style={{ background: '#f59e0b15', color: '#f59e0b' }}>
+              <i className='bx bx-target-lock'></i>
+            </div>
+            <div>
+              <span className="stat-label">Total budgets</span>
+              <span className="stat-value">{budgetsFiltres.length}</span>
+            </div>
+          </div>
         </div>
       )}
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '60px 0', color: '#94a3b8' }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>⏳</div><p>Chargement...</p>
+        <div className="loading-container">
+          <div className="spinner large"></div>
+          <p>Chargement des budgets...</p>
         </div>
-      ) : budgets.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '60px 20px', color: '#94a3b8' }}>
-          <div style={{ fontSize: 56, marginBottom: 12 }}>🎯</div>
-          <p style={{ fontSize: 16, fontWeight: 600, color: '#1e293b' }}>Aucun budget actif</p>
-          <p style={{ fontSize: 13, marginBottom: 20 }}>Créez votre premier budget pour contrôler vos dépenses</p>
-          {categories.length > 0 && (
-            <button onClick={() => { setBudgetModal({}); setIsCreating(true); }} style={{
-              background: '#6366f1', color: '#fff', border: 'none', borderRadius: 10,
-              padding: '12px 24px', cursor: 'pointer', fontWeight: 600, fontSize: 14,
-            }}>
-              ➕ Créer mon premier budget
+      ) : budgetsFiltres.length === 0 && budgets.length > 0 && filterType !== 'all' ? (
+        <div className="empty-state">
+          <i className='bx bx-filter-alt'></i>
+          <h3>Aucun budget {filterType === 'encours' ? 'en cours' : 'terminé'}</h3>
+          <p>Aucun budget ne correspond à ce filtre.</p>
+          <button onClick={() => setFilterType('all')} className="primary-btn">
+            <i className='bx bx-list-ul'></i> Voir tous les budgets
+          </button>
+        </div>
+      ) : budgetsFiltres.length === 0 && !showQuickCreate ? (
+        <div className="empty-state">
+          <i className='bx bx-target-lock'></i>
+          <h3>Aucun budget</h3>
+          <p>Créez votre premier budget pour contrôler vos dépenses</p>
+          {hasCategoriesSortie && (
+            <button onClick={() => { setBudgetModal({}); setIsCreating(true); }} className="primary-btn">
+              <i className='bx bx-plus'></i> Créer un budget
             </button>
           )}
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 20 }}>
-          {budgets.map(budget => {
+        <div className="budgets-grid">
+          {budgetsFiltres.map(budget => {
             const pct = Math.min(parseFloat(budget.pourcentage_utilise || 0), 100);
             const couleur = budget.couleur || '#6366f1';
             const depasse = budget.est_depasse;
+            const reste = parseFloat(budget.montant_prevu) - parseFloat(budget.montant_depense);
+            const estEncours = estBudgetEncours(budget);
+            const estTermine = estBudgetTermine(budget);
 
             return (
-              <div key={budget.id} style={{
-                background: '#fff', borderRadius: 18, overflow: 'hidden',
-                boxShadow: '0 2px 16px rgba(0,0,0,0.07)',
-                border: depasse ? '2px solid #fee2e2' : `1.5px solid ${couleur}20`,
-                transition: 'transform 0.15s, box-shadow 0.15s',
-              }}
-                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.12)'; }}
-                onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '0 2px 16px rgba(0,0,0,0.07)'; }}
-              >
-                {/* Header budget */}
-                <div style={{
-                  background: `linear-gradient(135deg, ${couleur}22, ${couleur}11)`,
-                  borderBottom: `3px solid ${couleur}`,
-                  padding: '18px 22px',
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-                }}>
-                  <div>
-                    <h3 style={{ margin: 0, fontWeight: 800, fontSize: 17, color: '#1e293b' }}>
-                      {budget.categorie_nom}
-                    </h3>
-                    <p style={{ margin: '4px 0 0', fontSize: 12, color: '#64748b' }}>
-                      {budget.date_debut} → {budget.date_fin}
-                    </p>
+              <div key={budget.id} className={`budget-card ${depasse ? 'depasse' : ''} ${estTermine ? 'termine' : ''}`} style={{ borderTopColor: couleur }}>
+                <div className="budget-card-header">
+                  <div className="budget-category" style={{ color: couleur }}>
+                    <i className='bx bx-category'></i>
+                    <span>{budget.categorie_nom}</span>
                   </div>
-                  {depasse && (
-                    <span style={{
-                      background: '#fee2e2', color: '#ef4444', borderRadius: 8,
-                      padding: '4px 10px', fontSize: 12, fontWeight: 700,
-                    }}>🚨 Dépassé</span>
-                  )}
+                  <div className="budget-status-badges">
+                    {estEncours && (
+                      <div className="encours-badge" title="Budget en cours">
+                        <i className='bx bx-time'></i>
+                        <span>En cours</span>
+                      </div>
+                    )}
+                    {estTermine && (
+                      <div className="termine-badge" title="Budget terminé">
+                        <i className='bx bx-check-circle'></i>
+                        <span>Terminé</span>
+                      </div>
+                    )}
+                    {depasse && (
+                      <div className="depasse-badge" title="Budget dépassé">
+                        <i className='bx bx-error-circle'></i>
+                        <span>Dépassé</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                {/* Corps budget */}
-                <div style={{ padding: '18px 22px' }}>
-                  {/* Stats */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
-                    <div>
-                      <p style={{ margin: 0, fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>Prévu</p>
-                      <p style={{ margin: '2px 0 0', fontWeight: 700, fontSize: 16, color: '#1e293b' }}>
-                        {parseFloat(budget.montant_prevu).toLocaleString()} MRU
-                      </p>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <p style={{ margin: 0, fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>Dépensé</p>
-                      <p style={{ margin: '2px 0 0', fontWeight: 700, fontSize: 16, color: depasse ? '#ef4444' : couleur }}>
-                        {parseFloat(budget.montant_depense).toLocaleString()} MRU
-                      </p>
-                    </div>
+                <div className="budget-card-stats">
+                  <div className="stat-item">
+                    <span className="stat-label-small">{parseFloat(budget.montant_prevu).toLocaleString()} MRU</span>
+                    <span className="stat-sub">prévu</span>
                   </div>
-
-                  {/* Barre de progression */}
-                  <div style={{ background: '#f1f5f9', borderRadius: 20, height: 10, marginBottom: 10 }}>
-                    <div style={{
-                      height: 10, borderRadius: 20,
-                      width: `${pct}%`,
-                      background: depasse
-                        ? 'linear-gradient(90deg,#ef4444,#dc2626)'
-                        : pct > 80
-                          ? 'linear-gradient(90deg,#f59e0b,#d97706)'
-                          : `linear-gradient(90deg,${couleur},${couleur}bb)`,
-                      transition: 'width 0.5s',
-                    }} />
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-                    <span style={{ fontSize: 12, color: '#94a3b8' }}>
-                      {budget.pourcentage_utilise}% utilisé
+                  <div className="stat-divider"></div>
+                  <div className="stat-item">
+                    <span className="stat-label-small" style={{ color: depasse ? '#ef4444' : couleur }}>
+                      {parseFloat(budget.montant_depense).toLocaleString()} MRU
                     </span>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#10b981' }}>
-                      Reste : {(parseFloat(budget.montant_prevu) - parseFloat(budget.montant_depense)).toLocaleString()} MRU
-                    </span>
+                    <span className="stat-sub">dépensé</span>
                   </div>
+                </div>
 
-                  {/* Actions */}
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <button onClick={() => setDepenseModal(budget)} style={{
-                      flex: 1, background: `linear-gradient(135deg,${couleur},${couleur}bb)`,
-                      color: '#fff', border: 'none', borderRadius: 10, padding: '9px',
-                      cursor: 'pointer', fontSize: 13, fontWeight: 600,
-                    }}>💸 Dépenser</button>
-                    <button onClick={() => setTxModal(budget)} style={{
-                      flex: 1, background: '#f1f5f9', color: '#475569', border: 'none',
-                      borderRadius: 10, padding: '9px', cursor: 'pointer', fontSize: 13, fontWeight: 600,
-                    }}>📋 Voir dépenses</button>
-                    <button onClick={() => { setBudgetModal(budget); setIsCreating(false); }} style={{
-                      background: '#eef2ff', color: '#6366f1', border: 'none',
-                      borderRadius: 10, padding: '9px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 600,
-                    }}>✏️</button>
-                    <button onClick={() => setConfirmSupprId(budget.id)} style={{
-                      background: '#fef2f2', color: '#ef4444', border: 'none',
-                      borderRadius: 10, padding: '9px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 600,
-                    }}>🗑</button>
+                <div className="progress-bar">
+                  <div className="progress-fill" style={{ width: `${pct}%`, background: depasse ? '#ef4444' : (pct > 80 ? '#f59e0b' : couleur) }}></div>
+                </div>
+
+                <div className="budget-card-footer">
+                  <div className="reste-info">
+                    <i className='bx bx-wallet'></i>
+                    <span>Reste: {reste.toLocaleString()} MRU</span>
                   </div>
+                  <span className="pourcentage">{budget.pourcentage_utilise}% utilisé</span>
+                </div>
+
+                <div className="budget-actions">
+                  <button onClick={() => setDepenseModal(budget)} className="action-btn-depense" style={{ background: couleur }} title="Ajouter une dépense au budget">
+                    <i className='bx bx-money'></i>
+                    <span>Dépenser</span>
+                  </button>
+                  <button onClick={() => setDepensesModal(budget)} className="action-btn-view" title="Voir les dépenses du budget">
+                    <i className='bx bx-list-ul'></i>
+                  </button>
+                  <button onClick={() => { setBudgetModal(budget); setIsCreating(false); }} className="action-btn-edit" title="Modifier">
+                    <i className='bx bx-edit-alt'></i>
+                  </button>
+                  <button onClick={() => setConfirmSupprId(budget.id)} className="action-btn-delete" title="Supprimer">
+                    <i className='bx bx-trash'></i>
+                  </button>
                 </div>
               </div>
             );
@@ -592,7 +758,6 @@ export default function Budgets() {
         </div>
       )}
 
-      {/* Modales */}
       {depenseModal && (
         <DepenseModal
           budget={depenseModal}
@@ -600,8 +765,8 @@ export default function Budgets() {
           onSuccess={msg => { setDepenseModal(null); setSuccessMsg(msg); chargerDonnees(); }}
         />
       )}
-      {txModal && (
-        <BudgetTransactionsModal budget={txModal} onClose={() => setTxModal(null)} />
+      {depensesModal && (
+        <BudgetDepensesModal budget={depensesModal} onClose={() => setDepensesModal(null)} />
       )}
       {budgetModal !== null && (
         <BudgetModal
@@ -612,38 +777,1156 @@ export default function Budgets() {
         />
       )}
 
-      {/* Confirmation suppression */}
       {confirmSupprId && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 9999,
-          background: 'rgba(15,23,42,0.5)', backdropFilter: 'blur(4px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <div style={{
-            background: '#fff', borderRadius: 18, padding: 32, width: 380, textAlign: 'center',
-            boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
-          }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>🗑️</div>
-            <h3 style={{ margin: '0 0 8px', color: '#1e293b', fontWeight: 700 }}>Supprimer le budget ?</h3>
-            <p style={{ margin: '0 0 24px', color: '#64748b', fontSize: 14 }}>Cette action est irréversible.</p>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={handleSupprimerBudget} style={{
-                flex: 1, background: 'linear-gradient(135deg,#ef4444,#dc2626)',
-                color: '#fff', border: 'none', borderRadius: 10, padding: '12px',
-                cursor: 'pointer', fontWeight: 700,
-              }}>🗑️ Supprimer</button>
-              <button onClick={() => setConfirmSupprId(null)} style={{
-                flex: 1, background: '#f1f5f9', border: '1px solid #e2e8f0',
-                borderRadius: 10, padding: '12px', cursor: 'pointer', color: '#64748b',
-              }}>Annuler</button>
+        <div className="modal-overlay" onClick={() => setConfirmSupprId(null)}>
+          <div className="modal-container delete-confirm compact" onClick={e => e.stopPropagation()}>
+            <div className="delete-icon">
+              <i className='bx bx-trash'></i>
+            </div>
+            <h3>Supprimer ce budget ?</h3>
+            <p>Cette action est irréversible.</p>
+            <div className="modal-actions compact">
+              <button onClick={handleSupprimerBudget} className="btn-danger">
+                <i className='bx bx-trash'></i> Supprimer
+              </button>
+              <button onClick={() => setConfirmSupprId(null)} className="btn-secondary">Annuler</button>
             </div>
           </div>
         </div>
       )}
+
+      <style jsx>{`
+        @import url('https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css');
+
+        .budgets-page {
+          max-width: 1200px;
+          margin: 0 auto;
+          padding: 20px 16px;
+          font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .modal-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 9999;
+          background: rgba(15, 23, 42, 0.5);
+          backdrop-filter: blur(4px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .modal-container {
+          background: white;
+          border-radius: 20px;
+          padding: 20px;
+          width: 90%;
+          max-width: 380px;
+          max-height: 85vh;
+          overflow-y: auto;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal-container.compact {
+          max-width: 340px;
+          padding: 16px;
+        }
+
+        .modal-container.large {
+          max-width: 600px;
+        }
+
+        .modal-header {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 16px;
+        }
+
+        .modal-header.compact {
+          margin-bottom: 12px;
+        }
+
+        .modal-header-icon {
+          width: 40px;
+          height: 40px;
+          border-radius: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 20px;
+          flex-shrink: 0;
+        }
+
+        .modal-header h3 {
+          margin: 0;
+          font-size: 1.1rem;
+          font-weight: 700;
+          color: #1e293b;
+        }
+
+        .modal-header p {
+          margin: 2px 0 0;
+          font-size: 0.75rem;
+          color: #64748b;
+        }
+
+        .modal-close {
+          margin-left: auto;
+          background: #f1f5f9;
+          border: none;
+          border-radius: 8px;
+          width: 30px;
+          height: 30px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #64748b;
+          transition: all 0.2s;
+        }
+
+        .modal-close:hover {
+          background: #e2e8f0;
+        }
+
+        .success-modal {
+          background: white;
+          border-radius: 28px;
+          padding: 40px 56px;
+          text-align: center;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
+        }
+
+        .success-modal i {
+          font-size: 64px;
+          color: #10b981;
+          margin-bottom: 16px;
+        }
+
+        .success-modal p {
+          margin: 0;
+          font-size: 1.1rem;
+          font-weight: 600;
+          color: #1e293b;
+        }
+
+        .input-with-icon {
+          position: relative;
+          display: flex;
+          align-items: center;
+        }
+
+        .input-with-icon i {
+          position: absolute;
+          left: 12px;
+          color: #94a3b8;
+          font-size: 1rem;
+          pointer-events: none;
+        }
+
+        .input-with-icon input {
+          width: 100%;
+          padding: 10px 12px 10px 36px;
+          border: 1.5px solid #e2e8f0;
+          border-radius: 10px;
+          font-size: 0.85rem;
+          outline: none;
+          background: white;
+          box-sizing: border-box;
+        }
+
+        .input-with-icon input:focus {
+          border-color: #ef4444;
+          box-shadow: 0 0 0 2px #ef444420;
+        }
+
+        .form-group.compact {
+          margin-bottom: 10px;
+        }
+
+        .form-group.compact label {
+          display: none;
+        }
+
+        .form-group.compact input,
+        .form-group.compact select {
+          width: 100%;
+          padding: 10px 12px;
+          border: 1.5px solid #e2e8f0;
+          border-radius: 10px;
+          font-size: 0.85rem;
+          outline: none;
+          background: white;
+          box-sizing: border-box;
+        }
+
+        .form-group.compact input:focus,
+        .form-group.compact select:focus {
+          border-color: #6366f1;
+          box-shadow: 0 0 0 2px #6366f120;
+        }
+
+        .form-row.compact {
+          display: flex;
+          gap: 8px;
+        }
+
+        .form-row.compact .form-group.compact {
+          flex: 1;
+        }
+
+        .color-row.compact {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 12px;
+        }
+
+        .color-trigger {
+          width: 38px;
+          height: 38px;
+          border-radius: 10px;
+          border: 2px solid #e2e8f0;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-size: 18px;
+          transition: all 0.2s;
+        }
+
+        .color-trigger:hover {
+          transform: scale(1.02);
+        }
+
+        .color-picker.compact {
+          display: flex;
+          gap: 6px;
+          flex-wrap: wrap;
+          flex: 1;
+        }
+
+        .color-option {
+          width: 30px;
+          height: 30px;
+          border-radius: 50%;
+          border: 2px solid transparent;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+
+        .color-option:hover {
+          transform: scale(1.1);
+        }
+
+        .color-option.active {
+          border-color: #1e293b;
+          transform: scale(1.1);
+        }
+
+        .modal-actions.compact {
+          display: flex;
+          gap: 8px;
+          margin-top: 12px;
+        }
+
+        .btn-primary, .btn-secondary, .btn-danger {
+          flex: 1;
+          padding: 10px;
+          border: none;
+          border-radius: 10px;
+          font-weight: 600;
+          font-size: 0.8rem;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          transition: all 0.2s;
+        }
+
+        .btn-primary {
+          background: linear-gradient(135deg, #6366f1, #8b5cf6);
+          color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+        }
+
+        .btn-secondary {
+          background: #f1f5f9;
+          color: #64748b;
+          border: 1px solid #e2e8f0;
+        }
+
+        .btn-secondary:hover {
+          background: #e2e8f0;
+        }
+
+        .btn-danger {
+          background: linear-gradient(135deg, #ef4444, #dc2626);
+          color: white;
+        }
+
+        .btn-danger:hover {
+          transform: translateY(-1px);
+        }
+
+        .btn-primary:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .budget-info-row.compact {
+          display: flex;
+          gap: 12px;
+          padding: 10px;
+          background: #f8fafc;
+          border-radius: 10px;
+          margin-bottom: 16px;
+        }
+
+        .budget-info-item {
+          flex: 1;
+          text-align: center;
+        }
+
+        .info-label {
+          display: block;
+          font-size: 0.6rem;
+          font-weight: 600;
+          color: #94a3b8;
+          text-transform: uppercase;
+          margin-bottom: 4px;
+        }
+
+        .info-value {
+          font-size: 0.9rem;
+          font-weight: 700;
+        }
+
+        .stats-row.compact {
+          display: flex;
+          gap: 12px;
+          padding: 12px;
+          background: #f8fafc;
+          border-radius: 14px;
+          margin-bottom: 20px;
+        }
+
+        .stat-card-mini {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .stat-card-mini i {
+          font-size: 22px;
+        }
+
+        .stat-mini-label {
+          display: block;
+          font-size: 0.6rem;
+          font-weight: 600;
+          color: #94a3b8;
+          text-transform: uppercase;
+        }
+
+        .stat-mini-value {
+          display: block;
+          font-size: 0.8rem;
+          font-weight: 700;
+          color: #1e293b;
+        }
+
+        .filter-tabs {
+          display: flex;
+          gap: 10px;
+          margin-bottom: 24px;
+          flex-wrap: wrap;
+        }
+
+        .filter-btn {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 20px;
+          border-radius: 40px;
+          border: 1.5px solid #e2e8f0;
+          background: white;
+          color: #64748b;
+          font-size: 0.8rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .filter-btn i {
+          font-size: 1.1rem;
+        }
+
+        .filter-btn:hover {
+          border-color: #6366f1;
+          color: #6366f1;
+          transform: translateY(-1px);
+        }
+
+        .filter-btn.active {
+          background: linear-gradient(135deg, #6366f1, #8b5cf6);
+          border-color: transparent;
+          color: white;
+          box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+
+        .transactions-list {
+          margin-top: 8px;
+        }
+
+        .transactions-header {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding-bottom: 12px;
+          border-bottom: 1px solid #eef2f8;
+          font-size: 0.8rem;
+          font-weight: 600;
+          color: #64748b;
+        }
+
+        .empty-transactions.compact {
+          text-align: center;
+          padding: 40px 20px;
+        }
+
+        .empty-transactions.compact i {
+          font-size: 40px;
+          color: #cbd5e1;
+          margin-bottom: 12px;
+        }
+
+        .empty-transactions.compact p {
+          margin: 0;
+          font-weight: 500;
+          font-size: 0.85rem;
+          color: #64748b;
+        }
+
+        .empty-transactions.compact span {
+          font-size: 0.7rem;
+          color: #94a3b8;
+        }
+
+        .transaction-row.compact {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 12px 0;
+          border-bottom: 1px solid #f1f5f9;
+        }
+
+        .transaction-icon {
+          width: 36px;
+          height: 36px;
+          background: #fef2f2;
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #ef4444;
+          font-size: 16px;
+          flex-shrink: 0;
+        }
+
+        .transaction-info {
+          flex: 1;
+        }
+
+        .transaction-desc {
+          font-weight: 600;
+          font-size: 0.85rem;
+          color: #1e293b;
+        }
+
+        .transaction-date {
+          font-size: 0.65rem;
+          color: #94a3b8;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          margin-top: 4px;
+        }
+
+        .transaction-amount {
+          font-weight: 700;
+          font-size: 0.85rem;
+        }
+
+        .transaction-amount.negative {
+          color: #ef4444;
+        }
+
+        .page-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: wrap;
+          gap: 16px;
+          margin-bottom: 24px;
+        }
+
+        .header-left {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+        }
+
+        .header-icon {
+          width: 56px;
+          height: 56px;
+          background: linear-gradient(135deg, #6366f1, #8b5cf6);
+          border-radius: 20px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-size: 28px;
+          box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);
+        }
+
+        .page-header h1 {
+          margin: 0;
+          font-size: 1.6rem;
+          font-weight: 800;
+          color: #1e293b;
+          letter-spacing: -0.3px;
+        }
+
+        .page-header p {
+          margin: 4px 0 0;
+          color: #64748b;
+          font-size: 0.85rem;
+        }
+
+        .create-btn {
+          background: linear-gradient(135deg, #6366f1, #8b5cf6);
+          border: none;
+          border-radius: 40px;
+          padding: 12px 24px;
+          color: white;
+          font-weight: 600;
+          font-size: 0.85rem;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          transition: all 0.2s;
+          box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+
+        .create-btn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+        }
+
+        .quick-create-btn {
+          width: 100%;
+          background: white;
+          border: 2px dashed #cbd5e1;
+          border-radius: 20px;
+          padding: 18px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
+          color: #6366f1;
+          font-weight: 600;
+          font-size: 0.9rem;
+          margin-bottom: 24px;
+          transition: all 0.2s;
+        }
+
+        .quick-create-btn:hover {
+          border-color: #6366f1;
+          background: #f8fafc;
+          transform: translateY(-2px);
+        }
+
+        .quick-create-card {
+          background: white;
+          border-radius: 20px;
+          padding: 20px;
+          margin-bottom: 24px;
+          border: 1px solid #e2e8f0;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        }
+
+        .quick-create-header {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-bottom: 16px;
+          font-weight: 700;
+          font-size: 0.9rem;
+          color: #1e293b;
+        }
+
+        .quick-close {
+          margin-left: auto;
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: #94a3b8;
+          font-size: 1.2rem;
+        }
+
+        .quick-create-form {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+
+        .quick-create-form select,
+        .quick-create-form input {
+          padding: 12px 14px;
+          border: 1.5px solid #e2e8f0;
+          border-radius: 12px;
+          font-size: 0.85rem;
+          outline: none;
+        }
+
+        .quick-create-form select:focus,
+        .quick-create-form input:focus {
+          border-color: #6366f1;
+        }
+
+        .quick-submit {
+          background: #6366f1;
+          color: white;
+          border: none;
+          border-radius: 12px;
+          padding: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          margin-top: 4px;
+        }
+
+        .warning-card.compact {
+          background: #fffbeb;
+          border: 1px solid #fde68a;
+          border-radius: 16px;
+          padding: 16px 20px;
+          margin-bottom: 24px;
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          flex-wrap: wrap;
+        }
+
+        .warning-card.compact i {
+          font-size: 28px;
+          color: #f59e0b;
+        }
+
+        .warning-card.compact div {
+          flex: 1;
+        }
+
+        .warning-card.compact strong {
+          color: #b45309;
+          font-size: 0.85rem;
+        }
+
+        .warning-card.compact p {
+          margin: 2px 0 0;
+          font-size: 0.75rem;
+          color: #92400e;
+        }
+
+        .warning-action-btn {
+          background: #6366f1;
+          border: none;
+          border-radius: 40px;
+          padding: 8px 18px;
+          color: white;
+          font-size: 0.75rem;
+          font-weight: 600;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          white-space: nowrap;
+        }
+
+        .warning-banner.compact {
+          background: #fffbeb;
+          border: 1px solid #fde68a;
+          border-radius: 10px;
+          padding: 8px 12px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .info-banner.compact {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          border: 1px solid;
+          border-radius: 10px;
+          padding: 8px 12px;
+          font-size: 0.7rem;
+        }
+
+        .stats-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 16px;
+          margin-bottom: 28px;
+        }
+
+        .stat-card {
+          background: white;
+          border-radius: 20px;
+          padding: 16px 20px;
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+          border: 1px solid #eef2f8;
+        }
+
+        .stat-icon {
+          width: 48px;
+          height: 48px;
+          border-radius: 16px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 24px;
+        }
+
+        .stat-card .stat-label {
+          display: block;
+          font-size: 0.7rem;
+          font-weight: 600;
+          color: #94a3b8;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        .stat-card .stat-value {
+          display: block;
+          font-size: 1.2rem;
+          font-weight: 800;
+          color: #1e293b;
+        }
+
+        .budgets-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+          gap: 20px;
+        }
+
+        .budget-card {
+          background: white;
+          border-radius: 20px;
+          overflow: hidden;
+          box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+          border: 1px solid #eef2f8;
+          border-top: 4px solid;
+          transition: all 0.2s;
+        }
+
+        .budget-card:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
+        }
+
+        .budget-card.depasse {
+          border-top-color: #ef4444;
+          background: #fef2f2;
+        }
+
+        .budget-card.termine {
+          opacity: 0.85;
+          filter: grayscale(0.05);
+        }
+
+        .budget-card-header {
+          padding: 18px 20px;
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          border-bottom: 1px solid #f1f5f9;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+
+        .budget-category {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-weight: 700;
+          font-size: 1rem;
+        }
+
+        .budget-category i {
+          font-size: 1.1rem;
+        }
+
+        .budget-status-badges {
+          display: flex;
+          gap: 6px;
+          flex-wrap: wrap;
+        }
+
+        .encours-badge {
+          background: #e0e7ff;
+          color: #4338ca;
+          border-radius: 20px;
+          padding: 4px 10px;
+          font-size: 0.65rem;
+          font-weight: 600;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+
+        .termine-badge {
+          background: #dcfce7;
+          color: #15803d;
+          border-radius: 20px;
+          padding: 4px 10px;
+          font-size: 0.65rem;
+          font-weight: 600;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+
+        .depasse-badge {
+          background: #fee2e2;
+          color: #ef4444;
+          border-radius: 20px;
+          padding: 4px 10px;
+          font-size: 0.65rem;
+          font-weight: 600;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+
+        .budget-card-stats {
+          padding: 16px 20px;
+          display: flex;
+          align-items: center;
+          justify-content: space-around;
+          background: #fafcff;
+        }
+
+        .stat-item {
+          text-align: center;
+          flex: 1;
+        }
+
+        .stat-label-small {
+          display: block;
+          font-size: 1.1rem;
+          font-weight: 800;
+          color: #1e293b;
+        }
+
+        .stat-sub {
+          font-size: 0.65rem;
+          font-weight: 600;
+          color: #94a3b8;
+          text-transform: uppercase;
+          margin-top: 2px;
+        }
+
+        .stat-divider {
+          width: 1px;
+          height: 40px;
+          background: #e2e8f0;
+        }
+
+        .progress-bar {
+          margin: 0 20px 12px 20px;
+          background: #f1f5f9;
+          border-radius: 20px;
+          height: 8px;
+          overflow: hidden;
+        }
+
+        .progress-fill {
+          height: 8px;
+          border-radius: 20px;
+          transition: width 0.3s;
+        }
+
+        .budget-card-footer {
+          padding: 0 20px 16px 20px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+
+        .reste-info {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 0.8rem;
+          font-weight: 600;
+          color: #10b981;
+        }
+
+        .pourcentage {
+          font-size: 0.7rem;
+          font-weight: 600;
+          color: #94a3b8;
+        }
+
+        .budget-actions {
+          padding: 16px 20px 20px;
+          display: flex;
+          gap: 8px;
+          border-top: 1px solid #f1f5f9;
+        }
+
+        .action-btn-depense {
+          flex: 2;
+          border: none;
+          border-radius: 12px;
+          padding: 10px;
+          color: white;
+          font-weight: 600;
+          font-size: 0.8rem;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          transition: all 0.2s;
+        }
+
+        .action-btn-depense:hover {
+          filter: brightness(0.9);
+        }
+
+        .action-btn-view,
+        .action-btn-edit,
+        .action-btn-delete {
+          flex: 1;
+          border: none;
+          border-radius: 12px;
+          padding: 10px;
+          cursor: pointer;
+          font-size: 1rem;
+          transition: all 0.2s;
+        }
+
+        .action-btn-view {
+          background: #f1f5f9;
+          color: #475569;
+        }
+
+        .action-btn-edit {
+          background: #eef2ff;
+          color: #6366f1;
+        }
+
+        .action-btn-delete {
+          background: #fef2f2;
+          color: #ef4444;
+        }
+
+        .action-btn-view:hover,
+        .action-btn-edit:hover,
+        .action-btn-delete:hover {
+          transform: scale(0.95);
+        }
+
+        .loading-container {
+          text-align: center;
+          padding: 80px 20px;
+          color: #94a3b8;
+        }
+
+        .empty-state {
+          text-align: center;
+          padding: 80px 20px;
+          color: #94a3b8;
+        }
+
+        .empty-state i {
+          font-size: 64px;
+          color: #cbd5e1;
+          margin-bottom: 16px;
+        }
+
+        .empty-state h3 {
+          margin: 0 0 8px;
+          font-size: 1.1rem;
+          color: #1e293b;
+        }
+
+        .empty-state p {
+          margin: 0 0 24px;
+          font-size: 0.85rem;
+        }
+
+        .primary-btn {
+          background: linear-gradient(135deg, #6366f1, #8b5cf6);
+          border: none;
+          border-radius: 40px;
+          padding: 12px 28px;
+          color: white;
+          font-weight: 600;
+          font-size: 0.85rem;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .delete-confirm.compact {
+          text-align: center;
+          max-width: 320px;
+        }
+
+        .delete-icon {
+          width: 64px;
+          height: 64px;
+          background: #fef2f2;
+          border-radius: 32px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin: 0 auto 16px;
+          color: #ef4444;
+          font-size: 32px;
+        }
+
+        .delete-confirm h3 {
+          margin: 0 0 8px;
+          font-size: 1.1rem;
+          color: #1e293b;
+        }
+
+        .delete-confirm p {
+          margin: 0 0 24px;
+          font-size: 0.8rem;
+          color: #64748b;
+        }
+
+        .spinner {
+          width: 16px;
+          height: 16px;
+          border: 2px solid rgba(255, 255, 255, 0.3);
+          border-top-color: white;
+          border-radius: 50%;
+          animation: spin 0.7s linear infinite;
+        }
+
+        .spinner.large {
+          width: 40px;
+          height: 40px;
+          margin: 0 auto 16px;
+          border: 3px solid #e2e8f0;
+          border-top-color: #6366f1;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+          .budgets-page {
+            padding: 16px 12px;
+          }
+
+          .page-header {
+            flex-direction: column;
+            align-items: flex-start;
+          }
+
+          .create-btn {
+            width: 100%;
+            justify-content: center;
+          }
+
+          .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+          }
+
+          .filter-tabs {
+            flex-wrap: wrap;
+          }
+
+          .filter-btn {
+            flex: 1;
+            justify-content: center;
+          }
+
+          .budgets-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .modal-container {
+            padding: 16px;
+            width: 95%;
+          }
+
+          .form-row.compact {
+            flex-direction: column;
+          }
+
+          .stats-row.compact {
+            flex-direction: column;
+          }
+
+          .budget-card-stats {
+            flex-direction: column;
+            gap: 8px;
+          }
+
+          .stat-divider {
+            display: none;
+          }
+
+          .stat-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 0;
+          }
+        }
+
+        @media (min-width: 769px) and (max-width: 1024px) {
+          .budgets-page {
+            max-width: 960px;
+          }
+
+          .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+
+          .budgets-grid {
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+          }
+        }
+      `}</style>
     </div>
   );
 }
-
-
-
-

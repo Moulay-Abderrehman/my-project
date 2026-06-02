@@ -12,12 +12,7 @@ urlpatterns = [
     path('api/budgets/', include('budgets.urls')),
     path('api/notifications/', include('notifications.urls')),
     path('api/logs/', include('logs.urls')),
-    # ─── AJOUTER CETTE LIGNE pour le refresh token ───
-    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 ] 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-
-
-#+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 

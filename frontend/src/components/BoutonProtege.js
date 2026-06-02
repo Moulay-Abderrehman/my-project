@@ -1,6 +1,6 @@
 // frontend/src/components/BoutonProtege.js
-import React from 'react';
-import { useAuth } from '../context/AuthContext';
+/*import React from 'react';
+import { useAuth } from '../context/AuthContext';*/
 
 /**
  * Bouton qui se désactive automatiquement selon le rôle ou la feature.
@@ -16,7 +16,7 @@ import { useAuth } from '../context/AuthContext';
  *   <BoutonProtege roles={['standard','entreprise']} onClick={...}>Modifier</BoutonProtege>
  *   <BoutonProtege feature="extraction_pdf" onClick={...}>Extraire PDF</BoutonProtege>
  */
-export default function BoutonProtege({
+/*export default function BoutonProtege({
   children,
   onClick,
   roles,
@@ -56,4 +56,4 @@ export default function BoutonProtege({
       {!autorise && '🔒 '}{children}
     </button>
   );
-}
+}*/

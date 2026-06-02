@@ -1,8 +1,9 @@
 import secrets
 import string
 import random
+import uuid
+import os
 from datetime import timedelta
-
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -15,10 +16,9 @@ from django.contrib.auth import authenticate
 from django.utils import timezone
 from django.core.mail import send_mail
 from django.conf import settings
-from .models import Utilisateur
+from .models import Utilisateur , KYCVerificationSession
 from .serializers import UtilisateurSerializer
-
-from .models import Utilisateur
+from django.contrib.auth.hashers import make_password
 from .serializers import (
     InscriptionSerializer, ConnexionSerializer, UtilisateurSerializer,
     ChangePasswordSerializer, ContactSerializer,
@@ -34,7 +34,6 @@ from .utils import (
 from logs.utils import enregistrer_log
 
 
-# Ajouter:
 def _est_compte_entreprise(user) -> bool:
     """
     Retourne True si l'utilisateur est de type entreprise.
@@ -87,41 +86,110 @@ class InscriptionView(generics.CreateAPIView):
     permission_classes = [AllowAny]
 
     def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.save()
-
-        # Créer le solde initial
-        from transactions.models import Solde
-        Solde.objects.get_or_create(utilisateur=user)
-
-        # Créer l'abonnement essai gratuit 14 jours (rôle binome)
-        from abonnements.models import Abonnement
-        Abonnement.objects.get_or_create(
-            utilisateur=user,
-            defaults={
-                'type': 'essai',
-                'date_debut': timezone.now(),
-                'date_fin': timezone.now() + timedelta(days=14),
-                'statut': 'actif',
-                'montant': 0,
-            }
-        )
-
-        # Envoyer le code de confirmation email
-        if user.email:
-            envoyer_email_confirmation(user)
-
-        enregistrer_log(user, "INSCRIPTION", "Nouveau compte créé", request)
-
-        return Response(
-            {
-                "message": "Compte créé avec succès. Vérifiez votre email pour confirmer votre adresse.",
+        try:
+            email = request.data.get('email', '').lower()
+            telephone = request.data.get('telephone', '')
+            
+            # Vérifier si l'utilisateur existe déjà
+            existing_user = Utilisateur.objects.filter(email=email).first()
+            
+            if existing_user:
+                # Utilisateur existe et KYC complété
+                if existing_user.is_kyc_verified and existing_user.is_active:
+                    return Response({
+                        "status": "existing_user",
+                        "message": "Un compte existe déjà avec cet email. Veuillez vous connecter.",
+                        "user_id": str(existing_user.id),
+                        "redirect_to": "/connexion"
+                    }, status=status.HTTP_200_OK)
+                
+                # Utilisateur existe mais KYC incomplet
+                else:
+                    session = KYCVerificationSession.objects.filter(email=email).first()
+                    
+                    if not session:
+                        session_token = str(uuid.uuid4())
+                        session = KYCVerificationSession.objects.create(
+                            session_token=session_token,
+                            email=email,
+                            telephone=telephone,
+                            password=make_password(request.data.get('password', '')),
+                            nom=existing_user.nom,
+                            prenom=existing_user.prenom,
+                            auth_type='email',
+                            expires_at=timezone.now() + timedelta(hours=24),
+                            user_id=str(existing_user.id),
+                        )
+                    
+                    # Envoyer code de vérification
+                    code = generer_code_6chiffres()
+                    existing_user.code_confirmation = code
+                    existing_user.code_confirmation_expire = timezone.now() + timedelta(minutes=5)
+                    existing_user.save(update_fields=['code_confirmation', 'code_confirmation_expire'])
+                    
+                    return Response({
+                        "status": "kyc_incomplete",
+                        "message": "Votre compte est incomplet. Veuillez compléter la vérification d'identité.",
+                        "session_token": session.session_token,
+                        "user_id": str(existing_user.id),
+                        "redirect_to": "/kyc/document"
+                    }, status=status.HTTP_200_OK)
+            
+            # Nouvel utilisateur
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            validated_data = serializer.validated_data
+            
+            user = Utilisateur.objects.create(
+                email=validated_data.get('email', '').lower(),
+                telephone=validated_data.get('telephone', ''),
+                nom=validated_data.get('nom', ''),
+                prenom=validated_data.get('prenom', ''),
+                role='binome',
+                is_active=False,
+                is_kyc_verified=False,
+            )
+            user.set_password(validated_data.get('password', ''))
+            user.save()
+            
+            # Générer et envoyer le code
+            code = generer_code_6chiffres()
+            user.code_confirmation = code
+            user.code_confirmation_expire = timezone.now() + timedelta(minutes=5)
+            user.save(update_fields=['code_confirmation', 'code_confirmation_expire'])
+            
+            # Envoyer l'email
+            envoyer_email_verification_compte(user)
+            
+            # Créer la session KYC
+            session_token = str(uuid.uuid4())
+            session = KYCVerificationSession.objects.create(
+                session_token=session_token,
+                email=validated_data.get('email', '').lower(),
+                telephone=validated_data.get('telephone', ''),
+                password=make_password(validated_data.get('password', '')),
+                nom=validated_data.get('nom', ''),
+                prenom=validated_data.get('prenom', ''),
+                auth_type='email',
+                expires_at=timezone.now() + timedelta(hours=24),
+                user_id=str(user.id),
+            )
+            
+            enregistrer_log(None, "INSCRIPTION", f"Nouvelle inscription: {validated_data.get('email')}", request)
+            
+            return Response({
+                "status": "new_user",
+                "message": "Compte créé avec succès. Vérifiez votre email.",
+                "session_token": session_token,
                 "user_id": str(user.id),
-                "user": UtilisateurSerializer(user).data,
-            },
-            status=status.HTTP_201_CREATED
-        )
+                "redirect_to": "/verifier-email"
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            print(f"Erreur inscription: {e}")
+            import traceback
+            traceback.print_exc()
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 # ─── VERIFICATION EMAIL ────────────────────────────────────────────────────────
@@ -150,7 +218,7 @@ class VerifierEmailView(APIView):
             return Response({'error': 'Code incorrect.'}, status=400)
 
         user.email_verifie = True
-        user.code_confirmation = ''
+        user.is_active = True  
         user.code_confirmation_expire = None
         user.save(update_fields=['email_verifie', 'code_confirmation', 'code_confirmation_expire'])
 
@@ -184,16 +252,53 @@ class ConnexionView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        serializer = ConnexionSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.validated_data['user']
-        refresh = RefreshToken.for_user(user)
-        enregistrer_log(user, "CONNEXION", "Connexion réussie", request)
-        return Response({
-            "refresh": str(refresh),
-            "access": str(refresh.access_token),
-            "user": UtilisateurSerializer(user).data,
-        })
+        try:
+            serializer = ConnexionSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            user = serializer.validated_data['user']
+            
+            # Vérifier si le KYC est complété
+            if not user.is_kyc_verified:
+                session = KYCVerificationSession.objects.filter(user_id=str(user.id)).first()
+                
+                if not session:
+                    session_token = str(uuid.uuid4())
+                    session = KYCVerificationSession.objects.create(
+                        session_token=session_token,
+                        email=user.email,
+                        telephone=user.telephone,
+                        password=user.password,
+                        nom=user.nom,
+                        prenom=user.prenom,
+                        auth_type='email',
+                        expires_at=timezone.now() + timedelta(hours=24),
+                        user_id=str(user.id),
+                    )
+                
+                return Response({
+                    "error": "kyc_required",
+                    "message": "Veuillez compléter la vérification d'identité avant de continuer.",
+                    "session_token": session.session_token,
+                    "user_id": str(user.id),
+                    "redirect_to": "/kyc"
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            # Connexion normale
+            refresh = RefreshToken.for_user(user)
+            enregistrer_log(user, "CONNEXION", "Connexion réussie", request)
+            
+            return Response({
+                "refresh": str(refresh),
+                "access": str(refresh.access_token),
+                "user": UtilisateurSerializer(user).data,
+            })
+            
+        except Exception as e:
+            print(f"Erreur connexion: {e}")
+            return Response({
+                "error": "connexion_failed",
+                "message": "Email ou mot de passe incorrect."
+            }, status=status.HTTP_400_BAD_REQUEST)
 
 
 # ─── DECONNEXION ──────────────────────────────────────────────────────────────
@@ -513,69 +618,68 @@ class ActiverCompteEmployeView(APIView):
         })
     
 # ─── CONNEXION GOOGLE OAUTH ───────────────────────────────────────────────────
+
 class GoogleAuthView(APIView):
     permission_classes = [AllowAny]
-
+ 
     def post(self, request):
         import requests as req_lib
         import os
-
-        code = request.data.get('code', '').strip()
+ 
+        code         = request.data.get('code', '').strip()
         redirect_uri = request.data.get('redirect_uri', '').strip()
-
+ 
         if not code:
             return Response({'error': 'Code Google manquant.'}, status=400)
-
-        GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
+ 
+        GOOGLE_CLIENT_ID     = os.environ.get('GOOGLE_CLIENT_ID', '')
         GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
-
+ 
         if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
-            return Response(
-                {'error': 'Google OAuth n\'est pas configuré sur le serveur.'},
-                status=500
-            )
-
+            return Response({'error': "Google OAuth n'est pas configuré."}, status=500)
+ 
+        # Échanger le code contre un access_token
         token_resp = req_lib.post('https://oauth2.googleapis.com/token', data={
-            'code': code,
-            'client_id': GOOGLE_CLIENT_ID,
+            'code':          code,
+            'client_id':     GOOGLE_CLIENT_ID,
             'client_secret': GOOGLE_CLIENT_SECRET,
-            'redirect_uri': redirect_uri,
-            'grant_type': 'authorization_code',
+            'redirect_uri':  redirect_uri,
+            'grant_type':    'authorization_code',
         }, timeout=10)
-
+ 
         if token_resp.status_code != 200:
-            return Response({'error': 'Impossible d\'échanger le code Google.'}, status=400)
-
-        token_data = token_resp.json()
+            return Response({'error': "Impossible d'échanger le code Google."}, status=400)
+ 
+        token_data   = token_resp.json()
         access_token = token_data.get('access_token')
-
+ 
+        # Récupérer le profil Google
         profile_resp = req_lib.get(
             'https://www.googleapis.com/oauth2/v2/userinfo',
             headers={'Authorization': f'Bearer {access_token}'},
             timeout=10
         )
-
         if profile_resp.status_code != 200:
             return Response({'error': 'Impossible de récupérer le profil Google.'}, status=400)
-
-        profile = profile_resp.json()
+ 
+        profile   = profile_resp.json()
         google_id = profile.get('id')
-        email = (profile.get('email') or '').lower()
-        prenom = profile.get('given_name') or profile.get('name', 'Utilisateur').split()[0]
-        nom = profile.get('family_name') or (profile.get('name', '').split()[-1] if ' ' in profile.get('name', '') else 'Google')
-        photo = profile.get('picture', '')
-        email_ok = profile.get('verified_email', False)
-
+        email     = (profile.get('email') or '').lower()
+        prenom    = profile.get('given_name') or profile.get('name', 'Utilisateur').split()[0]
+        nom       = profile.get('family_name') or (profile.get('name', '').split()[-1] if ' ' in profile.get('name', '') else 'Google')
+        photo     = profile.get('picture', '')
+        email_ok  = profile.get('verified_email', False)
+ 
         if not email or not google_id:
             return Response({'error': 'Profil Google incomplet.'}, status=400)
-
-        user = None
+ 
+        user   = None
         need_password_setup = False
-
+ 
         # Chercher par google_id
         try:
             user = Utilisateur.objects.get(google_id=google_id)
-            user.email = email
+            user.email        = email
             user.email_verifie = email_ok
             user.google_photo = photo
             user.save(update_fields=['email', 'email_verifie', 'google_photo'])
@@ -583,113 +687,92 @@ class GoogleAuthView(APIView):
                 need_password_setup = True
         except Utilisateur.DoesNotExist:
             pass
-
+ 
         # Chercher par email
         if not user:
-            try:
-                user = Utilisateur.objects.get(email__iexact=email)
-                user.google_id = google_id
-                user.email_verifie = email_ok
-                user.google_photo = photo
-                #ajoute
-                 # Mettre à jour nom/prénom si vide
-                if not user.nom or user.nom == '':
-                    user.nom = nom
-                if not user.prenom or user.prenom == '':
-                    user.prenom = prenom
-                    #fin
-                user.save(update_fields=['google_id', 'email_verifie', 'google_photo'])
-                if not user.has_usable_password():
-                    need_password_setup = True
-            except Utilisateur.DoesNotExist:
-                pass
-
-        # Créer un nouvel utilisateur
+            existing_user = Utilisateur.objects.filter(email=email).first()
+            if existing_user:
+                # Mettre à jour l'utilisateur existant avec google_id
+                existing_user.google_id = google_id
+                existing_user.save(update_fields=['google_id'])
+                user = existing_user
+            else:
+                user = Utilisateur.objects.create_google_user(
+                    email=email, google_id=google_id, nom=nom, prenom=prenom,
+                    google_photo=photo, email_verifie=email_ok,
+                )
+                need_password_setup = True
+ 
+        # Créer un nouvel utilisateur Google
         if not user:
             user = Utilisateur.objects.create_google_user(
-                email=email,
-                google_id=google_id,
-                nom=nom,
-                prenom=prenom,
-                google_photo=photo,
-                email_verifie=email_ok,
+                email=email, google_id=google_id, nom=nom, prenom=prenom,
+                google_photo=photo, email_verifie=email_ok,
             )
             need_password_setup = True
-            
             from transactions.models import Solde
             Solde.objects.get_or_create(utilisateur=user)
             from .utils import creer_abonnement_essai
             creer_abonnement_essai(user)
-
+ 
+        # ── LOGIQUE KYC ──────────────────────────────────────────────────────
+        # Si l'utilisateur doit créer un mot de passe → KYC pas encore fait
         if need_password_setup:
             return Response({
                 "need_password_setup": True,
                 "user": UtilisateurSerializer(user).data,
             })
-
+ 
+        # Utilisateur existant avec mot de passe
+        # Vérifier si le KYC est fait
+        if not user.is_kyc_verified:
+            # KYC non fait → retourner les infos pour redirection KYC côté frontend
+            return Response({
+                "need_password_setup": False,
+                "kyc_required":        True,
+                "user":                UtilisateurSerializer(user).data,
+            })
+ 
+        # Utilisateur complet → connexion normale
         refresh = RefreshToken.for_user(user)
         enregistrer_log(user, "CONNEXION_GOOGLE", f"Connexion Google : {email}", request)
-
         return Response({
-            "refresh": str(refresh),
-            "access": str(refresh.access_token),
-            "user": UtilisateurSerializer(user).data,
-            "need_password_setup": False,
+            "refresh":              str(refresh),
+            "access":               str(refresh.access_token),
+            "user":                 UtilisateurSerializer(user).data,
+            "need_password_setup":  False,
+            "kyc_required":         False,
         })
 
 
 class GoogleSetPasswordView(APIView):
-    """
-    Permet à un utilisateur connecté via Google de définir un mot de passe
-    pour pouvoir se connecter avec email + mot de passe par la suite.
-    """
     permission_classes = [AllowAny]
-
+ 
     def post(self, request):
-        user_id = request.data.get('user_id')
-        password = request.data.get('password')
+        user_id          = request.data.get('user_id')
+        password         = request.data.get('password')
         confirm_password = request.data.get('confirm_password')
-
+ 
         if not user_id or not password:
             return Response({'error': 'Tous les champs sont obligatoires.'}, status=400)
-
         if password != confirm_password:
             return Response({'error': 'Les mots de passe ne correspondent pas.'}, status=400)
-
         if len(password) < 6:
             return Response({'error': 'Le mot de passe doit contenir au moins 6 caractères.'}, status=400)
-
-        '''try:
-            user = Utilisateur.objects.get(id=user_id, google_id__isnull=False)
-        except Utilisateur.DoesNotExist:
-            return Response({'error': 'Utilisateur Google introuvable.'}, status=404)
-
-        user.set_password(password)
-        user.save()
-
-        refresh = RefreshToken.for_user(user)
-
-        #enregistrer_log(user, "GOOGLE_PASSWORD", "Mot de passe défini après connexion Google", request)
-
-        return Response({
-            "message": "Mot de passe créé avec succès.",
-            "refresh": str(refresh),
-            "access": str(refresh.access_token),
-            "user": UtilisateurSerializer(user).data,
-        })'''
-
+ 
         try:
             user = Utilisateur.objects.get(id=user_id, google_id__isnull=False)
             user.set_password(password)
             user.save()
-            
-            refresh = RefreshToken.for_user(user)
-            
+ 
+            # ── NE PAS connecter l'utilisateur ici ──────────────────────────
+            # Il doit d'abord passer par le KYC.
+            # Le frontend va rediriger vers /kyc après cet appel.
             return Response({
-                'access': str(refresh.access_token),
-                'refresh': str(refresh),
-                'user': UtilisateurSerializer(user).data,
-                'message': 'Mot de passe créé avec succès'
+                'message':    'Mot de passe créé. Passez à la vérification d\'identité.',
+                'user_id':    str(user.id),
+                'kyc_required': not user.is_kyc_verified,
             })
+            
         except Utilisateur.DoesNotExist:
-            return Response({'error': 'Utilisateur non trouvé'}, status=404)
+            return Response({'error': 'Utilisateur non trouvé.'}, status=404)

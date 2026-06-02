@@ -104,17 +104,36 @@ class UtilisateurSerializer(serializers.ModelSerializer):
     supprimer_photo   = serializers.BooleanField(write_only=True, required=False)
     plan              = serializers.SerializerMethodField()
     limite_categories = serializers.SerializerMethodField()
-    est_compte_google = serializers.SerializerMethodField()  # <-- AJOUTER
+    est_compte_google = serializers.SerializerMethodField()  
 
     class Meta:
         model  = Utilisateur
         fields = [
             'id', 'nom', 'prenom', 'telephone', 'email', 'email_verifie',
             'photo_profil', 'date_inscription', 'initiales', 'supprimer_photo',
-            'role', 'plan', 'limite_categories','est_compte_google',  # <-- AJOUTER
+            'role', 'plan', 'limite_categories','est_compte_google',  
+            # ── Champs KYC ajoutés ───────────────────────────────────────
+            'is_kyc_verified',
+            'kyc_status',
+            'kyc_document_type',
+            'nni',
+            'nom_fr',
+            'prenom_fr',
+            'father_name',
+            'birth_date',
+            'birth_place',
+            'gender',
+            'nationality',
+            'face_similarity_score',
+            'kyc_completed_at',
+            # ────────────────────────────────────────────────────────────
         ]
-        read_only_fields = ['id', 'telephone', 'date_inscription', 'email_verifie', 'role']
-
+        read_only_fields = [
+                    'id', 'role', 'email_verifie', 'est_compte_google', 'initiales',
+                    'is_kyc_verified', 'kyc_status', 'face_similarity_score',
+                    'kyc_completed_at', 'nni', 'nom_fr', 'prenom_fr',
+                    'birth_date', 'birth_place', 'gender', 'nationality',
+                ]
     def get_est_compte_google(self, obj):
         return obj.est_compte_google  # <-- AJOUTER
     

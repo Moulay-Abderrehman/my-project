@@ -77,8 +77,52 @@ class Utilisateur(AbstractBaseUser, PermissionsMixin):
     token_invitation        = models.CharField(max_length=64, blank=True, unique=True, null=True)
     token_invitation_expire = models.DateTimeField(null=True, blank=True)
     invitation_email        = models.EmailField(blank=True)
-
     photo_profil     = models.ImageField(upload_to='media/profile/', null=True, blank=True)
+
+    # ── KYC (Know Your Customer) ─────────────────────────────────────────────
+    is_kyc_verified          = models.BooleanField(default=False)
+    kyc_document_type        = models.CharField(
+        max_length=20,
+        choices=[('cni', 'Carte Nationale'), ('passport', 'Passeport'), ('sejour', 'Carte de Séjour')],
+        blank=True
+    )
+    # Données extraites par OCR
+    nni                      = models.CharField(max_length=50, blank=True)
+    nom_fr                   = models.CharField(max_length=100, blank=True)
+    prenom_fr                = models.CharField(max_length=100, blank=True)
+    father_name              = models.CharField(max_length=100, blank=True, null=True)
+    father_name_ar           = models.CharField(max_length=100, blank=True, null=True)
+    nom_ar                   = models.CharField(max_length=100, blank=True)
+    prenom_ar                = models.CharField(max_length=100, blank=True)
+    birth_date               = models.DateField(null=True, blank=True)
+    birth_place              = models.CharField(max_length=100, blank=True)
+    gender                   = models.CharField(max_length=10, blank=True)
+    nationality              = models.CharField(max_length=10, blank=True, default='MRT')
+    # Image du visage extraite du document (base64 ou URL)
+    face_image_document      = models.TextField(blank=True)   # base64 du visage sur document
+    # Selfie pris lors de la vérification Face ID
+    selfie_profil            = models.ImageField(upload_to='media/selfies/', null=True, blank=True)
+    # Score de similarité faciale
+    face_similarity_score    = models.FloatField(null=True, blank=True)
+    # Stocke l'image complète en base64
+    document_full_image = models.TextField(blank=True, null=True)
+    # Statut KYC détaillé
+    kyc_status               = models.CharField(
+        max_length=20,
+        choices=[
+            ('pending',   'En attente'),
+            ('ocr_done',  'OCR terminé'),
+            ('face_done', 'Face ID vérifié'),
+            ('approved',  'Approuvé'),
+            ('rejected',  'Rejeté'),
+        ],
+        default='pending'
+    )
+    kyc_completed_at         = models.DateTimeField(null=True, blank=True)
+
+
+# ============================================================
+
     is_active        = models.BooleanField(default=True)
     is_staff         = models.BooleanField(default=False)
     date_inscription = models.DateTimeField(auto_now_add=True)
@@ -128,3 +172,24 @@ class Utilisateur(AbstractBaseUser, PermissionsMixin):
     class Meta:
         verbose_name = "Utilisateur"
         verbose_name_plural = "Utilisateurs"
+
+class KYCVerificationSession(models.Model):
+    """Session temporaire avant création du compte (stockée en base)"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    session_token = models.CharField(max_length=100, unique=True)
+    email = models.EmailField()
+    user_id = models.CharField(max_length=100, blank=True, null=True)
+    telephone = models.CharField(max_length=50)
+    password = models.CharField(max_length=128)  # hashé
+    nom = models.CharField(max_length=100, blank=True)
+    prenom = models.CharField(max_length=100, blank=True)
+    auth_type = models.CharField(max_length=20, default='email')  # email, google
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def is_valid(self):
+        from django.utils import timezone
+        return timezone.now() <= self.expires_at
+    
+    def __str__(self):
+        return f"Session {self.session_token[:8]} - {self.email}"

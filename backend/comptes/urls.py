@@ -7,6 +7,12 @@ from .views import (
     MotDePasseOublieView, ReinitialisationMotDePasseView,
     InviterEmployeView, ListeEmployesView, MesEmployesView, ActiverCompteEmployeView, GoogleAuthView,GoogleSetPasswordView,
 )
+from .views_kyc import (
+    KYCOCRExtractView,
+    KYCConfirmDataView,
+    KYCFaceVerifyView,
+    KYCStatusView,
+)
 from .sso import SSOCallbackView, SSORedirectView
 
 
@@ -43,5 +49,10 @@ urlpatterns = [
 
     path('auth/sso/', SSORedirectView.as_view(), name='sso-redirect'),
     path('auth/sso/callback/', SSOCallbackView.as_view(), name='sso-callback'),
-    
+
+    # ── KYC — NOUVELLES ROUTES ────────────────────────────────────────────────
+    path('kyc/ocr/',                  KYCOCRExtractView.as_view(),         name='kyc-ocr'),
+    path('kyc/confirm/',              KYCConfirmDataView.as_view(),        name='kyc-confirm'),
+    path('kyc/face/',                 KYCFaceVerifyView.as_view(),         name='kyc-face'),
+    path('kyc/status/',               KYCStatusView.as_view(),             name='kyc-status'),
     ]
