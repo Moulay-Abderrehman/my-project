@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api/axios';
-import toast from 'react-hot-toast';
 
 // ─── PARSING BUDGET TERMINÉ (message structuré) ───────────────────────────────
 function parseBudgetMessage(message) {
@@ -90,14 +89,26 @@ export default function Notifications() {
   const [filtre, setFiltre] = useState('toutes');
   const [selectedNotif, setSelectedNotif] = useState(null);
   const [expandedDepenses, setExpandedDepenses] = useState(null);
+  
+  // États pour les messages de feedback
+  const [feedback, setFeedback] = useState({ show: false, message: '', type: '' });
+  
+  // États pour la boîte de dialogue de confirmation
+  const [confirmDialog, setConfirmDialog] = useState({
+    show: false,
+    message: '',
+    onConfirm: null,
+    onCancel: null
+  });
 
   const charger = async () => {
     setLoading(true);
     try {
       const res = await api.get('/notifications/');
       setNotifications(res.data.results || res.data);
-    } catch {
-      toast.error('Erreur chargement notifications');
+    } catch (error) {
+      console.error('Erreur chargement:', error);
+      showFeedback('Erreur chargement notifications', 'error');
     } finally {
       setLoading(false);
     }
@@ -105,16 +116,92 @@ export default function Notifications() {
 
   useEffect(() => { charger(); }, []);
 
+  // ─── GESTION DES FEEDBACKS ──────────────────────────────────────────────────
+  const showFeedback = (message, type = 'success') => {
+    setFeedback({ show: true, message, type });
+    setTimeout(() => {
+      setFeedback({ show: false, message: '', type: '' });
+    }, 5000);
+  };
+
+  // ─── BOÎTE DE DIALOGUE DE CONFIRMATION ─────────────────────────────────────
+  const showConfirmDialog = (message, onConfirm, onCancel) => {
+    setConfirmDialog({
+      show: true,
+      message,
+      onConfirm: () => {
+        onConfirm();
+        setConfirmDialog({ show: false, message: '', onConfirm: null, onCancel: null });
+      },
+      onCancel: () => {
+        if (onCancel) onCancel();
+        setConfirmDialog({ show: false, message: '', onConfirm: null, onCancel: null });
+      }
+    });
+  };
+
+  // ─── ACTIONS ────────────────────────────────────────────────────────────────
   const marquerLue = async (id) => {
-    await api.patch(`/notifications/${id}/lue/`);
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, est_lue: true } : n));
-    toast.success('Notification marquée comme lue');
+    try {
+      await api.patch(`/notifications/${id}/lue/`);
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, est_lue: true } : n));
+      showFeedback('Notification marquée comme lue', 'success');
+    } catch (error) {
+      console.error('Erreur marquage:', error);
+      showFeedback('Erreur lors du marquage', 'error');
+    }
   };
 
   const marquerToutes = async () => {
-    await api.patch('/notifications/toutes-lues/');
-    setNotifications(prev => prev.map(n => ({ ...n, est_lue: true })));
-    toast.success('Toutes les notifications sont lues');
+    try {
+      await api.patch('/notifications/toutes-lues/');
+      setNotifications(prev => prev.map(n => ({ ...n, est_lue: true })));
+      showFeedback('Toutes les notifications sont lues', 'success');
+    } catch (error) {
+      console.error('Erreur marquage toutes:', error);
+      showFeedback('Erreur lors du marquage', 'error');
+    }
+  };
+
+  const supprimerUne = async (id) => {
+    if (!id) {
+      showFeedback('ID de notification invalide', 'error');
+      return;
+    }
+
+    try {
+      console.log('Suppression de la notification:', id);
+      const response = await api.delete(`/notifications/${id}/`);
+      console.log('Réponse suppression:', response);
+      
+      setNotifications(prev => prev.filter(n => n.id !== id));
+      showFeedback('Notification supprimée avec succès', 'success');
+    } catch (error) {
+      console.error('Erreur suppression détaillée:', error);
+      
+      if (error.response) {
+        console.error('Erreur réponse:', error.response.status, error.response.data);
+        if (error.response.status === 404) {
+          showFeedback('Notification non trouvée (peut-être déjà supprimée)', 'error');
+          charger();
+        } else {
+          showFeedback(`Erreur serveur: ${error.response.data?.detail || 'Erreur inconnue'}`, 'error');
+        }
+      } else if (error.request) {
+        console.error('Pas de réponse du serveur');
+        showFeedback('Impossible de contacter le serveur', 'error');
+      } else {
+        showFeedback('Erreur lors de la suppression', 'error');
+      }
+    }
+  };
+
+  const handleDeleteClick = (e, id) => {
+    e.stopPropagation();
+    showConfirmDialog(
+      'Voulez-vous vraiment supprimer cette notification ?',
+      () => supprimerUne(id)
+    );
   };
 
   const openModal = async (n) => {
@@ -224,6 +311,13 @@ export default function Notifications() {
           from { opacity: 0; }
           to { opacity: 1; }
         }
+        @keyframes slideDown {
+          from { opacity: 0; transform: translateY(-20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
         .notif-card {
           transition: all 0.2s ease;
           cursor: pointer;
@@ -239,6 +333,9 @@ export default function Notifications() {
         }
         .modal-overlay {
           animation: fadeIn 0.2s ease;
+        }
+        .feedback-banner {
+          animation: slideDown 0.3s ease;
         }
         @media (max-width: 640px) {
           .stats-row {
@@ -259,8 +356,153 @@ export default function Notifications() {
             margin: 16px !important;
             padding: 16px !important;
           }
+          .action-buttons {
+            flex-wrap: wrap !important;
+          }
+          .confirm-dialog {
+            width: 90% !important;
+            margin: 16px !important;
+          }
         }
       `}</style>
+
+      {/* ── BANNIÈRE DE FEEDBACK ── */}
+      {feedback.show && (
+        <div className="feedback-banner" style={{
+          position: 'fixed',
+          top: '16px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 9999,
+          background: feedback.type === 'success' ? '#10b981' : '#ef4444',
+          color: '#fff',
+          padding: '12px 24px',
+          borderRadius: 12,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          maxWidth: '90%',
+          fontWeight: 500,
+          fontSize: 13,
+        }}>
+          <i className={`bx ${feedback.type === 'success' ? 'bx-check-circle' : 'bx-error-circle'}`} style={{ fontSize: 20 }} />
+          {feedback.message}
+          <button 
+            onClick={() => setFeedback({ show: false, message: '', type: '' })}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#fff',
+              cursor: 'pointer',
+              fontSize: 18,
+              display: 'flex',
+              alignItems: 'center',
+              padding: '0 4px',
+            }}
+          >
+            <i className='bx bx-x' />
+          </button>
+        </div>
+      )}
+
+      {/* ── BOÎTE DE DIALOGUE DE CONFIRMATION ── */}
+      {confirmDialog.show && (
+        <div
+          className="modal-overlay"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.6)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 10000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+          }}
+        >
+          <div className="confirm-dialog" style={{
+            background: '#fff',
+            borderRadius: 16,
+            maxWidth: 400,
+            width: '100%',
+            padding: '24px',
+            animation: 'fadeIn 0.2s ease',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+          }}>
+            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+              <div style={{
+                width: 48,
+                height: 48,
+                background: '#fef2f2',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 12px',
+                color: '#ef4444',
+              }}>
+                <i className='bx bx-error' style={{ fontSize: 24 }} />
+              </div>
+              <h3 style={{ 
+                margin: '0 0 8px', 
+                fontSize: 16, 
+                fontWeight: 700, 
+                color: '#1e293b' 
+              }}>
+                Confirmation
+              </h3>
+              <p style={{ 
+                margin: 0, 
+                fontSize: 14, 
+                color: '#64748b', 
+                lineHeight: 1.5 
+              }}>
+                {confirmDialog.message}
+              </p>
+            </div>
+            
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={confirmDialog.onCancel}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  background: '#f1f5f9',
+                  border: 'none',
+                  borderRadius: 10,
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: '#64748b',
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={confirmDialog.onConfirm}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  background: '#ef4444',
+                  border: 'none',
+                  borderRadius: 10,
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: '#fff',
+                }}
+              >
+                Confirmer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── EN-TÊTE ── */}
       <div style={{
@@ -322,7 +564,7 @@ export default function Notifications() {
         {nonLues > 0 && (
           <button onClick={marquerToutes} style={{
             background: 'transparent',
-            border: `1px solid #6366f1`,
+            border: '1px solid #6366f1',
             borderRadius: 20,
             padding: '5px 12px',
             cursor: 'pointer',
@@ -345,6 +587,7 @@ export default function Notifications() {
         gap: 8,
         marginBottom: 16,
         flexWrap: 'wrap',
+        alignItems: 'center',
       }}>
         <button onClick={() => setFiltre('toutes')} className="filter-btn" style={{
           padding: '5px 12px',
@@ -552,7 +795,28 @@ export default function Notifications() {
                     </div>
                   </div>
 
-                  <i className='bx bx-chevron-right' style={{ fontSize: 18, color: '#94a3b8' }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <button
+                      onClick={(e) => handleDeleteClick(e, n.id)}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#94a3b8',
+                        cursor: 'pointer',
+                        padding: '4px',
+                        borderRadius: 6,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.color = '#ef4444'}
+                      onMouseLeave={(e) => e.currentTarget.style.color = '#94a3b8'}
+                    >
+                      <i className='bx bx-trash' style={{ fontSize: 16 }} />
+                    </button>
+                    <i className='bx bx-chevron-right' style={{ fontSize: 18, color: '#94a3b8' }} />
+                  </div>
                 </div>
               </div>
             );
@@ -799,23 +1063,53 @@ export default function Notifications() {
                 </div>
               )}
 
-              <button
-                onClick={closeModal}
-                style={{
-                  width: '100%',
-                  marginTop: 20,
-                  background: cfg.gradient,
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: 12,
-                  padding: '12px',
-                  cursor: 'pointer',
-                  fontSize: 14,
-                  fontWeight: 600,
-                }}
-              >
-                Fermer
-              </button>
+              <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
+                <button
+                  onClick={() => {
+                    showConfirmDialog(
+                      'Voulez-vous vraiment supprimer cette notification ?',
+                      () => {
+                        supprimerUne(selectedNotif.id);
+                        closeModal();
+                      }
+                    );
+                  }}
+                  style={{
+                    flex: 1,
+                    background: '#ef4444',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 12,
+                    padding: '12px',
+                    cursor: 'pointer',
+                    fontSize: 14,
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <i className='bx bx-trash' style={{ fontSize: 16 }} />
+                  Supprimer
+                </button>
+                <button
+                  onClick={closeModal}
+                  style={{
+                    flex: 1,
+                    background: cfg.gradient,
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 12,
+                    padding: '12px',
+                    cursor: 'pointer',
+                    fontSize: 14,
+                    fontWeight: 600,
+                  }}
+                >
+                  Fermer
+                </button>
+              </div>
             </div>
           </div>
         );

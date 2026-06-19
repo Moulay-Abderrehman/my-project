@@ -12,16 +12,23 @@ const getPhotoUrl = (path) => {
 
 export default function Layout() {
   const { user, abonnement, estAbonne, estEnEssai, estExpire, estEntreprise, notifNonLues, deconnexion } = useAuth();
-  const navigate     = useNavigate();
+  const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [infoEssai,  setInfoEssai]  = useState(null);
-  const [logoutHover, setLogoutHover] = useState(false);
+  const [infoEssai, setInfoEssai] = useState(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
-  const abonneActif  = estAbonne();
-  const enEssai      = estEnEssai();
-  const expire       = estExpire();
-  const entreprise   = estEntreprise();
+  // États pour la boîte de dialogue de confirmation
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [confirmMessage, setConfirmMessage] = useState('');
+
+  // États pour les messages (bannières)
+  const [message, setMessage] = useState({ text: '', type: '', visible: false });
+
+  const abonneActif = estAbonne();
+  const enEssai = estEnEssai();
+  const expire = estExpire();
+  const entreprise = estEntreprise();
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
@@ -38,12 +45,36 @@ export default function Layout() {
     }
   }, [enEssai]);
 
-  // Gestion déconnexion
-  const handleDeconnexion = async () => {
-    if (window.confirm('Voulez-vous vous déconnecter ?')) {
-      await deconnexion();
-      navigate('/');
-    }
+  // Fonction pour afficher un message
+  const showMessage = (text, type = 'success') => {
+    setMessage({ text, type, visible: true });
+    setTimeout(() => {
+      setMessage({ text: '', type: '', visible: false });
+    }, 5000);
+  };
+
+  // Gestion déconnexion avec boîte de dialogue inline
+  const handleDeconnexion = () => {
+    setConfirmMessage('Voulez-vous vous déconnecter ?');
+    setConfirmAction(() => async () => {
+      try {
+        await deconnexion();
+        setShowConfirmDialog(false);
+        showMessage('Déconnexion réussie', 'success');
+        navigate('/');
+      } catch (error) {
+        setShowConfirmDialog(false);
+        showMessage('Erreur lors de la déconnexion', 'error');
+      }
+    });
+    setShowConfirmDialog(true);
+  };
+
+  // Fonction pour annuler la confirmation
+  const cancelConfirmation = () => {
+    setShowConfirmDialog(false);
+    setConfirmAction(null);
+    setConfirmMessage('');
   };
 
   const initiales = user
@@ -101,6 +132,10 @@ export default function Layout() {
           from { opacity: 0; }
           to { opacity: 1; }
         }
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
         @keyframes pulse {
           0% { box-shadow: 0 0 0 0 rgba(59,130,246,0.4); }
           70% { box-shadow: 0 0 0 6px rgba(59,130,246,0); }
@@ -128,6 +163,155 @@ export default function Layout() {
           main { padding: 16px !important; }
         }
       `}</style>
+
+      {/* ═══ MESSAGE BANNIERE ═══════════════════════════════════════════════════════ */}
+      {message.visible && (
+        <div style={{
+          position: 'fixed',
+          top: 76,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 9999,
+          animation: 'slideUp 0.3s ease',
+          width: '90%',
+          maxWidth: '500px',
+        }}>
+          <div style={{
+            padding: '10px 16px',
+            borderRadius: 10,
+            background: message.type === 'success' 
+              ? 'linear-gradient(135deg, #ecfdf5, #d1fae5)' 
+              : 'linear-gradient(135deg, #fef2f2, #fee2e2)',
+            border: `1px solid ${message.type === 'success' ? '#6ee7b7' : '#fca5a5'}`,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
+          }}>
+            <i className={`bx ${message.type === 'success' ? 'bx-check-circle' : 'bx-error-circle'}`} 
+               style={{ fontSize: 18, color: message.type === 'success' ? '#059669' : '#dc2626' }} />
+            <span style={{ 
+              fontSize: 12, 
+              color: message.type === 'success' ? '#065f46' : '#991b1b',
+              fontWeight: 500,
+              flex: 1,
+            }}>
+              {message.text}
+            </span>
+            <button
+              onClick={() => setMessage({ text: '', type: '', visible: false })}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                color: '#6b7280',
+                fontSize: 16,
+                padding: '0 4px',
+              }}
+            >
+              <i className='bx bx-x'></i>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ BOÎTE DE DIALOGUE DE CONFIRMATION INLINE (TAILLE RÉDUITE) ═══════════════════════════════════════════════════════ */}
+      {showConfirmDialog && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.3)',
+          backdropFilter: 'blur(3px)',
+          zIndex: 99999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          animation: 'fadeIn 0.2s ease',
+        }}>
+          <div style={{
+            background: '#fff',
+            borderRadius: 12,
+            padding: '20px 24px',
+            maxWidth: 340,
+            width: '90%',
+            boxShadow: '0 12px 40px rgba(0,0,0,0.15)',
+            animation: 'slideUp 0.25s ease',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <div style={{
+                width: 32,
+                height: 32,
+                borderRadius: '50%',
+                background: '#fef2f2',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <i className='bx bx-question-mark' style={{ fontSize: 18, color: '#dc2626' }}></i>
+              </div>
+              <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#111827' }}>
+                Confirmation
+              </h3>
+            </div>
+            <p style={{ fontSize: 13, color: '#4b5563', marginBottom: 18, lineHeight: 1.4 }}>
+              {confirmMessage}
+            </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={cancelConfirmation}
+                style={{
+                  padding: '6px 16px',
+                  borderRadius: 6,
+                  border: '1px solid #d1d5db',
+                  background: '#fff',
+                  color: '#4b5563',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = '#f3f4f6';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = '#fff';
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => {
+                  if (confirmAction) confirmAction();
+                }}
+                style={{
+                  padding: '6px 16px',
+                  borderRadius: 6,
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #dc2626, #b91c1c)',
+                  color: '#fff',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                  e.currentTarget.style.boxShadow = '0 3px 10px rgba(220,38,38,0.25)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
+              >
+                Confirmer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ═══ HEADER ═══════════════════════════════════════════════════════ */}
       <header style={{

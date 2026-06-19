@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
-import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 // ── Tarifs selon type utilisateur ────────────────────────────────────────────
@@ -45,6 +44,23 @@ export default function Profil() {
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  // ── Bannières de message (remplacent les toasts) ─────────────────────────
+  // Chaque section a sa propre bannière : { type: 'success' | 'error', text }
+  const [msgProfil, setMsgProfil] = useState(null);
+  const [msgSecurite, setMsgSecurite] = useState(null);
+  const [msgAbonnement, setMsgAbonnement] = useState(null);
+  const [msgContact, setMsgContact] = useState(null);
+
+  const showMsg = (setter, type, text, duree = 4000) => {
+    setter({ type, text });
+    window.clearTimeout(showMsg._t);
+    showMsg._t = window.setTimeout(() => setter(null), duree);
+  };
+
+  // ── Boîtes de confirmation inline (remplacent window.confirm) ────────────
+  const [confirmSupprimerPhoto, setConfirmSupprimerPhoto] = useState(false);
+  const [confirmDeconnexion, setConfirmDeconnexion] = useState(false);
 
   // ── Profil ────────────────────────────────────────────────────────────────
   const [formProfil, setFormProfil] = useState({ nom: '', prenom: '', supprimer_photo: false });
@@ -122,9 +138,9 @@ export default function Profil() {
       setPhotoPreview(null);
       setPhotoKey(Date.now());
       setFormProfil(prev => ({ ...prev, supprimer_photo: false }));
-      toast.success('Photo mise à jour !');
+      showMsg(setMsgProfil, 'success', 'Photo mise à jour !');
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Erreur lors de la mise à jour.');
+      showMsg(setMsgProfil, 'error', err.response?.data?.detail || 'Erreur lors de la mise à jour.');
     } finally {
       setLoadingProfil(false);
     }
@@ -133,14 +149,22 @@ export default function Profil() {
   const handlePhotoChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) { toast.error('Photo max 5 Mo.'); return; }
+    if (file.size > 5 * 1024 * 1024) { showMsg(setMsgProfil, 'error', 'Photo max 5 Mo.'); return; }
     setPhotoFile(file);
     setPhotoPreview(URL.createObjectURL(file));
     setFormProfil(p => ({ ...p, supprimer_photo: false }));
   };
 
+  const demanderSuppressionPhoto = () => {
+    setConfirmSupprimerPhoto(true);
+  };
+
+  const annulerSuppressionPhoto = () => {
+    setConfirmSupprimerPhoto(false);
+  };
+
   const handleSupprimerPhoto = async () => {
-    if (!window.confirm('Voulez-vous vraiment supprimer votre photo de profil ?')) return;
+    setConfirmSupprimerPhoto(false);
     setLoadingProfil(true);
     try {
       const fd = new FormData();
@@ -153,9 +177,9 @@ export default function Profil() {
       setPhotoPreview(null);
       setPhotoKey(Date.now());
       setFormProfil(prev => ({ ...prev, supprimer_photo: false }));
-      toast.success('Photo supprimée avec succès !');
+      showMsg(setMsgProfil, 'success', 'Photo supprimée avec succès !');
     } catch {
-      toast.error('Erreur lors de la suppression');
+      showMsg(setMsgProfil, 'error', 'Erreur lors de la suppression');
     } finally {
       setLoadingProfil(false);
     }
@@ -164,17 +188,17 @@ export default function Profil() {
   const handleChangerMdp = async (e) => {
     e.preventDefault();
     if (formMdp.nouveau_password !== formMdp.confirm_password)
-      return toast.error('Les mots de passe ne correspondent pas.');
+      return showMsg(setMsgSecurite, 'error', 'Les mots de passe ne correspondent pas.');
     setLoadingMdp(true);
     try {
       await api.post('/comptes/changer-mot-de-passe/', {
         ancien_password: formMdp.ancien_password,
         nouveau_password: formMdp.nouveau_password,
       });
-      toast.success('Mot de passe modifié !');
+      showMsg(setMsgSecurite, 'success', 'Mot de passe modifié !');
       setFormMdp({ ancien_password: '', nouveau_password: '', confirm_password: '' });
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Mot de passe actuel incorrect.');
+      showMsg(setMsgSecurite, 'error', err.response?.data?.error || 'Mot de passe actuel incorrect.');
     } finally {
       setLoadingMdp(false);
     }
@@ -182,15 +206,15 @@ export default function Profil() {
 
   const demanderCode = async (e) => {
     e.preventDefault();
-    if (!emailAbo) return toast.error("L'email est obligatoire.");
-    if (!peutSouscrire()) { toast.error(`Abonnement actif. Il vous reste ${joursRest} jours.`); return; }
+    if (!emailAbo) return showMsg(setMsgAbonnement, 'error', "L'email est obligatoire.");
+    if (!peutSouscrire()) { showMsg(setMsgAbonnement, 'error', `Abonnement actif. Il vous reste ${joursRest} jours.`); return; }
     setLoadingCode(true);
     try {
       await api.post('/abonnements/demander-code/', { email: emailAbo, type_abonnement: typeAbo, type_utilisateur: typeUser });
-      toast.success(`Code envoyé à ${emailAbo} !`);
+      showMsg(setMsgAbonnement, 'success', `Code envoyé à ${emailAbo} !`);
       setCodeEnvoye(true);
     } catch (err) {
-      toast.error(err.response?.data?.error || "Erreur lors de l'envoi du code.");
+      showMsg(setMsgAbonnement, 'error', err.response?.data?.error || "Erreur lors de l'envoi du code.");
     } finally {
       setLoadingCode(false);
     }
@@ -198,8 +222,8 @@ export default function Profil() {
 
   const confirmerAbonnement = async (e) => {
     e.preventDefault();
-    if (!code) return toast.error('Entrez le code reçu par email.');
-    if (!peutSouscrire()) { toast.error(`Abonnement actif. Il vous reste ${joursRest} jours.`); return; }
+    if (!code) return showMsg(setMsgAbonnement, 'error', 'Entrez le code reçu par email.');
+    if (!peutSouscrire()) { showMsg(setMsgAbonnement, 'error', `Abonnement actif. Il vous reste ${joursRest} jours.`); return; }
     setLoadingAbo(true);
     try {
       const res = await api.post('/abonnements/souscrire/', {
@@ -207,9 +231,9 @@ export default function Profil() {
       });
       setSuccessAbo(res.data.abonnement);
       await chargerAbonnement();
-      toast.success('Abonnement activé avec succès !');
+      showMsg(setMsgAbonnement, 'success', 'Abonnement activé avec succès !');
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Code invalide ou expiré.');
+      showMsg(setMsgAbonnement, 'error', err.response?.data?.error || 'Code invalide ou expiré.');
     } finally {
       setLoadingAbo(false);
     }
@@ -220,17 +244,25 @@ export default function Profil() {
     setLoadingContact(true);
     try {
       await api.post('/comptes/contact/', { message: formContact });
-      toast.success('Message envoyé !');
+      showMsg(setMsgContact, 'success', 'Message envoyé !');
       setFormContact('');
     } catch {
-      toast.error("Erreur lors de l'envoi.");
+      showMsg(setMsgContact, 'error', "Erreur lors de l'envoi.");
     } finally {
       setLoadingContact(false);
     }
   };
 
+  const demanderDeconnexion = () => {
+    setConfirmDeconnexion(true);
+  };
+
+  const annulerDeconnexion = () => {
+    setConfirmDeconnexion(false);
+  };
+
   const handleDeconnexion = async () => {
-    if (!window.confirm('Voulez-vous vous déconnecter ?')) return;
+    setConfirmDeconnexion(false);
     await deconnexion();
     navigate('/connexion');
   };
@@ -273,7 +305,12 @@ export default function Profil() {
           to   { opacity: 1; transform: translateY(0); }
         }
         @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes bannerIn {
+          from { opacity: 0; transform: translateY(-6px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
         .prof-fade { animation: fadeUp 0.3s ease both; }
+        .msg-banner { animation: bannerIn 0.25s ease both; }
         .prof-input:focus {
           border-color: ${T.primary} !important;
           background: ${T.white} !important;
@@ -417,23 +454,54 @@ export default function Profil() {
             </div>
 
             {/* Déconnexion - icône seulement sur mobile */}
-            <button onClick={handleDeconnexion} style={{
-              background: T.dangerSoft,
-              color: T.danger,
-              border: `1px solid #fecaca`,
-              borderRadius: 30,
-              padding: isMobile ? '6px 12px' : '8px 20px',
-              cursor: 'pointer',
-              fontSize: isMobile ? 11 : 13,
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              fontFamily: "'DM Sans', sans-serif",
-            }}>
-              <i className='bx bx-log-out' style={{ fontSize: isMobile ? 14 : 16 }} />
-              {!isMobile && 'Déconnexion'}
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+              <button onClick={demanderDeconnexion} style={{
+                background: T.dangerSoft,
+                color: T.danger,
+                border: `1px solid #fecaca`,
+                borderRadius: 30,
+                padding: isMobile ? '6px 12px' : '8px 20px',
+                cursor: 'pointer',
+                fontSize: isMobile ? 11 : 13,
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                fontFamily: "'DM Sans', sans-serif",
+              }}>
+                <i className='bx bx-log-out' style={{ fontSize: isMobile ? 14 : 16 }} />
+                {!isMobile && 'Déconnexion'}
+              </button>
+
+              {/* Boîte de confirmation inline — remplace window.confirm */}
+              {confirmDeconnexion && (
+                <div className="msg-banner" style={{
+                  background: T.dangerSoft,
+                  border: `1px solid #fecaca`,
+                  borderRadius: T.radiusSm,
+                  padding: '10px 14px',
+                  maxWidth: 280,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                }}>
+                  <div style={{ fontSize: 11, color: '#991b1b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <i className='bx bx-error-circle' style={{ fontSize: 14 }} />
+                    Voulez-vous vous déconnecter ?
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                    <button onClick={annulerDeconnexion} style={{
+                      background: T.white, border: `1px solid ${T.border}`, color: T.textMid,
+                      borderRadius: 20, padding: '5px 12px', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                    }}>Annuler</button>
+                    <button onClick={handleDeconnexion} style={{
+                      background: T.danger, border: 'none', color: T.white,
+                      borderRadius: 20, padding: '5px 12px', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                    }}>Confirmer</button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -482,7 +550,27 @@ export default function Profil() {
         ════════════════════════════════════════════════════════════════════ */}
         {activeTab === 'informations' && (
           <div className="prof-fade" style={{ ...cardStyle, padding: cardPadding }}>
-            
+
+            {/* Bannière de message — remplace toast pour la section Profil */}
+            {msgProfil && (
+              <div className="msg-banner" style={{
+                marginBottom: 16,
+                padding: '10px 14px',
+                borderRadius: T.radiusSm,
+                background: msgProfil.type === 'success' ? T.successSoft : T.dangerSoft,
+                border: `1px solid ${msgProfil.type === 'success' ? '#bbf7d0' : '#fecaca'}`,
+                color: msgProfil.type === 'success' ? '#065f46' : '#991b1b',
+                fontSize: isMobile ? 11 : 12,
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}>
+                <i className={msgProfil.type === 'success' ? 'bx bx-check-circle' : 'bx bx-error-circle'} style={{ fontSize: 15 }} />
+                {msgProfil.text}
+              </div>
+            )}
+
             {/* Section Photo */}
             <div style={{ marginBottom: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
@@ -555,9 +643,9 @@ export default function Profil() {
                       {photoPreview ? 'Changer' : 'Changer'}
                       <input type="file" accept="image/*" onChange={handlePhotoChange} style={{ display: 'none' }} />
                     </label>
-                    
+
                     {(user?.photo_profil || photoPreview) && (
-                      <button onClick={handleSupprimerPhoto} style={{
+                      <button onClick={demanderSuppressionPhoto} style={{
                         display: 'inline-flex',
                         alignItems: 'center',
                         gap: 5,
@@ -575,6 +663,34 @@ export default function Profil() {
                       </button>
                     )}
                   </div>
+
+                  {/* Boîte de confirmation inline — remplace window.confirm */}
+                  {confirmSupprimerPhoto && (
+                    <div className="msg-banner" style={{
+                      background: T.dangerSoft,
+                      border: `1px solid #fecaca`,
+                      borderRadius: T.radiusSm,
+                      padding: '10px 14px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 8,
+                    }}>
+                      <div style={{ fontSize: 11, color: '#991b1b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <i className='bx bx-error-circle' style={{ fontSize: 14 }} />
+                        Voulez-vous vraiment supprimer votre photo de profil ?
+                      </div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button onClick={annulerSuppressionPhoto} style={{
+                          background: T.white, border: `1px solid ${T.border}`, color: T.textMid,
+                          borderRadius: 20, padding: '5px 12px', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                        }}>Annuler</button>
+                        <button onClick={handleSupprimerPhoto} style={{
+                          background: T.danger, border: 'none', color: T.white,
+                          borderRadius: 20, padding: '5px 12px', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                        }}>Confirmer</button>
+                      </div>
+                    </div>
+                  )}
 
                   {photoFile && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -800,6 +916,27 @@ export default function Profil() {
         ════════════════════════════════════════════════════════════════════ */}
         {activeTab === 'securite' && (
           <div className="prof-fade" style={{ ...cardStyle, padding: cardPadding }}>
+
+            {/* Bannière de message — remplace toast pour la section Sécurité */}
+            {msgSecurite && (
+              <div className="msg-banner" style={{
+                marginBottom: 16,
+                padding: '10px 14px',
+                borderRadius: T.radiusSm,
+                background: msgSecurite.type === 'success' ? T.successSoft : T.dangerSoft,
+                border: `1px solid ${msgSecurite.type === 'success' ? '#bbf7d0' : '#fecaca'}`,
+                color: msgSecurite.type === 'success' ? '#065f46' : '#991b1b',
+                fontSize: isMobile ? 11 : 12,
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}>
+                <i className={msgSecurite.type === 'success' ? 'bx bx-check-circle' : 'bx bx-error-circle'} style={{ fontSize: 15 }} />
+                {msgSecurite.text}
+              </div>
+            )}
+
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
               <div style={{
                 width: sectionIconSize,
@@ -965,6 +1102,27 @@ export default function Profil() {
         ════════════════════════════════════════════════════════════════════ */}
         {activeTab === 'abonnement' && (
           <div className="prof-fade">
+
+            {/* Bannière de message — remplace toast pour la section Abonnement */}
+            {msgAbonnement && (
+              <div className="msg-banner" style={{
+                marginBottom: 16,
+                padding: '10px 14px',
+                borderRadius: T.radiusSm,
+                background: msgAbonnement.type === 'success' ? T.successSoft : T.dangerSoft,
+                border: `1px solid ${msgAbonnement.type === 'success' ? '#bbf7d0' : '#fecaca'}`,
+                color: msgAbonnement.type === 'success' ? '#065f46' : '#991b1b',
+                fontSize: isMobile ? 11 : 12,
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}>
+                <i className={msgAbonnement.type === 'success' ? 'bx bx-check-circle' : 'bx bx-error-circle'} style={{ fontSize: 15 }} />
+                {msgAbonnement.text}
+              </div>
+            )}
+
             {abonnement && (
               <div style={{
                 ...cardStyle,
@@ -1190,6 +1348,27 @@ export default function Profil() {
         ════════════════════════════════════════════════════════════════════ */}
         {activeTab === 'contact' && (
           <div className="prof-fade" style={{ ...cardStyle, padding: cardPadding }}>
+
+            {/* Bannière de message — remplace toast pour la section Contact */}
+            {msgContact && (
+              <div className="msg-banner" style={{
+                marginBottom: 16,
+                padding: '10px 14px',
+                borderRadius: T.radiusSm,
+                background: msgContact.type === 'success' ? T.successSoft : T.dangerSoft,
+                border: `1px solid ${msgContact.type === 'success' ? '#bbf7d0' : '#fecaca'}`,
+                color: msgContact.type === 'success' ? '#065f46' : '#991b1b',
+                fontSize: isMobile ? 11 : 12,
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}>
+                <i className={msgContact.type === 'success' ? 'bx bx-check-circle' : 'bx bx-error-circle'} style={{ fontSize: 15 }} />
+                {msgContact.text}
+              </div>
+            )}
+
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
               <div style={{ width: sectionIconSize, height: sectionIconSize, borderRadius: 8, background: 'linear-gradient(135deg, #ede9fe, #c4b5fd)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <i className='bx bx-support' style={{ fontSize: isMobile ? 14 : 16, color: '#6366f1' }} />

@@ -7,7 +7,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Webcam from 'react-webcam';
-import toast from 'react-hot-toast';
 import kycService from '../api/kycService';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
@@ -35,7 +34,11 @@ const injectBoxicons = () => {
       @keyframes kycSpin { to { transform: rotate(360deg); } }
       @keyframes kycFadeUp { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:translateY(0); } }
       @keyframes kycPulse { 0%,100%{box-shadow:0 0 0 0 rgba(255,255,255,.2)} 50%{box-shadow:0 0 0 14px rgba(255,255,255,0)} }
+      @keyframes kycBannerSlide { from { opacity:0; transform:translateY(-20px); } to { opacity:1; transform:translateY(0); } }
+      @keyframes kycBannerFade { 0%,80%{opacity:1;transform:translateY(0);} 100%{opacity:0;transform:translateY(-20px);} }
       .bx-spin-kyc { animation: kycSpin .8s linear infinite; display:inline-block; }
+      .kyc-banner-slide { animation: kycBannerSlide .4s ease; }
+      .kyc-banner-auto { animation: kycBannerSlide .4s ease, kycBannerFade 4s ease forwards; }
     `;
     document.head.appendChild(style);
   }
@@ -43,33 +46,22 @@ const injectBoxicons = () => {
 
 // ─── Design tokens — thème bleu FinanceApp ───────────────────────────────────
 const T = {
-  // Fond : dégradé bleu identique à l'app
   bg:          '#1a3a8f',
   bgGradient:  'linear-gradient(135deg, #1a3a8f 0%, #1e4db7 40%, #2563eb 100%)',
-
-  // Carte : blanc avec légère transparence (comme le panneau "Commencer")
   surface:     '#ffffff',
   surfaceAlt:  '#f1f5ff',
   border:      '#dce8ff',
-
-  // Accent bleu foncé (bouton primaire comme l'app)
   accent:      '#1e4db7',
   accentHover: '#1a3a8f',
   accentBg:    'rgba(30,77,183,.08)',
   accentBdr:   'rgba(30,77,183,.25)',
   accentGlow:  '0 4px 20px rgba(30,77,183,.35)',
-
-  // Couleurs secondaires
   blue:        '#2563eb',
   blueBg:      'rgba(37,99,235,.08)',
   blueBdr:     'rgba(37,99,235,.25)',
-
-  // Textes
   text:        '#0f1e3d',
   textMuted:   '#6b7a9e',
   textSub:     '#4a5880',
-
-  // États
   danger:      '#dc2626',
   dangerBg:    'rgba(220,38,38,.06)',
   dangerBdr:   'rgba(220,38,38,.2)',
@@ -77,12 +69,10 @@ const T = {
   warnBg:      'rgba(217,119,6,.06)',
   warnBdr:     'rgba(217,119,6,.2)',
   success:     '#059669',
-
-  // Typo
+  successBg:   'rgba(5,150,105,.08)',
+  successBdr:  'rgba(5,150,105,.2)',
   font:        "'DM Sans', sans-serif",
   fontDisplay: "'Syne', sans-serif",
-
-  // Radii
   radius:      '20px',
   radiusSm:    '12px',
   radiusXs:    '8px',
@@ -198,6 +188,69 @@ const S = {
   },
 };
 
+// ─── Banner component ─────────────────────────────────────────────────────────
+function Banner({ type = 'info', message, onDismiss, autoDismiss = false }) {
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    if (autoDismiss) {
+      const timer = setTimeout(() => {
+        setVisible(false);
+        if (onDismiss) onDismiss();
+      }, 4500);
+      return () => clearTimeout(timer);
+    }
+  }, [autoDismiss, onDismiss]);
+
+  if (!visible || !message) return null;
+
+  const styles = {
+    success: { bg: T.successBg, border: T.successBdr, icon: 'bx-check-circle', color: T.success },
+    error:   { bg: T.dangerBg,  border: T.dangerBdr,  icon: 'bx-error-circle', color: T.danger },
+    warning: { bg: T.warnBg,    border: T.warnBdr,    icon: 'bx-error',       color: T.warn },
+    info:    { bg: T.accentBg,  border: T.accentBdr,  icon: 'bx-info-circle', color: T.accent },
+  };
+
+  const style = styles[type] || styles.info;
+
+  return (
+    <div className="kyc-banner-slide" style={{
+      background: style.bg,
+      border: `1px solid ${style.border}`,
+      borderRadius: T.radiusXs,
+      padding: '12px 16px',
+      marginBottom: 16,
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: 10,
+      position: 'relative',
+    }}>
+      <i className={`bx ${style.icon}`} style={{ fontSize: 20, color: style.color, flexShrink: 0, marginTop: 1 }} />
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 13, color: style.color, lineHeight: 1.5, fontFamily: T.font }}>
+          {message}
+        </div>
+      </div>
+      {!autoDismiss && (
+        <button
+          onClick={() => { setVisible(false); if (onDismiss) onDismiss(); }}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: style.color,
+            cursor: 'pointer',
+            fontSize: 18,
+            padding: '0 0 0 8px',
+            flexShrink: 0,
+          }}
+        >
+          <i className="bx bx-x" />
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ─── StepBar ──────────────────────────────────────────────────────────────────
 function StepBar({ currentStep, totalSteps = 4 }) {
   const labels = ['Document', 'Scan', 'Données', 'Selfie'];
@@ -271,11 +324,18 @@ export default function KYCFlow() {
   const [faceResult,       setFaceResult]       = useState(null);
   const [showCamera,       setShowCamera]       = useState(false);
   const [showSelfieCamera, setShowSelfieCamera] = useState(false);
+  const [banner,           setBanner]           = useState(null);
 
   const webcamRef    = useRef(null);
   const fileInputRef = useRef(null);
 
   useEffect(() => { injectBoxicons(); }, []);
+
+  const showBanner = (message, type = 'info', autoDismiss = false) => {
+    setBanner({ message, type, autoDismiss });
+  };
+
+  const clearBanner = () => setBanner(null);
 
   // ── Load userId ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -312,7 +372,7 @@ export default function KYCFlow() {
         setUserId(id);
         setIsLoading(false);
       } else {
-        toast.error('Session expirée. Veuillez vous reconnecter.');
+        showBanner('Session expirée. Veuillez vous reconnecter.', 'error');
         setTimeout(() => navigate('/connexion'), 2000);
         setIsLoading(false);
       }
@@ -330,7 +390,7 @@ export default function KYCFlow() {
       setCapturedFile(file);
       setCapturedImage(imageSrc);
       setShowCamera(false);
-    }).catch(() => toast.error('Erreur lors de la capture'));
+    }).catch(() => showBanner('Erreur lors de la capture', 'error'));
   }, []);
 
   const handleCaptureSelfie = useCallback(() => {
@@ -341,29 +401,8 @@ export default function KYCFlow() {
       setSelfieBlob(blob);
       setSelfiePreview(imageSrc);
       setShowSelfieCamera(false);
-    }).catch(() => toast.error('Erreur lors de la capture'));
+    }).catch(() => showBanner('Erreur lors de la capture', 'error'));
   }, []);
-  // Messages d'erreur personnalisés selon le type de document
-  const getErrorMessage = (type) => {
-    const messages = {
-      passport: {
-        title: 'Vérification passeport échouée',
-        body: 'Le visage ne correspond pas à la photo du passeport.',
-        suggestion: 'Assurez-vous que la photo du passeport est visible et que vous êtes bien éclairé.'
-      },
-      cni: {
-        title: 'Vérification carte d\'identité échouée',
-        body: 'Le visage ne correspond pas à la photo de la carte d\'identité nationale.',
-        suggestion: 'Prenez un selfie bien éclairé, de face, sans lunettes ni masque.'
-      },
-      sejour: {
-        title: 'Vérification carte de séjour échouée',
-        body: 'Le visage ne correspond pas à la photo de la carte de séjour.',
-        suggestion: 'Placez-vous face à la caméra, dans un endroit bien éclairé.'
-      }
-    };
-    return messages[type] || messages.cni;
-  };
 
   // ── Loading screen ──────────────────────────────────────────────────────────
   if (isLoading) {
@@ -411,7 +450,10 @@ export default function KYCFlow() {
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) { toast.error('Le fichier ne doit pas dépasser 5 Mo'); return; }
+    if (file.size > 5 * 1024 * 1024) {
+      showBanner('Le fichier ne doit pas dépasser 5 Mo', 'error');
+      return;
+    }
     setCapturedFile(file);
     setCapturedImage(URL.createObjectURL(file));
   };
@@ -419,44 +461,32 @@ export default function KYCFlow() {
   const handleSendOCR = async () => {
     if (!capturedFile) return;
     setLoading(true);
+    clearBanner();
     try {
       const result = await kycService.extractDocument(capturedFile);
       
-      // ✅ Vérifier si l'OCR a réussi (status 'success')
       if (result.status === 'success') {
-        // Vérifier le score de confiance (double sécurité)
         if (result.confidence_score <= 25) {
-          toast.error('❌ Document illisible. Veuillez prendre une photo plus claire et mieux éclairée.', {
-            duration: 5000,
-            icon: '📷'
-          });
+          showBanner('❌ Document illisible. Veuillez prendre une photo plus claire et mieux éclairée.', 'error');
           setLoading(false);
-          return; // ⛔ BLOQUER - reste à l'étape 2
+          return;
         }
-        
-        // ✅ Confiance suffisante → passer à l'étape suivante
         setExtractedData({ ...result, document_type: docType });
         setStep(3);
-        toast.success(`Document analysé avec succès ! (Confiance: ${result.confidence_score}%)`);
-        
+        showBanner(`Document analysé avec succès ! (Confiance: ${result.confidence_score}%)`, 'success');
       } else {
-        // Erreur retournée par l'API
         const errorMsg = result.message || result.error || "Erreur lors de l'extraction";
-        toast.error(errorMsg);
+        showBanner(errorMsg, 'error');
         setLoading(false);
       }
-      
     } catch (err) {
-      // Gestion des erreurs réseau ou serveur
       const errorMessage = err.response?.data?.message || 
                           err.response?.data?.error || 
                           "Erreur lors de l'extraction OCR. Veuillez réessayer.";
-      
-      // Afficher un message spécifique si c'est une erreur de qualité d'image
       if (err.response?.status === 422 && err.response?.data?.error === 'DOCUMENT_ILLISIBLE') {
-        toast.error('❌ ' + err.response?.data?.message, { duration: 5000 });
+        showBanner('❌ ' + err.response?.data?.message, 'error');
       } else {
-        toast.error(errorMessage);
+        showBanner(errorMessage, 'error');
       }
       setLoading(false);
     } finally { 
@@ -464,51 +494,41 @@ export default function KYCFlow() {
     }
   };
 
-  /*const handleConfirmData = async () => {
-    setLoading(true);
-    try {
-      await kycService.confirmData(userId, extractedData);
-      setStep(4);
-      toast.success('Données confirmées !');
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Erreur lors de la confirmation.');
-    } finally { setLoading(false); }
-  };*/
   const handleConfirmData = async () => {
-  setLoading(true);
-  try {
-    // ✅ S'assurer que toutes les données sont envoyées, y compris l'image complète
-    const confirmPayload = {
-      user_id: userId,
-      nni: extractedData?.nni || '',
-      nom_fr: extractedData?.nom_fr || '',
-      prenom_fr: extractedData?.prenom_fr || '',
-      birth_date: extractedData?.birth_date || '',
-      birth_place: extractedData?.birth_place || '',
-      gender: extractedData?.gender || '',
-      nationality: extractedData?.nationality || 'MRT',
-      document_type: extractedData?.document_type || 'cni',
-      face_image_base64: extractedData?.face_image_base64 || '',
-      // ✅ AJOUTER CETTE LIGNE (la plus importante)
-      document_full_image_base64: extractedData?.document_full_image_base64 || '',
-    };
-    
-    console.log("[KYC] Envoi confirmation avec:", {
-      has_full_image: !!confirmPayload.document_full_image_base64,
-      full_image_length: confirmPayload.document_full_image_base64?.length || 0
-    });
-    
-    await kycService.confirmData(userId, confirmPayload);
-    setStep(4);
-    toast.success('Données confirmées !');
-  } catch (err) {
-    toast.error(err.response?.data?.error || 'Erreur lors de la confirmation.');
-  } finally { setLoading(false); }
-};
+    setLoading(true);
+    clearBanner();
+    try {
+      const confirmPayload = {
+        user_id: userId,
+        nni: extractedData?.nni || '',
+        nom_fr: extractedData?.nom_fr || '',
+        prenom_fr: extractedData?.prenom_fr || '',
+        birth_date: extractedData?.birth_date || '',
+        birth_place: extractedData?.birth_place || '',
+        gender: extractedData?.gender || '',
+        nationality: extractedData?.nationality || 'MRT',
+        document_type: extractedData?.document_type || 'cni',
+        face_image_base64: extractedData?.face_image_base64 || '',
+        document_full_image_base64: extractedData?.document_full_image_base64 || '',
+      };
+      
+      console.log("[KYC] Envoi confirmation avec:", {
+        has_full_image: !!confirmPayload.document_full_image_base64,
+        full_image_length: confirmPayload.document_full_image_base64?.length || 0
+      });
+      
+      await kycService.confirmData(userId, confirmPayload);
+      setStep(4);
+      showBanner('Données confirmées !', 'success');
+    } catch (err) {
+      showBanner(err.response?.data?.error || 'Erreur lors de la confirmation.', 'error');
+    } finally { setLoading(false); }
+  };
 
   const handleVerifyFace = async () => {
     if (!selfieBlob) return;
     setLoading(true);
+    clearBanner();
     try {
       const result = await kycService.verifyFace(userId, selfieBlob);
       result.document_type = docType; 
@@ -525,28 +545,14 @@ export default function KYCFlow() {
         localStorage.removeItem('temp_user_id');
         localStorage.removeItem('temp_session_token');
         setStep(5);
-        toast.success('✅ Identité vérifiée avec succès !');
-        navigate('/dashboard');
+        showBanner('✅ Identité vérifiée avec succès !', 'success');
       }
     } catch (err) {
       const errData = err.response?.data;
       errData.document_type = docType;
       setFaceResult(errData || { verified: false, similarity_score: 0, message: 'Erreur de vérification.' });
-      toast.error(errData?.message || 'Visage non reconnu. Réessayez.');
+      showBanner(errData?.message || 'Visage non reconnu. Réessayez.', 'error');
     } finally { setLoading(false); }
-  };
-  // Fonction pour obtenir le nom du document selon le type
-  const getDocumentLabel = (type) => {
-    switch(type) {
-      case 'passport':
-        return 'du passeport';
-      case 'cni':
-        return "de la carte d'identité nationale";
-      case 'sejour':
-        return 'de la carte de séjour';
-      default:
-        return 'du document';
-    }
   };
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -558,7 +564,15 @@ export default function KYCFlow() {
         <div style={S.card}>
           <div style={S.cardLine} />
 
-          {/* Icon */}
+          {banner && (
+            <Banner
+              type={banner.type}
+              message={banner.message}
+              onDismiss={clearBanner}
+              autoDismiss={banner.autoDismiss}
+            />
+          )}
+
           <div style={{ textAlign: 'center', marginBottom: 28 }}>
             <div style={{
               width: 72, height: 72, borderRadius: '50%',
@@ -577,7 +591,6 @@ export default function KYCFlow() {
             </p>
           </div>
 
-          {/* Duration */}
           <div style={{
             background: T.surfaceAlt, border: `1px solid ${T.border}`,
             borderRadius: T.radiusSm, padding: '12px 16px', marginBottom: 20,
@@ -590,7 +603,6 @@ export default function KYCFlow() {
             </div>
           </div>
 
-          {/* Steps list */}
           <div style={{ marginBottom: 22 }}>
             {[
               { icon: 'bx-id-card',      title: 'Scannez votre document',     desc: "Carte d'identité nationale ou passeport" },
@@ -617,7 +629,6 @@ export default function KYCFlow() {
             ))}
           </div>
 
-          {/* Security note */}
           <div style={{
             background: T.accentBg, border: `1px solid ${T.accentBdr}`,
             borderRadius: T.radiusXs, padding: '10px 14px', marginBottom: 22,
@@ -651,6 +662,16 @@ export default function KYCFlow() {
       <div style={S.page}>
         <div style={{ ...S.card, maxWidth: 520 }}>
           <div style={S.cardLine} />
+          
+          {banner && (
+            <Banner
+              type={banner.type}
+              message={banner.message}
+              onDismiss={clearBanner}
+              autoDismiss={banner.autoDismiss}
+            />
+          )}
+
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
             <button onClick={() => setStep(0)} style={S.backBtn}>
               <i className="bx bx-chevron-left" style={{ fontSize: 18 }} />
@@ -719,6 +740,16 @@ export default function KYCFlow() {
       <div style={S.page}>
         <div style={{ ...S.card, maxWidth: 520 }}>
           <div style={S.cardLine} />
+          
+          {banner && (
+            <Banner
+              type={banner.type}
+              message={banner.message}
+              onDismiss={clearBanner}
+              autoDismiss={banner.autoDismiss}
+            />
+          )}
+
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
             <button onClick={() => setStep(1)} style={S.backBtn}>
               <i className="bx bx-chevron-left" style={{ fontSize: 18 }} />
@@ -828,6 +859,16 @@ export default function KYCFlow() {
       <div style={S.page}>
         <div style={{ ...S.card, maxWidth: 520 }}>
           <div style={S.cardLine} />
+          
+          {banner && (
+            <Banner
+              type={banner.type}
+              message={banner.message}
+              onDismiss={clearBanner}
+              autoDismiss={banner.autoDismiss}
+            />
+          )}
+
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
             <button onClick={() => setStep(2)} style={S.backBtn}>
               <i className="bx bx-chevron-left" style={{ fontSize: 18 }} />
@@ -856,7 +897,6 @@ export default function KYCFlow() {
             </div>
           )}
 
-          {/* Dans l'étape 3, après l'affichage du score de confiance*/}
           {confidence && confidence <= 50 && confidence > 25 && (
             <div style={{
               background: T.warnBg,
@@ -943,7 +983,7 @@ export default function KYCFlow() {
     );
   }
 
-// ════════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════
   // ÉTAPE 4 — Vérification Face ID
   // ════════════════════════════════════════════════════════════════════════════
   if (step === 4) {
@@ -951,6 +991,16 @@ export default function KYCFlow() {
       <div style={S.page}>
         <div style={{ ...S.card, maxWidth: 520 }}>
           <div style={S.cardLine} />
+          
+          {banner && (
+            <Banner
+              type={banner.type}
+              message={banner.message}
+              onDismiss={clearBanner}
+              autoDismiss={banner.autoDismiss}
+            />
+          )}
+
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
             <button onClick={() => setStep(3)} style={S.backBtn}>
               <i className="bx bx-chevron-left" style={{ fontSize: 18 }} /> Retour
@@ -1029,7 +1079,6 @@ export default function KYCFlow() {
                 <img src={selfiePreview} alt="selfie" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               </div>
 
-              {/* ✅ AFFICHAGE DÉTAILLÉ DES ERREURS AVEC MESSAGES PERSONNALISÉS */}
               {faceResult && !faceResult.verified && (
                 <div style={{
                   background: T.dangerBg,
@@ -1041,15 +1090,12 @@ export default function KYCFlow() {
                   <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 12 }}>
                     <i className="bx bx-error-circle" style={{ fontSize: 24, color: T.danger, flexShrink: 0 }} />
                     <div>
-                      {/* Titre personnalisé selon le type de document */}
                       <div style={{ fontSize: 14, fontWeight: 700, color: T.danger, marginBottom: 4 }}>
                         {faceResult.document_type === 'passport' && 'Vérification passeport échouée'}
                         {faceResult.document_type === 'cni' && 'Vérification carte d\'identité échouée'}
                         {faceResult.document_type === 'sejour' && 'Vérification carte de séjour échouée'}
                         {!faceResult.document_type && 'Échec de la vérification'}
                       </div>
-                      
-                      {/* Message personnalisé selon le type de document */}
                       <div style={{ fontSize: 13, color: T.danger, lineHeight: 1.4 }}>
                         {faceResult.message || (
                           faceResult.document_type === 'passport' ? 'Le visage ne correspond pas à la photo du passeport.' :
@@ -1061,7 +1107,6 @@ export default function KYCFlow() {
                     </div>
                   </div>
 
-                  {/* Score de similarité */}
                   {faceResult.similarity_score !== undefined && (
                     <div style={{ marginBottom: 12 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -1086,7 +1131,6 @@ export default function KYCFlow() {
                     </div>
                   )}
 
-                  {/* Score de liveness (anti-spoofing) */}
                   {faceResult.liveness_score !== undefined && (
                     <div style={{ marginBottom: 12 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -1106,7 +1150,6 @@ export default function KYCFlow() {
                     </div>
                   )}
 
-                  {/* Décision Nova */}
                   {faceResult.nova_decision && (
                     <div style={{
                       background: T.accentBg,
@@ -1121,7 +1164,6 @@ export default function KYCFlow() {
                     </div>
                   )}
 
-                  {/* Suggestion personnalisée selon le type de document */}
                   {!faceResult.suggestion && (
                     <div style={{
                       background: T.blueBg,
@@ -1142,7 +1184,6 @@ export default function KYCFlow() {
                     </div>
                   )}
 
-                  {/* Suggestion existante (si fournie par le backend) */}
                   {faceResult.suggestion && (
                     <div style={{
                       background: T.blueBg,
@@ -1162,11 +1203,10 @@ export default function KYCFlow() {
                 </div>
               )}
 
-              {/* ✅ AFFICHAGE SUCCÈS */}
               {faceResult && faceResult.verified && (
                 <div style={{
-                  background: T.accentBg,
-                  border: `1px solid ${T.accentBdr}`,
+                  background: T.successBg,
+                  border: `1px solid ${T.successBdr}`,
                   borderRadius: T.radiusSm,
                   padding: '12px 16px',
                   marginBottom: 16,
@@ -1175,7 +1215,7 @@ export default function KYCFlow() {
                   alignItems: 'center',
                 }}>
                   <i className="bx bx-check-circle" style={{ fontSize: 22, color: T.success }} />
-                  <span style={{ fontSize: 13, color: T.accent }}>
+                  <span style={{ fontSize: 13, color: T.success }}>
                     ✅ {faceResult.message || 'Identité vérifiée avec succès !'}
                   </span>
                 </div>
@@ -1210,6 +1250,16 @@ export default function KYCFlow() {
       <div style={S.page}>
         <div style={{ ...S.card, textAlign: 'center', maxWidth: 480 }}>
           <div style={S.cardLine} />
+          
+          {banner && (
+            <Banner
+              type={banner.type}
+              message={banner.message}
+              onDismiss={clearBanner}
+              autoDismiss={banner.autoDismiss}
+            />
+          )}
+
           <div style={{
             width: 100, height: 100, borderRadius: '50%',
             background: T.accentBg, border: `2px solid ${T.accentBdr}`,
@@ -1223,6 +1273,70 @@ export default function KYCFlow() {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
               <i className="bx bx-check" style={{ fontSize: 38, color: '#fff' }} />
+            </div>
+          </div>
+
+          <div style={{
+            background: T.successBg,
+            border: `1px solid ${T.successBdr}`,
+            borderRadius: T.radiusSm,
+            padding: '16px 20px',
+            marginBottom: 16,
+            textAlign: 'left',
+          }}>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+              <i className="bx bx-party" style={{ fontSize: 28, color: T.success, flexShrink: 0 }} />
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: T.success, marginBottom: 4, fontFamily: T.fontDisplay }}>
+                  Bienvenue sur FinanceApp !
+                </div>
+                <div style={{ fontSize: 14, color: T.success, lineHeight: 1.6, fontFamily: T.font }}>
+                  Votre compte a été vérifié avec succès. Vous pouvez dès maintenant vous connecter avec votre adresse email pour profiter de tous nos services financiers.
+                </div>
+                <div style={{
+                  marginTop: 8,
+                  display: 'flex',
+                  gap: 6,
+                  flexWrap: 'wrap',
+                }}>
+                  <span style={{
+                    background: T.successBg,
+                    padding: '2px 10px',
+                    borderRadius: 12,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: T.success,
+                    fontFamily: T.font,
+                  }}>
+                    <i className="bx bx-check-circle" style={{ fontSize: 12, marginRight: 4 }} />
+                    Compte vérifié
+                  </span>
+                  <span style={{
+                    background: T.successBg,
+                    padding: '2px 10px',
+                    borderRadius: 12,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: T.success,
+                    fontFamily: T.font,
+                  }}>
+                    <i className="bx bx-check-circle" style={{ fontSize: 12, marginRight: 4 }} />
+                    Sécurisé
+                  </span>
+                  <span style={{
+                    background: T.successBg,
+                    padding: '2px 10px',
+                    borderRadius: 12,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: T.success,
+                    fontFamily: T.font,
+                  }}>
+                    <i className="bx bx-check-circle" style={{ fontSize: 12, marginRight: 4 }} />
+                    Prêt à utiliser
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1276,8 +1390,18 @@ export default function KYCFlow() {
             </div>
           )}
 
-          <button onClick={() => navigate('/dashboard')} style={S.btnPrimary}>
-            <i className="bx bx-rocket" style={{ fontSize: 18 }} /> Accéder à mon compte
+          <button 
+            onClick={() => {
+              clearBanner();
+              navigate('/authchoix');
+            }} 
+            style={{
+              ...S.btnPrimary,
+              background: `linear-gradient(135deg, ${T.accent}, ${T.blue})`,
+            }}
+          >
+            <i className="bx bx-log-in-circle" style={{ fontSize: 18 }} /> 
+            OK — Accéder à mon compte
           </button>
         </div>
       </div>

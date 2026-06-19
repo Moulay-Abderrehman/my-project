@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import api from '../api/axios';
-import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 // ── SHARED STYLE CONSTANTS ────────────────────────────────────────────────────
@@ -16,6 +15,10 @@ const COLORS = {
   border: '#e2e8f0',
   bg: '#f8fafc',
   white: '#ffffff',
+  success: '#10b981',
+  warning: '#f59e0b',
+  error: '#ef4444',
+  info: '#3b82f6',
 };
 
 const sharedInput = {
@@ -43,6 +46,81 @@ const iconLeft = {
   fontSize: 16, color: COLORS.textLight, pointerEvents: 'none',
 };
 
+// ── COMPOSANT DE MESSAGE ──────────────────────────────────────────────────────
+function MessageBanner({ type, message, onClose }) {
+  if (!message) return null;
+
+  const styles = {
+    success: {
+      background: '#ecfdf5',
+      border: '1px solid #6ee7b7',
+      color: '#065f46',
+      icon: 'bx-check-circle',
+    },
+    error: {
+      background: '#fef2f2',
+      border: '1px solid #fca5a5',
+      color: '#991b1b',
+      icon: 'bx-error-circle',
+    },
+    warning: {
+      background: '#fffbeb',
+      border: '1px solid #fcd34d',
+      color: '#92400e',
+      icon: 'bx-error',
+    },
+    info: {
+      background: '#eff6ff',
+      border: '1px solid #93c5fd',
+      color: '#1e40af',
+      icon: 'bx-info-circle',
+    },
+  };
+
+  const style = styles[type] || styles.info;
+
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+      padding: '12px 16px',
+      borderRadius: 12,
+      background: style.background,
+      border: `1px solid ${style.border}`,
+      marginBottom: 16,
+      animation: 'fadeUp 0.3s cubic-bezier(.16,1,.3,1) both',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <i className={`bx ${style.icon}`} style={{ fontSize: 20, color: style.color }} />
+        <span style={{ fontSize: 13, color: style.color, fontWeight: 500 }}>
+          {message}
+        </span>
+      </div>
+      {onClose && (
+        <button
+          onClick={onClose}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            color: style.color,
+            fontSize: 18,
+            padding: '0 4px',
+            opacity: 0.6,
+            transition: 'opacity 0.2s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+          onMouseLeave={e => e.currentTarget.style.opacity = '0.6'}
+        >
+          <i className='bx bx-x' />
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ── SPINNER ───────────────────────────────────────────────────────────────────
 const spinnerStyle = {
   width: 15, height: 15,
@@ -69,7 +147,13 @@ function TypeBadge({ type }) {
 }
 
 // ── MODAL CRÉATION / MODIFICATION ─────────────────────────────────
-function TransactionModal({ transaction, onClose, onSuccess, categories }) {
+function TransactionModal({ 
+  transaction, 
+  onClose, 
+  onSuccess, 
+  categories,
+  onMessage 
+}) {
   const [form, setForm] = useState({
     type: transaction?.type || 'entree',
     montant: transaction?.montant || '',
@@ -77,10 +161,14 @@ function TransactionModal({ transaction, onClose, onSuccess, categories }) {
     categorie: transaction?.categorie || '',
   });
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState(null);
 
   const isEdit = !!transaction;
 
-  const categoriesDisponibles = (categories || []).filter(c => c && c.nom && c.nom.trim() !== '');
+  const categoriesFiltrees = (categories || []).filter(c => {
+    if (!c || !c.nom || c.nom.trim() === '') return false;
+    return c.type === 'les_deux' || c.type === form.type;
+  });
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -88,14 +176,17 @@ function TransactionModal({ transaction, onClose, onSuccess, categories }) {
       ...prev,
       [name]: value,
     }));
+    setMessage(null);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.montant || parseFloat(form.montant) <= 0) {
-      return toast.error('Le montant doit être positif.');
+      setMessage({ type: 'error', text: 'Le montant doit être supérieur à 0.' });
+      return;
     }
     setLoading(true);
+    setMessage(null);
     try {
       const payload = {
         type: form.type,
@@ -105,15 +196,63 @@ function TransactionModal({ transaction, onClose, onSuccess, categories }) {
       };
       if (isEdit) {
         await api.patch(`/transactions/${transaction.id}/`, payload);
-        toast.success('Transaction modifiée !');
+        setMessage({ type: 'success', text: 'Transaction modifiée avec succès !' });
+        setTimeout(() => {
+          onSuccess();
+        }, 1000);
       } else {
         await api.post('/transactions/', payload);
-        toast.success('Transaction créée !');
+        setMessage({ type: 'success', text: 'Transaction créée avec succès !' });
+        setTimeout(() => {
+          onSuccess();
+        }, 1000);
       }
-      onSuccess();
     } catch (err) {
-      const msg = err.response?.data?.detail || "Erreur lors de l'opération.";
-      toast.error(msg);
+      const errorData = err.response?.data;
+      const status = err.response?.status;
+      
+      if (status === 403) {
+        if (errorData?.error === 'abonnement_expire') {
+          setMessage({ 
+            type: 'error', 
+            text: 'Votre abonnement a expiré. Veuillez le renouveler pour effectuer cette action.' 
+          });
+          if (onMessage) onMessage('abonnement_expire');
+          return;
+        }
+        if (errorData?.error === 'abonnement_requis') {
+          setMessage({ 
+            type: 'error', 
+            text: 'Vous devez avoir un abonnement actif pour effectuer cette action.' 
+          });
+          return;
+        }
+        if (errorData?.error === 'limite_essai' || errorData?.error === 'limite' || 
+            (errorData?.detail && errorData.detail.toLowerCase().includes('limite'))) {
+          setMessage({ 
+            type: 'warning', 
+            text: 'Limite quotidienne atteinte. Revenez demain ou passez à un abonnement payant.' 
+          });
+          return;
+        }
+      }
+      
+      if (status === 401) {
+        setMessage({ 
+          type: 'error', 
+          text: 'Session expirée. Veuillez vous reconnecter.' 
+        });
+        setTimeout(() => {
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+          localStorage.removeItem('user');
+          window.location.href = '/connexion';
+        }, 2000);
+        return;
+      }
+      
+      const msg = errorData?.message || errorData?.detail || 'Une erreur est survenue. Veuillez réessayer.';
+      setMessage({ type: 'error', text: msg });
     } finally {
       setLoading(false);
     }
@@ -132,6 +271,8 @@ function TransactionModal({ transaction, onClose, onSuccess, categories }) {
         background: COLORS.white,
         borderRadius: 20, padding: '28px 24px',
         width: '100%', maxWidth: 460,
+        maxHeight: '90vh',
+        overflowY: 'auto',
         boxShadow: '0 32px 80px rgba(0,0,0,0.22)',
         animation: 'modalIn 0.3s cubic-bezier(.16,1,.3,1)',
       }} onClick={e => e.stopPropagation()}>
@@ -149,7 +290,7 @@ function TransactionModal({ transaction, onClose, onSuccess, categories }) {
               }} />
             </div>
             <h3 style={{ margin: 0, color: COLORS.text, fontWeight: 800, fontSize: 18, fontFamily: "'Outfit', sans-serif" }}>
-              {isEdit ? 'Modifier' : 'Nouvelle transaction'}
+              {isEdit ? 'Modifier la transaction' : 'Nouvelle transaction'}
             </h3>
           </div>
           <button onClick={onClose} style={{
@@ -164,6 +305,15 @@ function TransactionModal({ transaction, onClose, onSuccess, categories }) {
 
         <div style={{ height: 1, background: COLORS.border, marginBottom: 20 }} />
 
+        {/* Message dans le modal */}
+        {message && (
+          <MessageBanner 
+            type={message.type} 
+            message={message.text} 
+            onClose={() => setMessage(null)}
+          />
+        )}
+
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
           <div>
@@ -176,7 +326,7 @@ function TransactionModal({ transaction, onClose, onSuccess, categories }) {
                 { val: 'sortie', label: 'Sortie', icon: 'bx-trending-down', color: COLORS.sortie },
               ].map(opt => (
                 <button key={opt.val} type="button"
-                  onClick={() => setForm(prev => ({ ...prev, type: opt.val }))}
+                  onClick={() => setForm(prev => ({ ...prev, type: opt.val, categorie: '' }))}
                   style={{
                     flex: 1, padding: '11px 10px', borderRadius: 11,
                     border: `2px solid ${form.type === opt.val ? opt.color : COLORS.border}`,
@@ -216,7 +366,7 @@ function TransactionModal({ transaction, onClose, onSuccess, categories }) {
               Catégorie{' '}
               <span style={{ color: COLORS.textLight, fontWeight: 400, textTransform: 'none' }}>(optionnel)</span>
             </label>
-            {categoriesDisponibles.length === 0 ? (
+            {categoriesFiltrees.length === 0 ? (
               <div style={{
                 padding: '12px 14px', borderRadius: 10,
                 background: '#fff7ed', border: '1.5px solid #fed7aa',
@@ -224,10 +374,12 @@ function TransactionModal({ transaction, onClose, onSuccess, categories }) {
                 display: 'flex', alignItems: 'center', gap: 8,
               }}>
                 <i className='bx bx-error' style={{ fontSize: 16, color: '#f97316' }} />
-                Aucune catégorie disponible.{' '}
-                <a href="/categories" style={{ color: COLORS.primary, fontWeight: 600 }}>
-                  Créer
-                </a>
+                {categories.length === 0 ? 'Aucune catégorie disponible.' : `Aucune catégorie pour le type "${form.type === 'entree' ? 'Entrée' : 'Sortie'}"`}
+                {categories.length === 0 && (
+                  <a href="/categories" style={{ color: COLORS.primary, fontWeight: 600 }}>
+                    Créer
+                  </a>
+                )}
               </div>
             ) : (
               <div style={{ position: 'relative' }}>
@@ -236,7 +388,7 @@ function TransactionModal({ transaction, onClose, onSuccess, categories }) {
                   className="tx-input"
                   style={{ ...sharedInput, background: COLORS.white, cursor: 'pointer', appearance: 'none' }}>
                   <option value="">— Sans catégorie —</option>
-                  {categoriesDisponibles.map(c => (
+                  {categoriesFiltrees.map(c => (
                     <option key={c.id} value={c.id}>{c.nom}</option>
                   ))}
                 </select>
@@ -301,7 +453,8 @@ function TransactionModal({ transaction, onClose, onSuccess, categories }) {
 // ── PAGE PRINCIPALE ───────────────────────────────────────────────────────────
 export default function Transactions() {
   const navigate = useNavigate();
-  const [transactions, setTransactions] = useState([]);
+  const [allTransactions, setAllTransactions] = useState([]);
+  const [transactionsFiltrees, setTransactionsFiltrees] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOuvert, setModalOuvert] = useState(false);
@@ -309,6 +462,14 @@ export default function Transactions() {
   const [confirmSupprId, setConfirmSupprId] = useState(null);
   const [filtres, setFiltres] = useState({ type: '', date_debut: '', date_fin: '' });
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  
+  // ✅ États pour les messages
+  const [pageMessage, setPageMessage] = useState(null);
+  const [modalMessage, setModalMessage] = useState(null);
+  
+  // ✅ État pour l'abonnement expiré
+  const [abonnementExpire, setAbonnementExpire] = useState(false);
+  const [abonnementCharge, setAbonnementCharge] = useState(true);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
@@ -316,20 +477,63 @@ export default function Transactions() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // ✅ Vérifier le statut de l'abonnement
+  const verifierAbonnement = useCallback(async () => {
+    try {
+      const response = await api.get('/abonnements/statut/');
+      setAbonnementExpire(!response.data.est_actif);
+    } catch (error) {
+      console.error('Erreur vérification abonnement:', error);
+      setAbonnementExpire(true);
+    } finally {
+      setAbonnementCharge(false);
+    }
+  }, []);
+
+  const filtrerTransactionsParPeriode = useCallback((transactions, dateDebut, dateFin) => {
+    if (!dateDebut && !dateFin) return transactions;
+    
+    return transactions.filter(t => {
+      const dateTransaction = new Date(t.date);
+      dateTransaction.setHours(0, 0, 0, 0);
+      
+      if (dateDebut) {
+        const debut = new Date(dateDebut);
+        debut.setHours(0, 0, 0, 0);
+        if (dateTransaction < debut) return false;
+      }
+      
+      if (dateFin) {
+        const fin = new Date(dateFin);
+        fin.setHours(23, 59, 59, 999);
+        if (dateTransaction > fin) return false;
+      }
+      
+      return true;
+    });
+  }, []);
+
   const chargerDonnees = useCallback(async () => {
     setLoading(true);
+    setPageMessage(null);
     try {
       const params = {};
       if (filtres.type) params.type = filtres.type;
-      if (filtres.date_debut) params.date_debut = filtres.date_debut;
-      if (filtres.date_fin) params.date_fin = filtres.date_fin;
 
       const [txRes, catRes] = await Promise.all([
         api.get('/transactions/', { params }),
         api.get('/transactions/categories/'),
       ]);
 
-      setTransactions(txRes.data.results || txRes.data);
+      const transactionsRecues = txRes.data.results || txRes.data;
+      setAllTransactions(transactionsRecues);
+      
+      const transactionsFiltreesParPeriode = filtrerTransactionsParPeriode(
+        transactionsRecues,
+        filtres.date_debut,
+        filtres.date_fin
+      );
+      setTransactionsFiltrees(transactionsFiltreesParPeriode);
       
       let cats = [];
       if (Array.isArray(catRes.data)) {
@@ -342,34 +546,167 @@ export default function Transactions() {
       
       const validCats = cats.filter(c => c && c.id && c.nom && c.nom.trim() !== '');
       setCategories(validCats);
+      
     } catch (err) {
+      const status = err.response?.status;
+      const errorData = err.response?.data;
+      
+      if (status === 401) {
+        setPageMessage({ 
+          type: 'error', 
+          text: 'Session expirée. Veuillez vous reconnecter.' 
+        });
+        setTimeout(() => {
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+          localStorage.removeItem('user');
+          window.location.href = '/connexion';
+        }, 2000);
+        return;
+      }
+      
+      if (status === 403 && errorData?.error === 'abonnement_expire') {
+        setAbonnementExpire(true);
+        setPageMessage({ 
+          type: 'error', 
+          text: 'Votre abonnement a expiré. Vous ne pouvez pas créer de nouvelles transactions.' 
+        });
+        return;
+      }
+      
       console.error('Erreur:', err);
-      toast.error('Erreur lors du chargement des données.');
+      setPageMessage({ 
+        type: 'error', 
+        text: 'Erreur lors du chargement des données. Veuillez réessayer.' 
+      });
     } finally {
       setLoading(false);
     }
-  }, [filtres]);
+  }, [filtres.type, filtrerTransactionsParPeriode, filtres.date_debut, filtres.date_fin]);
 
-  useEffect(() => { chargerDonnees(); }, [chargerDonnees]);
+  useEffect(() => {
+    if (allTransactions.length > 0) {
+      const transactionsFiltreesParPeriode = filtrerTransactionsParPeriode(
+        allTransactions,
+        filtres.date_debut,
+        filtres.date_fin
+      );
+      setTransactionsFiltrees(transactionsFiltreesParPeriode);
+    }
+  }, [filtres.date_debut, filtres.date_fin, allTransactions, filtrerTransactionsParPeriode]);
 
-  const ouvrirCreation = () => { setTransactionEdit(null); setModalOuvert(true); };
-  const ouvrirModification = (t) => { setTransactionEdit(t); setModalOuvert(true); };
+  useEffect(() => {
+    verifierAbonnement();
+    chargerDonnees();
+  }, [verifierAbonnement, chargerDonnees]);
+
+  useEffect(() => {
+    if (allTransactions.length > 0) {
+      chargerDonnees();
+    }
+  }, [filtres.type, chargerDonnees, allTransactions.length]);
+
+  const ouvrirCreation = () => {
+    if (abonnementExpire) {
+      setPageMessage({ 
+        type: 'error', 
+        text: 'Votre abonnement a expiré. Vous ne pouvez pas créer de nouvelles transactions.' 
+      });
+      return;
+    }
+    setTransactionEdit(null);
+    setModalOuvert(true);
+  };
+  
+  const ouvrirModification = (t) => {
+    setTransactionEdit(t);
+    setModalOuvert(true);
+  };
+  
   const confirmerSuppression = (id) => setConfirmSupprId(id);
 
   const handleSupprimer = async () => {
     try {
       await api.delete(`/transactions/${confirmSupprId}/`);
-      toast.success("Transaction supprimée.");
       setConfirmSupprId(null);
       chargerDonnees();
-    } catch {
-      toast.error('Erreur lors de la suppression.');
+      setPageMessage({ 
+        type: 'success', 
+        text: 'Transaction supprimée avec succès.' 
+      });
+      setTimeout(() => setPageMessage(null), 3000);
+    } catch (err) {
+      const status = err.response?.status;
+      const errorData = err.response?.data;
+      
+      if (status === 401) {
+        setPageMessage({ 
+          type: 'error', 
+          text: 'Session expirée. Veuillez vous reconnecter.' 
+        });
+        setTimeout(() => {
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+          localStorage.removeItem('user');
+          window.location.href = '/connexion';
+        }, 2000);
+        return;
+      }
+      
+      const msg = errorData?.message || errorData?.detail || 'Erreur lors de la suppression. Veuillez réessayer.';
+      setPageMessage({ type: 'error', text: msg });
     }
   };
 
+  // ✅ Gestion de la limite quotidienne
+  const handleDailyLimitExceeded = () => {
+    setPageMessage({ 
+      type: 'warning', 
+      text: 'Limite quotidienne atteinte. Revenez demain ou passez à un abonnement payant.' 
+    });
+  };
+
+  // ✅ Gestion des messages depuis le modal
+  const handleModalMessage = (type) => {
+    if (type === 'abonnement_expire') {
+      setAbonnementExpire(true);
+      setPageMessage({ 
+        type: 'error', 
+        text: 'Votre abonnement a expiré. Veuillez le renouveler pour effectuer cette action.' 
+      });
+    }
+  };
+
+  const transactions = transactionsFiltrees;
+  
   const totalEntrees = transactions.filter(t => t.type === 'entree').reduce((s, t) => s + parseFloat(t.montant), 0);
   const totalSorties = transactions.filter(t => t.type === 'sortie').reduce((s, t) => s + parseFloat(t.montant), 0);
   const solde = totalEntrees - totalSorties;
+
+  // ✅ Afficher un loader pendant le chargement
+  if (abonnementCharge) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        background: COLORS.bg,
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            width: 48, height: 48,
+            border: '3px solid #ede9fe',
+            borderTopColor: COLORS.primary,
+            borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite',
+            margin: '0 auto 16px',
+          }} />
+          <p style={{ color: COLORS.textMuted }}>Chargement...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ 
@@ -405,7 +742,7 @@ export default function Transactions() {
         .stat-card { animation: fadeUp 0.4s cubic-bezier(.16,1,.3,1) both; }
         .stat-card:nth-child(2) { animation-delay: 0.07s; }
         .stat-card:nth-child(3) { animation-delay: 0.14s; }
-        .btn-new-tx:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(99,102,241,0.4) !important; }
+        .btn-new-tx:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(99,102,241,0.4) !important; }
         .btn-new-tx { transition: all 0.2s cubic-bezier(.16,1,.3,1); }
         .transaction-card {
           transition: all 0.2s ease;
@@ -414,6 +751,13 @@ export default function Transactions() {
           transform: scale(0.98);
         }
       `}</style>
+
+      {/* ── MESSAGE PAGE ── */}
+      <MessageBanner 
+        type={pageMessage?.type} 
+        message={pageMessage?.text} 
+        onClose={() => setPageMessage(null)}
+      />
 
       {/* ── EN-TÊTE ── */}
       <div style={{
@@ -454,22 +798,31 @@ export default function Transactions() {
             </div>
           </div>
         </div>
-        <button onClick={ouvrirCreation} className="btn-new-tx" style={{
-          background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-          color: COLORS.white,
-          border: 'none',
-          borderRadius: 40,
-          padding: isMobile ? '10px 20px' : '12px 24px',
-          cursor: 'pointer',
-          fontWeight: 700,
-          fontSize: isMobile ? 13 : 14,
-          boxShadow: '0 4px 14px rgba(99,102,241,0.3)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          whiteSpace: 'nowrap',
-          fontFamily: "'DM Sans', sans-serif",
-        }}>
+        <button 
+          onClick={ouvrirCreation} 
+          className="btn-new-tx" 
+          style={{
+            background: abonnementExpire 
+              ? '#e2e8f0' 
+              : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+            color: abonnementExpire ? '#94a3b8' : COLORS.white,
+            border: 'none',
+            borderRadius: 40,
+            padding: isMobile ? '10px 20px' : '12px 24px',
+            cursor: abonnementExpire ? 'not-allowed' : 'pointer',
+            fontWeight: 700,
+            fontSize: isMobile ? 13 : 14,
+            boxShadow: abonnementExpire ? 'none' : '0 4px 14px rgba(99,102,241,0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            whiteSpace: 'nowrap',
+            fontFamily: "'DM Sans', sans-serif",
+            opacity: abonnementExpire ? 0.6 : 1,
+          }}
+          disabled={abonnementExpire}
+          title={abonnementExpire ? 'Votre abonnement a expiré' : ''}
+        >
           <i className='bx bx-plus' style={{ fontSize: isMobile ? 16 : 18 }} />
           {!isMobile && 'Nouvelle '}Transaction
         </button>
@@ -627,25 +980,33 @@ export default function Transactions() {
             <i className='bx bx-transfer-alt' style={{ fontSize: 32, color: COLORS.primary }} />
           </div>
           <h3 style={{ fontSize: isMobile ? 16 : 18, fontWeight: 700, color: COLORS.text, margin: '0 0 8px' }}>
-            Aucune transaction
+            {filtres.date_debut || filtres.date_fin ? 'Aucune transaction dans cette période' : 'Aucune transaction'}
           </h3>
           <p style={{ fontSize: isMobile ? 13 : 14, color: COLORS.textMuted, margin: '0 0 24px' }}>
-            Commencez par enregistrer votre première transaction
+            {filtres.date_debut || filtres.date_fin ? 'Ajustez les dates de filtrage' : 'Commencez par enregistrer votre première transaction'}
           </p>
-          <button onClick={ouvrirCreation} style={{
-            background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-            color: COLORS.white,
-            border: 'none',
-            borderRadius: 40,
-            padding: '12px 28px',
-            cursor: 'pointer',
-            fontWeight: 600,
-            fontSize: 14,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 8,
-            fontFamily: "'DM Sans', sans-serif",
-          }}>
+          <button 
+            onClick={ouvrirCreation} 
+            style={{
+              background: abonnementExpire 
+                ? '#e2e8f0' 
+                : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+              color: abonnementExpire ? '#94a3b8' : COLORS.white,
+              border: 'none',
+              borderRadius: 40,
+              padding: '12px 28px',
+              cursor: abonnementExpire ? 'not-allowed' : 'pointer',
+              fontWeight: 600,
+              fontSize: 14,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              fontFamily: "'DM Sans', sans-serif",
+              opacity: abonnementExpire ? 0.6 : 1,
+            }}
+            disabled={abonnementExpire}
+            title={abonnementExpire ? 'Votre abonnement a expiré' : ''}
+          >
             <i className='bx bx-plus' style={{ fontSize: 16 }} />
             Nouvelle transaction
           </button>
@@ -733,7 +1094,7 @@ export default function Transactions() {
                             gap: 5,
                             fontFamily: "'DM Sans', sans-serif",
                           }}>
-                            <i className='bx bx-trash' style={{ fontSize: 13 }} /> Suppr.
+                            <i className='bx bx-trash' style={{ fontSize: 13 }} /> Supprimer
                           </button>
                         </div>
                       </td>
@@ -836,7 +1197,7 @@ export default function Transactions() {
             </div>
           )}
 
-          {/* Footer avec lien vers Toutes les transactions */}
+          {/* Footer */}
           <div style={{
             marginTop: 20,
             padding: '16px 20px',
@@ -847,6 +1208,13 @@ export default function Transactions() {
           }}>
             <p style={{ margin: 0, fontSize: 13, color: COLORS.textMuted }}>
               {transactions.length} transaction(s) affichée(s)
+              {(filtres.date_debut || filtres.date_fin) && (
+                <span style={{ display: 'block', marginTop: 4, fontSize: 12, color: COLORS.primary }}>
+                  {filtres.date_debut && `Du ${new Date(filtres.date_debut).toLocaleDateString('fr-FR')}`}
+                  {filtres.date_debut && filtres.date_fin && ' au '}
+                  {filtres.date_fin && `${new Date(filtres.date_fin).toLocaleDateString('fr-FR')}`}
+                </span>
+              )}
             </p>
             <button 
               onClick={() => navigate('/toutes-transactions')}
@@ -889,6 +1257,7 @@ export default function Transactions() {
           categories={categories}
           onClose={() => { setModalOuvert(false); setTransactionEdit(null); }}
           onSuccess={() => { setModalOuvert(false); setTransactionEdit(null); chargerDonnees(); }}
+          onMessage={handleModalMessage}
         />
       )}
 
@@ -928,10 +1297,10 @@ export default function Transactions() {
               <i className='bx bx-trash' style={{ fontSize: 28, color: COLORS.sortie }} />
             </div>
             <h3 style={{ margin: '0 0 8px', color: COLORS.text, fontWeight: 800, fontFamily: "'Outfit', sans-serif", fontSize: 18 }}>
-              Supprimer ?
+              Supprimer cette transaction ?
             </h3>
             <p style={{ margin: '0 0 24px', color: COLORS.textMuted, fontSize: 13, lineHeight: 1.5 }}>
-              Cette action est irréversible.
+              Cette action est irréversible. Êtes-vous sûr de vouloir continuer ?
             </p>
             <div style={{ display: 'flex', gap: 12 }}>
               <button onClick={handleSupprimer} style={{
@@ -951,7 +1320,7 @@ export default function Transactions() {
                 fontFamily: "'DM Sans', sans-serif",
                 boxShadow: '0 4px 12px rgba(239,68,68,0.3)',
               }}>
-                <i className='bx bx-trash' style={{ fontSize: 15 }} /> Oui
+                <i className='bx bx-trash' style={{ fontSize: 15 }} /> Oui, supprimer
               </button>
               <button onClick={() => setConfirmSupprId(null)} style={{
                 flex: 1,
@@ -965,7 +1334,7 @@ export default function Transactions() {
                 fontSize: 14,
                 fontFamily: "'DM Sans', sans-serif",
               }}>
-                Non
+                Annuler
               </button>
             </div>
           </div>

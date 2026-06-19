@@ -1,42 +1,117 @@
-'''from rest_framework import generics, status
+from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from django.utils import timezone
-from abonnements.permissions import EstAbonne
+from decimal import Decimal
+from abonnements.permissions import EstAbonne, LimiteEssaiQuotidienne
 from logs.utils import enregistrer_log
-from .models import Budget
-from .serializers import BudgetSerializer
-from transactions.models import Transaction, Solde
+from .models import Budget, BudgetDepense
+from .serializers import BudgetSerializer, BudgetDepenseSerializer
+from transactions.models import Transaction, Solde, Categorie
 from transactions.serializers import TransactionSerializer
 
 
 class BudgetListCreateView(generics.ListCreateAPIView):
+    """
+    Liste et création des budgets.
+    - Lecture : accessible même si abonnement expiré (via EstAbonne)
+    - Création : nécessite un abonnement actif
+    """
     serializer_class = BudgetSerializer
-    permission_classes = [IsAuthenticated, EstAbonne]
+    permission_classes = [IsAuthenticated, EstAbonne, LimiteEssaiQuotidienne]
 
     def get_queryset(self):
-        return Budget.objects.filter(utilisateur=self.request.user, est_actif=True)
+        """Retourne les budgets actifs de l'utilisateur."""
+        return Budget.objects.filter(
+            utilisateur=self.request.user, 
+            est_actif=True
+        ).order_by('-date_creation')
 
     def perform_create(self, serializer):
-        # Vérifier que l'utilisateur a des catégories
-        from transactions.models import Categorie
-        from django.db.models import Q
         user = self.request.user
+        
+        # ✅ Vérification explicite de l'abonnement
+        try:
+            abo = user.abonnement
+            if not abo:
+                raise PermissionDenied({
+                    'error': 'abonnement_requis',
+                    'message': 'Vous devez avoir un abonnement pour créer des budgets.',
+                    'redirect_to': '/abonnement'
+                })
+            
+            if abo.statut != 'actif' or abo.date_fin <= timezone.now():
+                raise PermissionDenied({
+                    'error': 'abonnement_expire',
+                    'message': 'Votre abonnement a expiré. Vous ne pouvez pas créer de budgets.',
+                    'redirect_to': '/abonnement'
+                })
+                
+        except PermissionDenied:
+            raise
+        except Exception:
+            raise PermissionDenied({
+                'error': 'abonnement_requis',
+                'message': 'Vous devez avoir un abonnement actif pour créer des budgets.',
+                'redirect_to': '/abonnement'
+            })
+
+        # ✅ Vérifier que l'utilisateur a des catégories
         categories = Categorie.objects.filter(
-            Q(utilisateur__isnull=True) | Q(utilisateur=user),
-            is_visible=True,
+            utilisateur=user, 
+            is_visible=True
         )
         if not categories.exists():
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError(
-                "Il faut créer des catégories avant de créer un budget."
-            )
+            raise ValidationError({
+                'error': 'categorie_requise',
+                'message': 'Il faut créer des catégories avant de créer un budget.',
+                'redirect_to': '/categories'
+            })
 
+        # ✅ Vérifier que le montant est valide
+        montant_prevu = serializer.validated_data.get('montant_prevu', 0)
+        if montant_prevu <= 0:
+            raise ValidationError({
+                'error': 'montant_invalide',
+                'message': 'Le montant prévu doit être supérieur à 0.'
+            })
+
+        # ✅ Vérifier que la date de fin est après la date de début
+        date_debut = serializer.validated_data.get('date_debut', timezone.now().date())
+        date_fin = serializer.validated_data.get('date_fin')
+        if date_fin <= date_debut:
+            raise ValidationError({
+                'error': 'date_invalide',
+                'message': 'La date de fin doit être postérieure à la date de début.'
+            })
+
+        # ✅ Vérifier les limites pour les utilisateurs en essai
+        try:
+            abo = user.abonnement
+            if abo and abo.get_plan_nom() == 'essai':
+                aujourd_hui = timezone.now().date()
+                nb_budgets_jour = Budget.objects.filter(
+                    utilisateur=user,
+                    date_creation__date=aujourd_hui
+                ).count()
+                if nb_budgets_jour >= 2:  # Limite essai = 2 budgets par jour
+                    raise PermissionDenied({
+                        'error': 'limite_essai',
+                        'message': 'Limite quotidienne atteinte. Vous ne pouvez créer que 2 budgets par jour en période d\'essai.',
+                        'redirect_to': '/abonnement'
+                    })
+        except PermissionDenied:
+            raise
+        except Exception:
+            pass
+
+        # ✅ Créer le budget
         budget = serializer.save(utilisateur=user)
-        enregistrer_log(user, "BUDGET", f"Budget créé: {budget.categorie}", self.request)
+        enregistrer_log(user, "BUDGET", f"Budget créé: {budget.categorie.nom}", self.request)
 
-        # Si la date de fin est déjà passée, clôturer immédiatement
+        # ✅ Si la date de fin est déjà passée, clôturer immédiatement
         if budget.date_fin < timezone.now().date():
             budget.envoyer_notification_fin()
             budget.est_actif = False
@@ -44,6 +119,11 @@ class BudgetListCreateView(generics.ListCreateAPIView):
 
 
 class BudgetDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    Détail, modification et suppression d'un budget.
+    - Lecture : accessible même si abonnement expiré (via EstAbonne)
+    - Modification/Suppression : nécessite un abonnement actif
+    """
     serializer_class = BudgetSerializer
     permission_classes = [IsAuthenticated, EstAbonne]
 
@@ -51,21 +131,120 @@ class BudgetDetailView(generics.RetrieveUpdateDestroyAPIView):
         return Budget.objects.filter(utilisateur=self.request.user)
 
     def retrieve(self, request, *args, **kwargs):
+        """Récupère un budget avec toutes ses informations."""
         budget = self.get_object()
         data = BudgetSerializer(budget).data
+        
+        # ✅ Récupérer les transactions liées à ce budget
         transactions = Transaction.objects.filter(
             utilisateur=request.user,
-            categorie=budget.categorie,
+            budget=budget,
             type='sortie',
-            date__date__gte=budget.date_debut,
-            date__date__lte=budget.date_fin,
+            is_visible=True,
         )
         data['transactions'] = TransactionSerializer(transactions, many=True).data
+        
+        # ✅ Récupérer les dépenses du budget (suivi interne)
+        depenses = BudgetDepense.objects.filter(budget=budget)
+        data['depenses'] = BudgetDepenseSerializer(depenses, many=True).data
+        
+        # ✅ Ajouter des informations supplémentaires
+        data['pourcentage_utilise'] = budget.pourcentage_utilise
+        data['reste'] = float(budget.montant_prevu) - float(budget.montant_depense)
+        data['jours_restants'] = (budget.date_fin - timezone.now().date()).days if budget.est_actif else 0
+        
         return Response(data)
+
+    def perform_update(self, serializer):
+        user = self.request.user
+        
+        # ✅ Vérification explicite pour la modification
+        try:
+            abo = user.abonnement
+            if not abo:
+                raise PermissionDenied({
+                    'error': 'abonnement_requis',
+                    'message': 'Vous devez avoir un abonnement pour modifier des budgets.',
+                    'redirect_to': '/abonnement'
+                })
+            
+            if abo.statut != 'actif' or abo.date_fin <= timezone.now():
+                raise PermissionDenied({
+                    'error': 'abonnement_expire',
+                    'message': 'Votre abonnement a expiré. Vous ne pouvez pas modifier de budgets.',
+                    'redirect_to': '/abonnement'
+                })
+                
+        except PermissionDenied:
+            raise
+        except Exception:
+            raise PermissionDenied({
+                'error': 'abonnement_requis',
+                'message': 'Vous devez avoir un abonnement actif pour modifier des budgets.',
+                'redirect_to': '/abonnement'
+            })
+        
+        # ✅ Vérifier les dates
+        date_debut = serializer.validated_data.get('date_debut')
+        date_fin = serializer.validated_data.get('date_fin')
+        if date_debut and date_fin and date_fin <= date_debut:
+            raise ValidationError({
+                'error': 'date_invalide',
+                'message': 'La date de fin doit être postérieure à la date de début.'
+            })
+        
+        # ✅ Vérifier que le budget est actif
+        budget = self.get_object()
+        if not budget.est_actif:
+            raise ValidationError({
+                'error': 'budget_inactif',
+                'message': 'Ce budget est déjà clôturé. Vous ne pouvez pas le modifier.'
+            })
+        
+        budget = serializer.save()
+        enregistrer_log(user, "BUDGET", f"Budget modifié: {budget.categorie.nom}", self.request)
+
+    def destroy(self, request, *args, **kwargs):
+        user = request.user
+        
+        # ✅ Vérification explicite pour la suppression
+        try:
+            abo = user.abonnement
+            if not abo:
+                raise PermissionDenied({
+                    'error': 'abonnement_requis',
+                    'message': 'Vous devez avoir un abonnement pour supprimer des budgets.',
+                    'redirect_to': '/abonnement'
+                })
+            
+            if abo.statut != 'actif' or abo.date_fin <= timezone.now():
+                raise PermissionDenied({
+                    'error': 'abonnement_expire',
+                    'message': 'Votre abonnement a expiré. Vous ne pouvez pas supprimer de budgets.',
+                    'redirect_to': '/abonnement'
+                })
+                
+        except PermissionDenied:
+            raise
+        except Exception:
+            raise PermissionDenied({
+                'error': 'abonnement_requis',
+                'message': 'Vous devez avoir un abonnement actif pour supprimer des budgets.',
+                'redirect_to': '/abonnement'
+            })
+        
+        budget = self.get_object()
+        budget.est_actif = False
+        budget.save(update_fields=['est_actif'])
+        enregistrer_log(user, "BUDGET", f"Budget supprimé: {budget.categorie.nom}", request)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class BudgetTransactionsView(generics.ListAPIView):
-    """Retourne toutes les transactions liées à un budget spécifique."""
+    """
+    Retourne toutes les transactions liées à un budget spécifique.
+    ✅ Accessible même si l'abonnement est expiré (lecture seule)
+    """
     serializer_class = TransactionSerializer
     permission_classes = [IsAuthenticated, EstAbonne]
     pagination_class = None
@@ -75,142 +254,17 @@ class BudgetTransactionsView(generics.ListAPIView):
         budget = Budget.objects.get(id=pk, utilisateur=self.request.user)
         return Transaction.objects.filter(
             utilisateur=self.request.user,
-            categorie=budget.categorie,
-            type='sortie',
-            date__date__gte=budget.date_debut,
-            date__date__lte=budget.date_fin,
-        )
-
-
-class DepenseBudgetView(APIView):
-    """Enregistre une dépense liée à un budget."""
-    permission_classes = [IsAuthenticated, EstAbonne]
-
-    def post(self, request, pk):
-        try:
-            budget = Budget.objects.get(id=pk, utilisateur=request.user)
-        except Budget.DoesNotExist:
-            return Response({'error': 'Budget introuvable.'}, status=404)
-
-        montant = float(request.data.get('montant', 0))
-        description = request.data.get('description', '')
-
-        if montant <= 0:
-            return Response({'error': 'Montant invalide.'}, status=400)
-
-        # Vérifier le solde
-        solde, _ = Solde.objects.get_or_create(utilisateur=request.user)
-        if float(solde.montant_total) < montant:
-            return Response({'error': 'Solde insuffisant pour effectuer cette dépense.'}, status=400)
-
-        # Vérifier le reste du budget
-        reste = float(budget.montant_prevu) - float(budget.montant_depense)
-        if reste < montant:
-            return Response({
-                'error': f'Budget insuffisant. Il reste {reste:.2f} MRU dans ce budget.'
-            }, status=400)
-
-        transaction = Transaction.objects.create(
-            utilisateur=request.user,
-            type='sortie',
-            montant=montant,
-            categorie=budget.categorie,
-            description=description,
-            source='budget',
             budget=budget,
+            type='sortie',
             is_visible=True,
-        )
-
-        # Clôturer si dépassé
-        if budget.pourcentage_utilise >= 100:
-            budget.envoyer_notification_fin()
-            budget.est_actif = False
-            budget.save(update_fields=['est_actif'])
-
-        enregistrer_log(request.user, "DEPENSE_BUDGET",
-                        f"Dépense {montant} MRU sur budget {budget.categorie}", request)
-        return Response(TransactionSerializer(transaction).data, status=201)
-
-
-class VerifierBudgetsExpires(APIView):
-    """Clôture les budgets dont la date de fin est dépassée."""
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        today = timezone.now().date()
-        budgets_expires = Budget.objects.filter(
-            utilisateur=request.user,
-            est_actif=True,
-            date_fin__lt=today,
-        )
-        count = 0
-        for budget in budgets_expires:
-            if not budget.notif_fin_envoyee:
-                budget.envoyer_notification_fin()
-                budget.notif_fin_envoyee = True
-            budget.est_actif = False
-            budget.save(update_fields=['est_actif', 'notif_fin_envoyee'])
-            count += 1
-        return Response({'budgets_clotures': count})
-'''
-
-
-
-from rest_framework import generics, status
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from django.utils import timezone
-from decimal import Decimal
-from abonnements.permissions import EstAbonne
-from logs.utils import enregistrer_log
-from .models import Budget, BudgetDepense
-from .serializers import BudgetSerializer, BudgetDepenseSerializer
-from transactions.models import Transaction, Solde
-from transactions.serializers import TransactionSerializer
-
-
-class BudgetListCreateView(generics.ListCreateAPIView):
-    serializer_class = BudgetSerializer
-    permission_classes = [IsAuthenticated, EstAbonne]
-
-    def get_queryset(self):
-        return Budget.objects.filter(utilisateur=self.request.user, est_actif=True)
-
-    def perform_create(self, serializer):
-        from transactions.models import Categorie
-        from django.db.models import Q
-        user = self.request.user
-        categories = Categorie.objects.filter(
-            Q(utilisateur__isnull=True) | Q(utilisateur=user),
-            is_visible=True,
-        )
-        if not categories.exists():
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError(
-                "Il faut créer des catégories avant de créer un budget."
-            )
-
-        budget = serializer.save(utilisateur=user)
-        enregistrer_log(user, "BUDGET", f"Budget créé: {budget.categorie}", self.request)
-
-        # Si la date de fin est déjà passée, clôturer immédiatement
-        if budget.date_fin < timezone.now().date():
-            budget.envoyer_notification_fin()
-            budget.est_actif = False
-            budget.save(update_fields=['est_actif', 'notif_fin_envoyee'])
-
-
-class BudgetDetailView(generics.RetrieveUpdateDestroyAPIView):
-    serializer_class = BudgetSerializer
-    permission_classes = [IsAuthenticated, EstAbonne]
-
-    def get_queryset(self):
-        return Budget.objects.filter(utilisateur=self.request.user)
+        ).order_by('-date_creation')
 
 
 class BudgetDepensesView(generics.ListAPIView):
-    """Retourne toutes les dépenses d'un budget spécifique (indépendantes des transactions)."""
+    """
+    Retourne toutes les dépenses d'un budget spécifique.
+    ✅ Accessible même si l'abonnement est expiré (lecture seule)
+    """
     serializer_class = BudgetDepenseSerializer
     permission_classes = [IsAuthenticated, EstAbonne]
     pagination_class = None
@@ -218,45 +272,82 @@ class BudgetDepensesView(generics.ListAPIView):
     def get_queryset(self):
         pk = self.kwargs['pk']
         budget = Budget.objects.get(id=pk, utilisateur=self.request.user)
-        return BudgetDepense.objects.filter(budget=budget)
+        return BudgetDepense.objects.filter(budget=budget).order_by('-date_creation')
 
 
 class DepenseBudgetView(APIView):
-    """Enregistre une dépense liée à un budget (indépendante des transactions manuelles)."""
+    """
+    Enregistre une dépense liée à un budget.
+    Nécessite un abonnement actif.
+    """
     permission_classes = [IsAuthenticated, EstAbonne]
 
     def post(self, request, pk):
         try:
             budget = Budget.objects.get(id=pk, utilisateur=request.user)
         except Budget.DoesNotExist:
-            return Response({'error': 'Budget introuvable.'}, status=404)
+            return Response({
+                'error': 'budget_introuvable',
+                'message': 'Budget introuvable.'
+            }, status=404)
 
+        # ✅ Vérifier que le budget est actif
+        if not budget.est_actif:
+            return Response({
+                'error': 'budget_inactif',
+                'message': 'Ce budget est déjà clôturé ou expiré. Vous ne pouvez pas ajouter de dépenses.'
+            }, status=400)
+
+        # ✅ Vérifier que l'abonnement est actif
+        try:
+            abo = request.user.abonnement
+            if not abo or abo.statut != 'actif' or abo.date_fin <= timezone.now():
+                return Response({
+                    'error': 'abonnement_expire',
+                    'message': 'Votre abonnement a expiré. Vous ne pouvez pas enregistrer de dépenses.',
+                    'redirect_to': '/abonnement'
+                }, status=403)
+        except Exception:
+            return Response({
+                'error': 'abonnement_requis',
+                'message': 'Vous devez avoir un abonnement actif pour enregistrer des dépenses.',
+                'redirect_to': '/abonnement'
+            }, status=403)
+
+        # ✅ Valider les données
         montant = Decimal(str(request.data.get('montant', 0)))
         description = request.data.get('description', '')
 
         if montant <= 0:
-            return Response({'error': 'Montant invalide.'}, status=400)
+            return Response({
+                'error': 'montant_invalide',
+                'message': 'Le montant doit être supérieur à 0.'
+            }, status=400)
 
-        # Vérifier le solde
+        # ✅ Vérifier le solde
         solde, _ = Solde.objects.get_or_create(utilisateur=request.user)
         if solde.montant_total < montant:
-            return Response({'error': 'Solde insuffisant pour effectuer cette dépense.'}, status=400)
+            return Response({
+                'error': 'solde_insuffisant',
+                'message': f'Solde insuffisant. Solde actuel: {float(solde.montant_total):.2f} MRU'
+            }, status=400)
 
-        # Vérifier le reste du budget
+        # ✅ Vérifier le reste du budget
         reste = Decimal(str(budget.montant_prevu)) - Decimal(str(budget.montant_depense))
         if reste < montant:
             return Response({
-                'error': f'Budget insuffisant. Il reste {float(reste):.2f} MRU dans ce budget.'
+                'error': 'budget_insuffisant',
+                'message': f'Budget insuffisant. Il reste {float(reste):.2f} MRU dans ce budget.'
             }, status=400)
 
-        # 1. Créer une dépense de budget (pour le suivi interne du budget)
+        # ✅ 1. Créer une dépense de budget (suivi interne)
         depense = BudgetDepense.objects.create(
             budget=budget,
             montant=montant,
             description=description,
         )
 
-        # 2. Créer une transaction (pour l'historique global)
+        # ✅ 2. Créer une transaction (historique global)
         transaction = Transaction.objects.create(
             utilisateur=request.user,
             type='sortie',
@@ -268,11 +359,11 @@ class DepenseBudgetView(APIView):
             is_visible=True,
         )
 
-        # Mettre à jour le solde
+        # ✅ Mettre à jour le solde
         solde.montant_total = solde.montant_total - montant
         solde.save()
 
-        # Clôturer si dépassé ou si la date de fin est atteinte
+        # ✅ Clôturer si dépassé ou si la date de fin est atteinte
         if budget.pourcentage_utilise >= 100 or budget.date_fin <= timezone.now().date():
             if not budget.notif_fin_envoyee:
                 budget.envoyer_notification_fin()
@@ -283,16 +374,27 @@ class DepenseBudgetView(APIView):
         enregistrer_log(request.user, "DEPENSE_BUDGET",
                         f"Dépense {float(montant)} MRU sur budget {budget.categorie.nom}", request)
         
-        # Retourner les deux objets créés
+        # ✅ Retourner les deux objets créés
         return Response({
+            'message': 'Dépense enregistrée avec succès.',
             'depense_budget': BudgetDepenseSerializer(depense).data,
-            'transaction': TransactionSerializer(transaction).data
+            'transaction': TransactionSerializer(transaction).data,
+            'budget': {
+                'montant_depense': float(budget.montant_depense),
+                'montant_prevu': float(budget.montant_prevu),
+                'pourcentage_utilise': budget.pourcentage_utilise,
+                'reste': float(reste) - float(montant),
+                'est_actif': budget.est_actif
+            }
         }, status=201)
 
 
 class VerifierBudgetsExpires(APIView):
-    """Clôture les budgets dont la date de fin est dépassée."""
-    permission_classes = [IsAuthenticated]
+    """
+    Clôture les budgets dont la date de fin est dépassée.
+    ✅ Accessible en lecture même si abonnement expiré
+    """
+    permission_classes = [IsAuthenticated, EstAbonne]
 
     def post(self, request):
         today = timezone.now().date()
@@ -309,4 +411,53 @@ class VerifierBudgetsExpires(APIView):
             budget.est_actif = False
             budget.save(update_fields=['est_actif', 'notif_fin_envoyee'])
             count += 1
-        return Response({'budgets_clotures': count})
+        
+        enregistrer_log(request.user, "BUDGET", f"{count} budgets clôturés automatiquement", request)
+        return Response({
+            'message': f'{count} budget(s) clôturé(s)',
+            'budgets_clotures': count
+        })
+
+
+# ✅ NOUVEAU ENDPOINT : Statistiques des budgets
+class BudgetStatsView(APIView):
+    """
+    Retourne des statistiques sur les budgets de l'utilisateur.
+    ✅ Accessible même si l'abonnement est expiré (lecture seule)
+    """
+    permission_classes = [IsAuthenticated, EstAbonne]
+
+    def get(self, request):
+        user = request.user
+        
+        # Budgets actifs
+        budgets_actifs = Budget.objects.filter(utilisateur=user, est_actif=True)
+        budgets_total = Budget.objects.filter(utilisateur=user)
+        
+        # Calculs
+        total_prevu = sum(b.montant_prevu for b in budgets_actifs)
+        total_depense = sum(b.montant_depense for b in budgets_actifs)
+        
+        # Budgets par catégorie
+        budgets_par_categorie = {}
+        for budget in budgets_actifs:
+            nom_categorie = budget.categorie.nom if budget.categorie else 'Sans catégorie'
+            if nom_categorie not in budgets_par_categorie:
+                budgets_par_categorie[nom_categorie] = {
+                    'total_prevu': 0,
+                    'total_depense': 0,
+                    'count': 0
+                }
+            budgets_par_categorie[nom_categorie]['total_prevu'] += float(budget.montant_prevu)
+            budgets_par_categorie[nom_categorie]['total_depense'] += float(budget.montant_depense)
+            budgets_par_categorie[nom_categorie]['count'] += 1
+        
+        return Response({
+            'total_budgets': budgets_total.count(),
+            'budgets_actifs': budgets_actifs.count(),
+            'total_prevu': float(total_prevu),
+            'total_depense': float(total_depense),
+            'pourcentage_global': float((total_depense / total_prevu * 100)) if total_prevu > 0 else 0,
+            'budgets_par_categorie': budgets_par_categorie,
+            'budgets_actifs_details': BudgetSerializer(budgets_actifs, many=True).data
+        })

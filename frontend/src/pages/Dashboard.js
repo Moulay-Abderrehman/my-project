@@ -10,6 +10,81 @@ import {
 // ── Couleurs graphiques ───────────────────────────────────────────────────────
 const COLORS = ['#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#14b8a6','#f97316','#84cc16'];
 
+// ── COMPOSANT MESSAGE BANNIERE ───────────────────────────────────────────────
+function MessageBanner({ type, message, onClose }) {
+  if (!message) return null;
+
+  const styles = {
+    success: {
+      background: '#ecfdf5',
+      border: '1px solid #6ee7b7',
+      color: '#065f46',
+      icon: 'bx-check-circle',
+    },
+    error: {
+      background: '#fef2f2',
+      border: '1px solid #fca5a5',
+      color: '#991b1b',
+      icon: 'bx-error-circle',
+    },
+    warning: {
+      background: '#fffbeb',
+      border: '1px solid #fcd34d',
+      color: '#92400e',
+      icon: 'bx-error',
+    },
+    info: {
+      background: '#eff6ff',
+      border: '1px solid #93c5fd',
+      color: '#1e40af',
+      icon: 'bx-info-circle',
+    },
+  };
+
+  const style = styles[type] || styles.info;
+
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+      padding: '12px 16px',
+      borderRadius: 12,
+      background: style.background,
+      border: `1px solid ${style.border}`,
+      marginBottom: 16,
+      animation: 'fadeIn 0.3s ease-out both',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <i className={`bx ${style.icon}`} style={{ fontSize: 20, color: style.color }} />
+        <span style={{ fontSize: 13, color: style.color, fontWeight: 500 }}>
+          {message}
+        </span>
+      </div>
+      {onClose && (
+        <button
+          onClick={onClose}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            color: style.color,
+            fontSize: 18,
+            padding: '0 4px',
+            opacity: 0.6,
+            transition: 'opacity 0.2s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+          onMouseLeave={e => e.currentTarget.style.opacity = '0.6'}
+        >
+          <i className='bx bx-x' />
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ── Tooltip personnalisé ─────────────────────────────────────────────────────
 const TooltipCustom = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
@@ -25,7 +100,7 @@ const TooltipCustom = ({ active, payload, label }) => {
   );
 };
 
-// ── Formateur personnalisé pour l'axe Y (MRU sans 'k') ───────────────────────
+// ── Formateur personnalisé pour l'axe Y ───────────────────────────────────────
 const formatYAxisMRU = (value) => {
   return `${value.toLocaleString()} MRU`;
 };
@@ -117,13 +192,141 @@ function StatCard({ label, value, iconType, color, sub }) {
   );
 }
 
+// ── Modal pour afficher les transactions ─────────────────────────────────────
+function TransactionsModal({ isOpen, onClose, transactions, title }) {
+  const navigate = useNavigate();
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  if (!isOpen) return null;
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(0,0,0,0.5)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1000,
+      padding: isMobile ? 16 : 24,
+    }} onClick={onClose}>
+      <div style={{
+        background: '#fff',
+        borderRadius: 16,
+        maxWidth: 600,
+        width: '100%',
+        maxHeight: '80vh',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+      }} onClick={(e) => e.stopPropagation()}>
+        <div style={{
+          padding: isMobile ? 12 : 16,
+          borderBottom: '1px solid #e2e8f0',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+          color: '#fff',
+        }}>
+          <h3 style={{ margin: 0, fontSize: isMobile ? 14 : 16, fontWeight: 700 }}>{title}</h3>
+          <button onClick={onClose} style={{
+            background: 'none',
+            border: 'none',
+            color: '#fff',
+            fontSize: isMobile ? 20 : 24,
+            cursor: 'pointer',
+            padding: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <i className='bx bx-x' />
+          </button>
+        </div>
+        <div style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: isMobile ? 12 : 16,
+        }}>
+          {transactions.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: isMobile ? 30 : 40, color: '#94a3b8' }}>
+              <i className='bx bx-folder-open' style={{ fontSize: isMobile ? 32 : 40, marginBottom: 8 }} />
+              <p style={{ margin: 0, fontSize: isMobile ? 12 : 14 }}>Aucune transaction trouvée</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {transactions.map((t, i) => (
+                <div key={t.id} style={{
+                  padding: isMobile ? 10 : 12,
+                  background: '#f8fafc',
+                  borderRadius: 10,
+                  borderLeft: `3px solid ${t.type === 'entree' ? '#10b981' : '#ef4444'}`,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+                onClick={() => {
+                  onClose();
+                  navigate('/transactions');
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                    <span style={{ fontWeight: 700, fontSize: isMobile ? 12 : 13, color: '#1e293b' }}>
+                      {t.categorie_detail?.nom || 'Transaction'}
+                    </span>
+                    <span style={{ 
+                      fontWeight: 700, 
+                      fontSize: isMobile ? 11 : 12, 
+                      color: t.type === 'entree' ? '#10b981' : '#ef4444' 
+                    }}>
+                      {t.type === 'entree' ? '+' : '-'}{parseFloat(t.montant).toLocaleString()} MRU
+                    </span>
+                  </div>
+                  {t.description && (
+                    <p style={{ margin: '4px 0 0', fontSize: isMobile ? 10 : 11, color: '#64748b' }}>
+                      {t.description.length > 50 ? t.description.slice(0, 50) + '...' : t.description}
+                    </p>
+                  )}
+                  <p style={{ margin: '4px 0 0', fontSize: isMobile ? 9 : 10, color: '#94a3b8' }}>
+                    {new Date(t.date_creation).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── PAGE PRINCIPALE ───────────────────────────────────────────────────────────
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { estExpire } = useAuth();
+  const { estExpire, logout } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const expire = estExpire();
+  
+  // ✅ États pour les messages
+  const [pageMessage, setPageMessage] = useState(null);
+  const [abonnementCharge, setAbonnementCharge] = useState(true);
+  
+  // États pour les modals interactifs
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalTransactions, setModalTransactions] = useState([]);
+  const [modalTitle, setModalTitle] = useState('');
+  const [allTransactions, setAllTransactions] = useState([]);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
@@ -131,17 +334,155 @@ export default function Dashboard() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // ✅ Vérifier l'abonnement
+  const verifierAbonnement = async () => {
+    try {
+      await api.get('/abonnements/statut/');
+    } catch (error) {
+      // Silencieux - le contexte Auth gère déjà
+    } finally {
+      setAbonnementCharge(false);
+    }
+  };
+
+  // ✅ Charger les données
+  const chargerDonnees = async () => {
+    setLoading(true);
+    setPageMessage(null);
+    try {
+      const [dashboardRes, transactionsRes] = await Promise.all([
+        api.get('/transactions/dashboard/'),
+        api.get('/transactions/toutes/')
+      ]);
+      
+      setData(dashboardRes.data);
+      setAllTransactions(transactionsRes.data.results || transactionsRes.data);
+      
+    } catch (err) {
+      const status = err.response?.status;
+      const errorData = err.response?.data;
+      
+      if (status === 401) {
+        setPageMessage({ 
+          type: 'error', 
+          text: 'Session expirée. Veuillez vous reconnecter.' 
+        });
+        setTimeout(() => {
+          logout();
+          navigate('/connexion');
+        }, 2000);
+        return;
+      }
+      
+      if (status === 403 && errorData?.error === 'abonnement_expire') {
+        // ✅ Pas de message visible, juste un log silencieux
+        console.log('Abonnement expiré - mode lecture seule');
+        return;
+      }
+      
+      setPageMessage({ 
+        type: 'error', 
+        text: 'Erreur lors du chargement du tableau de bord. Veuillez réessayer.' 
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    api.get('/transactions/dashboard/')
-      .then(res => setData(res.data))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    verifierAbonnement();
+    chargerDonnees();
   }, []);
+
+  // Fonction pour gérer le clic sur une barre du graphique
+  const handleBarClick = (mois, type) => {
+    if (!allTransactions.length) return;
+    
+    const [moisNom, annee] = mois.split(' ');
+    const moisIndex = { 'Jan': 0, 'Fév': 1, 'Mar': 2, 'Avr': 3, 'Mai': 4, 'Jun': 5, 
+                       'Jul': 6, 'Aoû': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Déc': 11 }[moisNom];
+    
+    if (moisIndex === undefined) return;
+    
+    const anneeComplete = 2000 + parseInt(annee);
+    
+    const filtered = allTransactions.filter(t => {
+      const dateTrans = new Date(t.date_creation);
+      const moisTrans = dateTrans.getMonth();
+      const anneeTrans = dateTrans.getFullYear();
+      return t.type === type && moisTrans === moisIndex && anneeTrans === anneeComplete;
+    });
+    
+    setModalTransactions(filtered);
+    setModalTitle(`${type === 'entree' ? 'Entrées' : 'Sorties'} - ${mois} ${annee}`);
+    setModalOpen(true);
+  };
+
+  // Fonction pour gérer le clic sur une catégorie du pie chart
+  const handlePieClick = (categorie) => {
+    if (!allTransactions.length) return;
+    
+    const filtered = allTransactions.filter(t => 
+      t.type === 'sortie' && 
+      t.categorie_detail?.nom === categorie
+    );
+    
+    setModalTransactions(filtered);
+    setModalTitle(`Dépenses - ${categorie}`);
+    setModalOpen(true);
+  };
+
+  // ✅ Composant personnalisé pour les barres cliquables
+  const CustomBar = (props) => {
+    const { x, y, width, height, payload, type } = props;
+    const value = payload[type];
+    
+    if (!value || value === 0) return null;
+    
+    return (
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        fill={type === 'entrees' ? '#10b981' : '#ef4444'}
+        rx={4}
+        style={{ cursor: 'pointer', transition: 'opacity 0.2s' }}
+        onClick={() => handleBarClick(payload.mois, type === 'entrees' ? 'entree' : 'sortie')}
+        onMouseEnter={(e) => e.currentTarget.style.opacity = '0.7'}
+        onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+      />
+    );
+  };
+
+  // ✅ Afficher le loader pendant le chargement
+  if (abonnementCharge) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        height: '100vh',
+        flexDirection: 'column', 
+        gap: 10 
+      }}>
+        <div style={{ 
+          width: 32, 
+          height: 32, 
+          border: '2.5px solid #e2e8f0', 
+          borderTopColor: '#6366f1', 
+          borderRadius: '50%', 
+          animation: 'spin 0.8s linear infinite' 
+        }} />
+        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+        <p style={{ color: '#94a3b8', fontSize: 12 }}>Chargement...</p>
+      </div>
+    );
+  }
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 250, flexDirection: 'column', gap: 10 }}>
       <div style={{ width: 32, height: 32, border: '2.5px solid #e2e8f0', borderTopColor: '#6366f1', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
       <p style={{ color: '#94a3b8', fontSize: 12 }}>Chargement...</p>
     </div>
   );
@@ -150,7 +491,10 @@ export default function Dashboard() {
     <div style={{ textAlign: 'center', padding: '40px 16px', color: '#94a3b8' }}>
       <i className='bx bx-error-circle' style={{ fontSize: 40, marginBottom: 10, color: '#ef4444' }} />
       <p style={{ fontSize: 13 }}>Impossible de charger le tableau de bord</p>
-      <button onClick={() => window.location.reload()} style={{ background: '#6366f1', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontWeight: 600, fontSize: 12, marginTop: 10 }}>
+      <button 
+        onClick={() => { setLoading(true); chargerDonnees(); }} 
+        style={{ background: '#6366f1', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontWeight: 600, fontSize: 12, marginTop: 10 }}
+      >
         <i className='bx bx-refresh' style={{ marginRight: 4 }} /> Réessayer
       </button>
     </div>
@@ -162,7 +506,7 @@ export default function Dashboard() {
   const balance = parseFloat(solde.montant_total || 0);
   const nbTrans = data.nombre_transactions || 0;
 
-  // Préparer données graphique barres (par mois)
+  // Préparer données graphique barres
   const moisMap = {};
   (data.par_mois || []).forEach(item => {
     const mois = item.mois ? new Date(item.mois).toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }) : '?';
@@ -172,12 +516,19 @@ export default function Dashboard() {
   });
   const barData = Object.values(moisMap).slice(-6);
 
-  // Évolution solde
-  const evoData = (data.evolution_solde || []).slice(-20).map((e, i) => ({
-    index: i,
-    solde: parseFloat(e.solde || 0),
-    date: e.date ? new Date(e.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) : '',
-  }));
+  // Évolution solde - TRI PAR DATE CROISSANTE
+  const evoData = (data.evolution_solde || [])
+    .map((e) => ({
+      solde: parseFloat(e.solde || 0),
+      date: e.date ? new Date(e.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) : '',
+      dateObj: e.date ? new Date(e.date) : null,
+    }))
+    .filter(e => e.dateObj !== null)
+    .sort((a, b) => a.dateObj - b.dateObj)
+    .map((e, index) => ({
+      ...e,
+      index: index,
+    }));
 
   // Par catégorie (dépenses)
   const pieData = (data.par_categorie || []).slice(0, 6).map(c => ({
@@ -186,10 +537,12 @@ export default function Dashboard() {
     couleur: c.categorie__couleur || '#6366f1',
   }));
 
+  // ✅ Vérifier si l'utilisateur a des transactions
+  const hasTransactions = nbTrans > 0;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 14 : 20, padding: 0 }}>
 
-      {/* Boxicons et Fonts */}
       <link rel="stylesheet" href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" />
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet" />
 
@@ -206,44 +559,22 @@ export default function Dashboard() {
         .dashboard-card:nth-child(4) { animation-delay: 0.15s; }
       `}</style>
 
-      {/* ── Bannière mode lecture seule ────────────────────────────────── */}
-      {expire && (
-        <div style={{ 
-          background: 'linear-gradient(135deg, #fef2f2, #fee2e2)', 
-          border: '1px solid #ef4444', 
-          borderRadius: 10, 
-          padding: isMobile ? '10px 14px' : '14px 20px', 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: 10,
-          flexWrap: 'wrap'
-        }}>
-          <i className='bx bx-lock-alt' style={{ fontSize: isMobile ? 16 : 20, color: '#ef4444' }} />
-          <p style={{ margin: 0, fontSize: isMobile ? 11 : 14, color: '#991b1b', fontWeight: 600, flex: 1 }}>
-            Mode lecture seule
-          </p>
-          <button 
-            onClick={() => navigate('/profil')} 
-            style={{ 
-              background: '#ef4444', 
-              color: '#fff', 
-              border: 'none', 
-              borderRadius: 7, 
-              padding: isMobile ? '5px 12px' : '7px 16px', 
-              cursor: 'pointer', 
-              fontWeight: 600, 
-              fontSize: isMobile ? 11 : 13,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 5
-            }}
-          >
-            <i className='bx bx-crown' style={{ fontSize: 12 }} /> S'abonner
-          </button>
-        </div>
-      )}
+      {/* ── Message page (uniquement pour les erreurs) ── */}
+      <MessageBanner 
+        type={pageMessage?.type} 
+        message={pageMessage?.text} 
+        onClose={() => setPageMessage(null)}
+      />
 
-      {/* ── Titre avec bouton Nouvelle transaction en haut à droite ────── */}
+      {/* ── Modal des transactions ── */}
+      <TransactionsModal 
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        transactions={modalTransactions}
+        title={modalTitle}
+      />
+
+      {/* ── Titre avec bouton Nouvelle transaction ── */}
       <div style={{ 
         display: 'flex', 
         justifyContent: 'space-between', 
@@ -270,33 +601,43 @@ export default function Dashboard() {
           </p>
         </div>
         
-        {/* Bouton Nouvelle transaction en haut à droite - taille réduite */}
-        {!expire && (
-          <button 
-            onClick={() => navigate('/transactions')} 
-            style={{
-              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', 
-              color: '#fff',
-              border: 'none', 
-              borderRadius: isMobile ? 8 : 10, 
-              padding: isMobile ? '6px 12px' : '8px 16px',
-              cursor: 'pointer', 
-              fontWeight: 600, 
-              fontSize: isMobile ? 11 : 13,
-              boxShadow: '0 2px 8px rgba(99,102,241,0.25)',
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: 5,
-              whiteSpace: 'nowrap'
-            }}
-          >
-            <i className='bx bx-plus' style={{ fontSize: isMobile ? 14 : 16 }} />
-            Nouvelle transaction
-          </button>
-        )}
+        {/* ✅ Bouton Nouvelle transaction - désactivé si abonnement expiré */}
+        <button 
+          onClick={() => {
+            if (expire) {
+              setPageMessage({ 
+                type: 'warning', 
+                text: 'Votre abonnement a expiré. Vous ne pouvez pas créer de nouvelles transactions.' 
+              });
+              return;
+            }
+            navigate('/transactions');
+          }} 
+          style={{
+            background: expire ? '#e2e8f0' : 'linear-gradient(135deg, #6366f1, #8b5cf6)', 
+            color: expire ? '#94a3b8' : '#fff',
+            border: 'none', 
+            borderRadius: isMobile ? 8 : 10, 
+            padding: isMobile ? '6px 12px' : '8px 16px',
+            cursor: expire ? 'not-allowed' : 'pointer', 
+            fontWeight: 600, 
+            fontSize: isMobile ? 11 : 13,
+            boxShadow: expire ? 'none' : '0 2px 8px rgba(99,102,241,0.25)',
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 5,
+            whiteSpace: 'nowrap',
+            opacity: expire ? 0.6 : 1,
+            transition: 'all 0.2s',
+          }}
+          title={expire ? 'Votre abonnement a expiré' : ''}
+        >
+          <i className='bx bx-plus' style={{ fontSize: isMobile ? 14 : 16 }} />
+          Nouvelle transaction
+        </button>
       </div>
 
-      {/* ── Cartes statistiques avec icônes SVG ────────────────────────── */}
+      {/* ── Cartes statistiques ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: isMobile ? 10 : 16 }}>
         <StatCard 
           label="Solde"    
@@ -326,12 +667,51 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* ── Graphique barres (entrées vs sorties par mois) ─────────────── */}
+      {/* ── Message si aucune transaction ── */}
+      {!hasTransactions && (
+        <div style={{
+          background: 'linear-gradient(135deg, #eff6ff, #e0e7ff)',
+          borderRadius: 12,
+          padding: isMobile ? '16px 20px' : '24px 32px',
+          textAlign: 'center',
+          border: '1px solid #93c5fd',
+        }}>
+          <i className='bx bx-info-circle' style={{ fontSize: isMobile ? 28 : 36, color: '#3b82f6', marginBottom: 8 }} />
+          <h3 style={{ margin: 0, fontSize: isMobile ? 16 : 20, color: '#1e40af' }}>Bienvenue sur FinanceApp !</h3>
+          <p style={{ margin: '8px 0 0', color: '#1e40af', fontSize: isMobile ? 12 : 14 }}>
+            Commencez par créer votre première transaction pour voir vos statistiques ici.
+          </p>
+          {!expire && (
+            <button 
+              onClick={() => navigate('/transactions')} 
+              style={{ 
+                background: '#6366f1', 
+                color: '#fff', 
+                border: 'none', 
+                borderRadius: 8, 
+                padding: '8px 20px', 
+                cursor: 'pointer', 
+                fontWeight: 600, 
+                fontSize: isMobile ? 12 : 14, 
+                marginTop: 12,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                boxShadow: '0 2px 8px rgba(99,102,241,0.3)',
+              }}
+            >
+              <i className='bx bx-plus' style={{ fontSize: isMobile ? 14 : 16 }} /> Créer ma première transaction
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ── Graphique barres (entrées vs sorties par mois) ── */}
       {barData.length > 0 && (
         <div className="dashboard-card" style={{ background: '#fff', borderRadius: isMobile ? 12 : 16, padding: isMobile ? '14px' : '24px 20px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
           <h3 style={{ margin: '0 0 16px', fontSize: isMobile ? 13 : 16, fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 6 }}>
             <i className='bx bx-bar-chart-alt-2' style={{ fontSize: isMobile ? 14 : 18, color: '#6366f1' }} />
-            Entrées vs Sorties par mois
+            Entrées vs Sorties par mois 
           </h3>
           <ResponsiveContainer width="100%" height={isMobile ? 180 : 240}>
             <BarChart data={barData} barCategoryGap="30%">
@@ -344,14 +724,29 @@ export default function Dashboard() {
               />
               <Tooltip content={<TooltipCustom />} />
               <Legend wrapperStyle={{ fontSize: isMobile ? 10 : 12 }} />
-              <Bar dataKey="entrees" name="Entrées" fill="#10b981" radius={[4,4,0,0]} />
-              <Bar dataKey="sorties" name="Sorties" fill="#ef4444" radius={[4,4,0,0]} />
+              <Bar 
+                dataKey="entrees" 
+                name="Entrées" 
+                fill="#10b981" 
+                radius={[4,4,0,0]}
+                shape={(props) => <CustomBar {...props} type="entrees" payload={props.payload} />}
+              />
+              <Bar 
+                dataKey="sorties" 
+                name="Sorties" 
+                fill="#ef4444" 
+                radius={[4,4,0,0]}
+                shape={(props) => <CustomBar {...props} type="sorties" payload={props.payload} />}
+              />
             </BarChart>
           </ResponsiveContainer>
+          <p style={{ margin: '8px 0 0', fontSize: isMobile ? 9 : 11, color: '#94a3b8', textAlign: 'center' }}>
+            Cliquez sur une barre pour voir les détails
+          </p>
         </div>
       )}
 
-      {/* ── Graphiques : Évolution et Dépenses ──────────────────────────── */}
+      {/* ── Graphiques : Évolution et Dépenses ── */}
       <div style={{ 
         display: 'grid', 
         gridTemplateColumns: isMobile ? '1fr' : (evoData.length > 0 ? '1.6fr 1fr' : '1fr'), 
@@ -376,7 +771,8 @@ export default function Dashboard() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis 
                   dataKey="date" 
-                  tick={{ fontSize: isMobile ? 8 : 10, fill: '#94a3b8' }} 
+                  tick={{ fontSize: isMobile ? 8 : 10, fill: '#94a3b8' }}
+                  interval="preserveStartEnd"
                 />
                 <YAxis 
                   tick={{ fontSize: isMobile ? 8 : 10, fill: '#94a3b8' }} 
@@ -387,7 +783,15 @@ export default function Dashboard() {
                   formatter={(value) => [`${parseFloat(value).toLocaleString()} MRU`, 'Solde']}
                   labelFormatter={(label) => `Date: ${label}`}
                 />
-                <Area type="monotone" dataKey="solde" stroke="#6366f1" strokeWidth={2} fill="url(#gradSolde)" dot={false} />
+                <Area 
+                  type="monotone" 
+                  dataKey="solde" 
+                  stroke="#6366f1" 
+                  strokeWidth={2} 
+                  fill="url(#gradSolde)" 
+                  dot={{ r: 3, fill: '#6366f1' }}
+                  activeDot={{ r: 5 }}
+                />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -398,7 +802,7 @@ export default function Dashboard() {
           <div className="dashboard-card" style={{ background: '#fff', borderRadius: isMobile ? 12 : 16, padding: isMobile ? '14px' : '24px 20px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
             <h3 style={{ margin: '0 0 8px', fontSize: isMobile ? 13 : 16, fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 6 }}>
               <i className='bx bx-pie-chart-alt' style={{ fontSize: isMobile ? 14 : 18, color: '#f59e0b' }} />
-              Dépenses par catégorie
+              Dépenses par catégorie 
             </h3>
             <ResponsiveContainer width="100%" height={isMobile ? 140 : 180}>
               <PieChart>
@@ -413,7 +817,14 @@ export default function Dashboard() {
                   paddingAngle={2}
                 >
                   {pieData.map((entry, i) => (
-                    <Cell key={i} fill={entry.couleur || COLORS[i % COLORS.length]} />
+                    <Cell 
+                      key={i} 
+                      fill={entry.couleur || COLORS[i % COLORS.length]}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => handlePieClick(entry.name)}
+                      onMouseEnter={(e) => e.currentTarget.style.opacity = '0.7'}
+                      onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+                    />
                   ))}
                 </Pie>
                 <Tooltip formatter={(value) => [`${parseFloat(value).toLocaleString()} MRU`, 'Montant']} />
@@ -421,18 +832,36 @@ export default function Dashboard() {
             </ResponsiveContainer>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: isMobile ? 8 : 12 }}>
               {pieData.map((c, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: isMobile ? 10 : 12 }}>
+                <div 
+                  key={i} 
+                  style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: 6, 
+                    fontSize: isMobile ? 10 : 12,
+                    cursor: 'pointer',
+                    padding: '4px 8px',
+                    borderRadius: 6,
+                    transition: 'background 0.2s'
+                  }}
+                  onClick={() => handlePieClick(c.name)}
+                  onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: c.couleur || COLORS[i % COLORS.length], flexShrink: 0 }} />
                   <span style={{ flex: 1, color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: isMobile ? 10 : 12 }}>{c.name}</span>
                   <span style={{ fontWeight: 700, color: '#1e293b', whiteSpace: 'nowrap', fontSize: isMobile ? 10 : 12 }}>{parseFloat(c.value).toLocaleString()} MRU</span>
                 </div>
               ))}
             </div>
+            <p style={{ margin: '8px 0 0', fontSize: isMobile ? 9 : 11, color: '#94a3b8', textAlign: 'center' }}>
+              Cliquez sur une catégorie pour voir les détails
+            </p>
           </div>
         )}
       </div>
 
-      {/* ── 5 dernières transactions ────────────────────────────────────── */}
+      {/* ── 5 dernières transactions ── */}
       <div className="dashboard-card" style={{ background: '#fff', borderRadius: isMobile ? 12 : 16, padding: isMobile ? '14px' : '24px 28px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isMobile ? 12 : 16, flexWrap: 'wrap', gap: 8 }}>
           <h3 style={{ margin: 0, fontSize: isMobile ? 13 : 16, fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -534,7 +963,7 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* ── Budgets actifs ──────────────────────────────────────────────── */}
+      {/* ── Budgets actifs ── */}
       {(data.derniers_budgets || []).length > 0 && (
         <div className="dashboard-card" style={{ background: '#fff', borderRadius: isMobile ? 12 : 16, padding: isMobile ? '14px' : '24px 28px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isMobile ? 12 : 16, flexWrap: 'wrap', gap: 8 }}>

@@ -20,6 +20,55 @@ def _get_or_create_plan(nom_plan: str, defaults: dict) -> Plan:
     plan, _ = Plan.objects.get_or_create(nom=nom_plan, defaults=defaults)
     return plan
 
+def get_abonnement_essai_utilisateur(user):
+    """Récupère l'abonnement essai existant de l'utilisateur (celui créé à l'inscription)"""
+    try:
+        plan_essai = Plan.objects.get(nom='essai')
+        return Abonnement.objects.filter(utilisateur=user, plan=plan_essai).first()
+    except Plan.DoesNotExist:
+        return None
+
+
+def verifier_et_mettre_a_jour_abonnement_expire(user):
+    """
+    Vérifie si l'abonnement est expiré et bascule vers l'abonnement essai existant
+    Retourne True si l'abonnement a été changé, False sinon
+    """
+    try:
+        abo = user.abonnement
+        if abo and abo.statut == 'actif' and abo.date_fin < timezone.now():
+            # Marquer l'abonnement actuel comme expiré
+            abo.statut = 'expire'
+            abo.save(update_fields=['statut'])
+            
+            # Récupérer l'abonnement essai existant (créé à l'inscription)
+            abo_essai = get_abonnement_essai_utilisateur(user)
+            
+            if abo_essai:
+                # Réactiver l'abonnement essai existant
+                abo_essai.statut = 'actif'
+                abo_essai.date_debut = timezone.now()
+                abo_essai.date_fin = timezone.now() + timedelta(days=30)
+                abo_essai.montant = 0
+                abo_essai.type = 'mensuel'
+                abo_essai.save()
+                
+                # Mettre à jour la relation OneToOne sur l'utilisateur
+                user.abonnement = abo_essai
+                user.save(update_fields=['abonnement'])
+                
+                # Notification d'expiration
+                from notifications.models import Notification
+                Notification.objects.create(
+                    utilisateur=user,
+                    type='warning',
+                    message=f"ABONNEMENT EXPIRE|Votre abonnement {abo.get_plan_nom()} est expiré. Retour à votre essai gratuit."
+                )
+                
+                return True
+    except Abonnement.DoesNotExist:
+        pass
+    return False
 
 # ─── LISTE DES PLANS ─────────────────────────────────────────────────────────
 class PlanListView(generics.ListAPIView):
@@ -221,3 +270,61 @@ class PaiementListView(generics.ListAPIView):
             return self.request.user.abonnement.paiements.all().order_by('-date_paiement')
         except Abonnement.DoesNotExist:
             return Paiement.objects.none()
+        
+# abonnements/views.py - Ajouter cette classe
+
+class AbonnementStatutView(APIView):
+    """
+    Vérifie le statut de l'abonnement de l'utilisateur.
+    Utilisé par le frontend pour afficher des messages appropriés.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        try:
+            abonnement = user.abonnement
+            if not abonnement:
+                return Response({
+                    'statut': 'aucun',
+                    'message': 'Vous n\'avez pas d\'abonnement actif.',
+                    'plan': None,
+                    'est_actif': False,
+                    'jours_restants': 0,
+                    'redirect_to': '/abonnement'
+                })
+
+            est_actif = abonnement.statut == 'actif' and abonnement.date_fin > timezone.now()
+            
+            # Calcul des jours restants
+            if est_actif:
+                jours_restants = (abonnement.date_fin - timezone.now()).days
+            else:
+                jours_restants = 0
+
+            response_data = {
+                'statut': abonnement.statut,
+                'plan': abonnement.get_plan_nom(),
+                'date_debut': abonnement.date_debut,
+                'date_fin': abonnement.date_fin,
+                'est_actif': est_actif,
+                'jours_restants': jours_restants,
+                'peut_creer': est_actif,
+                'peut_modifier': est_actif,
+            }
+
+            if not est_actif:
+                response_data['message'] = 'Votre abonnement a expiré. Veuillez le renouveler pour continuer à créer/modifier des données.'
+                response_data['redirect_to'] = '/abonnement'
+            else:
+                response_data['message'] = f'Votre abonnement est actif. {jours_restants} jours restants.'
+
+            return Response(response_data)
+
+        except Exception as e:
+            return Response({
+                'statut': 'erreur',
+                'message': 'Erreur lors de la vérification de l\'abonnement.',
+                'est_actif': False,
+                'redirect_to': '/abonnement'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

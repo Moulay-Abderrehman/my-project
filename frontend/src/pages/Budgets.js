@@ -1,10 +1,127 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import api from '../api/axios';
 import { categorieService } from '../api/categorieService';
-import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
-// ── Modale succès ─────────────────────────────────────────────────────────────
+// ── Gestion des limites de l'abonnement d'essai (2 actions / jour) ────────────
+const BUDGET_DAILY_LIMIT = 2;
+const DEPENSE_DAILY_LIMIT = 2;
+const BUDGET_COUNT_KEY = 'financeapp_budgets_crees_par_jour';
+const DEPENSE_COUNT_KEY = 'financeapp_depenses_par_jour';
+
+function getTodayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getDailyCount(storageKey) {
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return 0;
+    const data = JSON.parse(raw);
+    if (data.date !== getTodayKey()) return 0;
+    return data.count || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function incrementDailyCount(storageKey) {
+  const today = getTodayKey();
+  let data = { date: today, count: 0 };
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed.date === today) data = parsed;
+    }
+  } catch {
+    // stockage illisible : on repart de zéro sans bloquer l'utilisateur
+  }
+  data.count += 1;
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(data));
+  } catch {
+    // stockage indisponible : on ignore silencieusement
+  }
+  return data.count;
+}
+
+// ── COMPOSANT DE MESSAGE BANNIERE ──────────────────────────────────────────────
+function MessageBanner({ type, message, onClose }) {
+  if (!message) return null;
+
+  const styles = {
+    success: {
+      background: '#ecfdf5',
+      border: '1px solid #6ee7b7',
+      color: '#065f46',
+      icon: 'bx-check-circle',
+    },
+    error: {
+      background: '#fef2f2',
+      border: '1px solid #fca5a5',
+      color: '#991b1b',
+      icon: 'bx-error-circle',
+    },
+    warning: {
+      background: '#fffbeb',
+      border: '1px solid #fcd34d',
+      color: '#92400e',
+      icon: 'bx-error',
+    },
+    info: {
+      background: '#eff6ff',
+      border: '1px solid #93c5fd',
+      color: '#1e40af',
+      icon: 'bx-info-circle',
+    },
+  };
+
+  const style = styles[type] || styles.info;
+
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+      padding: '12px 16px',
+      borderRadius: 12,
+      background: style.background,
+      border: `1px solid ${style.border}`,
+      marginBottom: 16,
+      animation: 'fadeUp 0.3s cubic-bezier(.16,1,.3,1) both',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <i className={`bx ${style.icon}`} style={{ fontSize: 20, color: style.color }} />
+        <span style={{ fontSize: 13, color: style.color, fontWeight: 500 }}>
+          {message}
+        </span>
+      </div>
+      {onClose && (
+        <button
+          onClick={onClose}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            color: style.color,
+            fontSize: 18,
+            padding: '0 4px',
+            opacity: 0.6,
+            transition: 'opacity 0.2s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+          onMouseLeave={e => e.currentTarget.style.opacity = '0.6'}
+        >
+          <i className='bx bx-x' />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── MODALE SUCCÈS ─────────────────────────────────────────────────────────────
 function SuccessModal({ message, onClose }) {
   useEffect(() => {
     const t = setTimeout(onClose, 2000);
@@ -20,22 +137,49 @@ function SuccessModal({ message, onClose }) {
   );
 }
 
-// ── Modale dépense budget (INDÉPENDANTE des transactions manuelles) ───────────
-function DepenseModal({ budget, onClose, onSuccess }) {
+// ── MODALE LIMITE ─────────────────────────────────────────────────────────────
+function LimitModal({ message, onClose }) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-container limit-confirm compact" onClick={e => e.stopPropagation()}>
+        <div className="limit-icon">
+          <i className='bx bx-lock-alt'></i>
+        </div>
+        <h3>Limite quotidienne atteinte</h3>
+        <p>{message}</p>
+        <div className="modal-actions compact">
+          <button onClick={onClose} className="btn-primary">
+            <i className='bx bx-check'></i> OK
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── MODALE DÉPENSE BUDGET ─────────────────────────────────────────────────────
+function DepenseModal({ budget, onClose, onSuccess, canSubmit, onLimitReached, onMessage }) {
   const [montant, setMontant] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
+    if (canSubmit === false) {
+      onLimitReached();
+      return;
+    }
+
     const montantValue = parseFloat(montant);
     if (isNaN(montantValue) || montantValue <= 0) {
-      toast.error('Veuillez entrer un montant valide');
+      setMessage({ type: 'error', text: 'Veuillez entrer un montant valide.' });
       return;
     }
 
     setLoading(true);
+    setMessage(null);
     try {
       const response = await api.post(`/budgets/${budget.id}/depense/`, {
         montant: montantValue,
@@ -43,14 +187,55 @@ function DepenseModal({ budget, onClose, onSuccess }) {
       });
       
       if (response.data) {
+        incrementDailyCount(DEPENSE_COUNT_KEY);
+        if (onMessage) onMessage('success', 'Dépense enregistrée avec succès !');
         onSuccess('Dépense enregistrée !');
       }
     } catch (err) {
-      console.error('Erreur détail:', err.response?.data);
-      const errorMsg = err.response?.data?.error || 
-                       err.response?.data?.detail ||
-                       'Erreur lors de l\'enregistrement';
-      toast.error(errorMsg);
+      const errorData = err.response?.data;
+      const status = err.response?.status;
+      
+      if (status === 403) {
+        if (errorData?.error === 'abonnement_expire') {
+          setMessage({ 
+            type: 'error', 
+            text: 'Votre abonnement a expiré. Veuillez le renouveler pour ajouter des dépenses.' 
+          });
+          if (onMessage) onMessage('error', 'Votre abonnement a expiré.');
+          return;
+        }
+        if (errorData?.error === 'abonnement_requis') {
+          setMessage({ 
+            type: 'error', 
+            text: 'Vous devez avoir un abonnement actif pour ajouter des dépenses.' 
+          });
+          return;
+        }
+        if (errorData?.error === 'limite_essai') {
+          setMessage({ 
+            type: 'warning', 
+            text: 'Limite quotidienne atteinte. Revenez demain ou passez à un abonnement payant.' 
+          });
+          return;
+        }
+      }
+      
+      if (status === 401) {
+        setMessage({ 
+          type: 'error', 
+          text: 'Session expirée. Veuillez vous reconnecter.' 
+        });
+        setTimeout(() => {
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+          localStorage.removeItem('user');
+          window.location.href = '/connexion';
+        }, 2000);
+        return;
+      }
+      
+      const msg = errorData?.message || errorData?.detail || 'Erreur lors de l\'enregistrement.';
+      setMessage({ type: 'error', text: msg });
     } finally {
       setLoading(false);
     }
@@ -74,6 +259,14 @@ function DepenseModal({ budget, onClose, onSuccess }) {
             <i className='bx bx-x'></i>
           </button>
         </div>
+
+        {message && (
+          <MessageBanner 
+            type={message.type} 
+            message={message.text} 
+            onClose={() => setMessage(null)}
+          />
+        )}
 
         <div className="budget-info-row compact">
           <div className="budget-info-item">
@@ -153,7 +346,7 @@ function DepenseModal({ budget, onClose, onSuccess }) {
   );
 }
 
-// ── Modale dépenses d'un budget (AFFICHE UNIQUEMENT LES DÉPENSES DE BUDGET) ───
+// ── MODALE DÉPENSES D'UN BUDGET ─────────────────────────────────────────────
 function BudgetDepensesModal({ budget, onClose }) {
   const [depenses, setDepenses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -161,7 +354,7 @@ function BudgetDepensesModal({ budget, onClose }) {
   useEffect(() => {
     api.get(`/budgets/${budget.id}/depenses/`)
       .then(res => setDepenses(res.data || []))
-      .catch(() => toast.error('Erreur chargement des dépenses'))
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, [budget.id]);
 
@@ -272,8 +465,8 @@ function BudgetDepensesModal({ budget, onClose }) {
   );
 }
 
-// ── Modale création/modification budget (COMPACTE AVEC FILTRE CATÉGORIES) ───
-function BudgetModal({ budget, categories, onClose, onSuccess }) {
+// ── MODALE CRÉATION/MODIFICATION BUDGET ─────────────────────────────────────
+function BudgetModal({ budget, categories, onClose, onSuccess, canCreate, onLimitReached, onMessage }) {
   const [form, setForm] = useState({
     categorie: budget?.categorie || '',
     montant_prevu: budget?.montant_prevu || '',
@@ -283,30 +476,95 @@ function BudgetModal({ budget, categories, onClose, onSuccess }) {
   });
   const [loading, setLoading] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [message, setMessage] = useState(null);
 
   const isEdit = !!budget;
 
-  // Filtrer les catégories pour n'afficher que celles de type 'sortie' (dépense)
   const categoriesSortie = categories.filter(cat => cat.type === 'sortie' || cat.type === 'depense' || cat.type === 'expense');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.categorie) return toast.error('Sélectionnez une catégorie');
-    if (!form.montant_prevu || parseFloat(form.montant_prevu) <= 0) return toast.error('Montant invalide');
+    
+    if (!isEdit && canCreate === false) {
+      onLimitReached();
+      return;
+    }
+    
+    if (!form.categorie) {
+      setMessage({ type: 'error', text: 'Veuillez sélectionner une catégorie.' });
+      return;
+    }
+    if (!form.montant_prevu || parseFloat(form.montant_prevu) <= 0) {
+      setMessage({ type: 'error', text: 'Le montant doit être supérieur à 0.' });
+      return;
+    }
+    if (!form.date_debut || !form.date_fin) {
+      setMessage({ type: 'error', text: 'Veuillez sélectionner une période.' });
+      return;
+    }
+    if (new Date(form.date_fin) <= new Date(form.date_debut)) {
+      setMessage({ type: 'error', text: 'La date de fin doit être postérieure à la date de début.' });
+      return;
+    }
     
     setLoading(true);
+    setMessage(null);
     try {
       if (isEdit) {
         await api.patch(`/budgets/${budget.id}/`, form);
-        toast.success('Budget modifié');
+        if (onMessage) onMessage('success', 'Budget modifié avec succès !');
+        onSuccess();
       } else {
         await api.post('/budgets/', form);
-        toast.success('Budget créé');
+        incrementDailyCount(BUDGET_COUNT_KEY);
+        if (onMessage) onMessage('success', 'Budget créé avec succès !');
+        onSuccess();
       }
-      onSuccess();
     } catch (err) {
-      const msg = err.response?.data?.detail || err.response?.data?.non_field_errors?.[0] || 'Erreur';
-      toast.error(msg);
+      const errorData = err.response?.data;
+      const status = err.response?.status;
+      
+      if (status === 403) {
+        if (errorData?.error === 'abonnement_expire') {
+          setMessage({ 
+            type: 'error', 
+            text: 'Votre abonnement a expiré. Veuillez le renouveler pour créer/modifier des budgets.' 
+          });
+          if (onMessage) onMessage('error', 'Votre abonnement a expiré.');
+          return;
+        }
+        if (errorData?.error === 'abonnement_requis') {
+          setMessage({ 
+            type: 'error', 
+            text: 'Vous devez avoir un abonnement actif pour créer/modifier des budgets.' 
+          });
+          return;
+        }
+        if (errorData?.error === 'limite_essai') {
+          setMessage({ 
+            type: 'warning', 
+            text: 'Limite quotidienne atteinte. Revenez demain ou passez à un abonnement payant.' 
+          });
+          return;
+        }
+      }
+      
+      if (status === 401) {
+        setMessage({ 
+          type: 'error', 
+          text: 'Session expirée. Veuillez vous reconnecter.' 
+        });
+        setTimeout(() => {
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+          localStorage.removeItem('user');
+          window.location.href = '/connexion';
+        }, 2000);
+        return;
+      }
+      
+      const msg = errorData?.detail || errorData?.non_field_errors?.[0] || 'Erreur lors de l\'opération.';
+      setMessage({ type: 'error', text: msg });
     } finally {
       setLoading(false);
     }
@@ -328,6 +586,14 @@ function BudgetModal({ budget, categories, onClose, onSuccess }) {
             <i className='bx bx-x'></i>
           </button>
         </div>
+
+        {message && (
+          <MessageBanner 
+            type={message.type} 
+            message={message.text} 
+            onClose={() => setMessage(null)}
+          />
+        )}
 
         {categoriesSortie.length === 0 && (
           <div className="warning-banner compact">
@@ -423,7 +689,7 @@ function BudgetModal({ budget, categories, onClose, onSuccess }) {
   );
 }
 
-// ── Page principale Budgets ───────────────────────────────────────────────────
+// ── PAGE PRINCIPALE BUDGETS ───────────────────────────────────────────────────
 export default function Budgets() {
   const navigate = useNavigate();
   const [budgets, setBudgets] = useState([]);
@@ -436,14 +702,38 @@ export default function Budgets() {
   const [isCreating, setIsCreating] = useState(false);
   const [confirmSupprId, setConfirmSupprId] = useState(null);
   const [showQuickCreate, setShowQuickCreate] = useState(false);
-  
+  const [searchTerm, setSearchTerm] = useState('');
+  const [limitMessage, setLimitMessage] = useState(null);
   const [filterType, setFilterType] = useState('all');
+  
+  // États pour l'abonnement
+  const [abonnementExpire, setAbonnementExpire] = useState(false);
+  const [abonnementCharge, setAbonnementCharge] = useState(true);
+  
+  // État pour les messages de la page
+  const [pageMessage, setPageMessage] = useState(null);
 
   const categoriesSortie = categories.filter(cat => cat.type === 'sortie' || cat.type === 'depense' || cat.type === 'expense');
   const hasCategoriesSortie = categoriesSortie.length > 0;
 
+  const peutCreerBudget = () => getDailyCount(BUDGET_COUNT_KEY) < BUDGET_DAILY_LIMIT;
+  const peutAjouterDepense = () => getDailyCount(DEPENSE_COUNT_KEY) < DEPENSE_DAILY_LIMIT;
+
+  const verifierAbonnement = useCallback(async () => {
+    try {
+      const response = await api.get('/abonnements/statut/');
+      setAbonnementExpire(!response.data.est_actif);
+    } catch (error) {
+      console.error('Erreur vérification abonnement:', error);
+      setAbonnementExpire(true);
+    } finally {
+      setAbonnementCharge(false);
+    }
+  }, []);
+
   const chargerDonnees = useCallback(async () => {
     setLoading(true);
+    setPageMessage(null);
     try {
       const [bRes, cRes] = await Promise.all([
         api.get('/budgets/'),
@@ -452,26 +742,99 @@ export default function Budgets() {
       setBudgets(bRes.data.results || bRes.data || []);
       setCategories(cRes.data || []);
     } catch (err) {
-      if (err.response?.status !== 403) {
-        toast.error('Erreur lors du chargement des budgets.');
+      const status = err.response?.status;
+      const errorData = err.response?.data;
+      
+      if (status === 401) {
+        setPageMessage({ 
+          type: 'error', 
+          text: 'Session expirée. Veuillez vous reconnecter.' 
+        });
+        setTimeout(() => {
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+          localStorage.removeItem('user');
+          window.location.href = '/connexion';
+        }, 2000);
+        return;
       }
+      
+      if (status === 403 && errorData?.error === 'abonnement_expire') {
+        setAbonnementExpire(true);
+        setPageMessage({ 
+          type: 'error', 
+          text: 'Votre abonnement a expiré. Vous ne pouvez pas créer de nouveaux budgets.' 
+        });
+        return;
+      }
+      
+      console.error('Erreur:', err);
+      setPageMessage({ 
+        type: 'error', 
+        text: 'Erreur lors du chargement des budgets. Veuillez réessayer.' 
+      });
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    verifierAbonnement();
     chargerDonnees();
-  }, [chargerDonnees]);
+  }, [verifierAbonnement, chargerDonnees]);
+
+  const handleModalMessage = (type, text) => {
+    if (type === 'success') {
+      setPageMessage({ type: 'success', text });
+      setTimeout(() => setPageMessage(null), 3000);
+    } else if (type === 'error') {
+      setPageMessage({ type: 'error', text });
+    }
+  };
+
+  const handleLimitReached = (message) => {
+    setLimitMessage(message);
+  };
 
   const handleSupprimerBudget = async () => {
     try {
+      const budget = budgets.find(b => b.id === confirmSupprId);
+      if (budget && estBudgetTermine(budget)) {
+        setPageMessage({ 
+          type: 'error', 
+          text: 'Impossible de supprimer un budget terminé.' 
+        });
+        setConfirmSupprId(null);
+        return;
+      }
       await api.delete(`/budgets/${confirmSupprId}/`);
-      toast.success('Budget supprimé');
+      setPageMessage({ 
+        type: 'success', 
+        text: 'Budget supprimé avec succès.' 
+      });
+      setTimeout(() => setPageMessage(null), 3000);
       setConfirmSupprId(null);
       chargerDonnees();
-    } catch {
-      toast.error('Erreur lors de la suppression');
+    } catch (err) {
+      const status = err.response?.status;
+      const errorData = err.response?.data;
+      
+      if (status === 401) {
+        setPageMessage({ 
+          type: 'error', 
+          text: 'Session expirée. Veuillez vous reconnecter.' 
+        });
+        setTimeout(() => {
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+          localStorage.removeItem('user');
+          window.location.href = '/connexion';
+        }, 2000);
+        return;
+      }
+      
+      const msg = errorData?.message || errorData?.detail || 'Erreur lors de la suppression.';
+      setPageMessage({ type: 'error', text: msg });
     }
   };
 
@@ -485,30 +848,104 @@ export default function Budgets() {
     return dateDebut <= aujourdHui && dateFin >= aujourdHui;
   };
 
-  const estBudgetTermine = (budget) => {
+  const estBudgetDepasse = (budget) => {
     const aujourdHui = new Date();
     aujourdHui.setHours(0, 0, 0, 0);
     const dateFin = new Date(budget.date_fin);
     dateFin.setHours(0, 0, 0, 0);
-    return dateFin < aujourdHui;
+    const pct = parseFloat(budget.pourcentage_utilise || 0);
+    return dateFin < aujourdHui && pct < 100;
   };
 
-  const budgetsFiltres = budgets.filter(budget => {
-    if (filterType === 'encours') return estBudgetEncours(budget);
-    if (filterType === 'termine') return estBudgetTermine(budget);
+  const estBudgetTermine = (budget) => {
+    const pct = parseFloat(budget.pourcentage_utilise || 0);
+    return pct >= 100;
+  };
+
+  const estBudgetModifiable = (budget) => {
+    const aujourdHui = new Date();
+    aujourdHui.setHours(0, 0, 0, 0);
+    const dateFin = new Date(budget.date_fin);
+    dateFin.setHours(0, 0, 0, 0);
+    return dateFin >= aujourdHui && !estBudgetTermine(budget);
+  };
+
+  const budgetsFiltresParRecherche = budgets.filter(budget => {
+    if (!searchTerm.trim()) return true;
+    const categorieNom = budget.categorie_nom?.toLowerCase() || '';
+    const searchLower = searchTerm.toLowerCase().trim();
+    return categorieNom.includes(searchLower);
+  });
+
+  const budgetsFiltres = budgetsFiltresParRecherche.filter(budget => {
+    const estEncours = estBudgetEncours(budget);
+    const estDepasse = estBudgetDepasse(budget);
+    const estTermine = estBudgetTermine(budget);
+
+    if (filterType === 'encours') {
+      return estEncours && !estDepasse && !estTermine;
+    }
+    if (filterType === 'termine') {
+      return estTermine;
+    }
+    if (filterType === 'depasse') {
+      return estDepasse && !estTermine;
+    }
     return true;
   });
 
-  const budgetsEncoursCount = budgets.filter(b => estBudgetEncours(b)).length;
+  const budgetsEncoursCount = budgets.filter(b => {
+    const estEncours = estBudgetEncours(b);
+    const estDepasse = estBudgetDepasse(b);
+    const estTermine = estBudgetTermine(b);
+    return estEncours && !estDepasse && !estTermine;
+  }).length;
+
   const budgetsTerminesCount = budgets.filter(b => estBudgetTermine(b)).length;
+  const budgetsDepasseCount = budgets.filter(b => {
+    const estDepasse = estBudgetDepasse(b);
+    const estTermine = estBudgetTermine(b);
+    return estDepasse && !estTermine;
+  }).length;
 
   const totalPrevu = budgetsFiltres.reduce((s, b) => s + parseFloat(b.montant_prevu || 0), 0);
   const totalDepense = budgetsFiltres.reduce((s, b) => s + parseFloat(b.montant_depense || 0), 0);
   const totalReste = totalPrevu - totalDepense;
 
+  if (abonnementCharge) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        background: '#f8fafc',
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            width: 48, height: 48,
+            border: '3px solid #ede9fe',
+            borderTopColor: '#6366f1',
+            borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite',
+            margin: '0 auto 16px',
+          }} />
+          <p style={{ color: '#64748b' }}>Chargement...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="budgets-page">
       {successMsg && <SuccessModal message={successMsg} onClose={() => setSuccessMsg('')} />}
+      {limitMessage && <LimitModal message={limitMessage} onClose={() => setLimitMessage(null)} />}
+      
+      <MessageBanner 
+        type={pageMessage?.type} 
+        message={pageMessage?.text} 
+        onClose={() => setPageMessage(null)}
+      />
 
       <div className="page-header">
         <div className="header-left">
@@ -517,11 +954,33 @@ export default function Budgets() {
           </div>
           <div>
             <h1>Budgets</h1>
-            <p>{budgetsFiltres.length} budget(s) • {budgetsEncoursCount} en cours • {budgetsTerminesCount} terminés</p>
+            <p>{budgets.length} budget(s) • {budgetsEncoursCount} en cours • {budgetsTerminesCount} terminés • {budgetsDepasseCount} dépassés</p>
           </div>
         </div>
         {hasCategoriesSortie && (
-          <button onClick={() => { setBudgetModal({}); setIsCreating(true); }} className="create-btn">
+          <button 
+            onClick={() => {
+              if (abonnementExpire) {
+                setPageMessage({ 
+                  type: 'error', 
+                  text: 'Votre abonnement a expiré. Vous ne pouvez pas créer de nouveaux budgets.' 
+                });
+                return;
+              }
+              if (!peutCreerBudget()) {
+                setLimitMessage(`Votre abonnement d'essai est limité à ${BUDGET_DAILY_LIMIT} budgets créés par jour. Vous avez atteint cette limite aujourd'hui. Revenez demain ou passez à un abonnement supérieur pour créer plus de budgets.`);
+                return;
+              }
+              setBudgetModal({}); 
+              setIsCreating(true);
+            }} 
+            className="create-btn"
+            style={{
+              opacity: abonnementExpire ? 0.6 : 1,
+              cursor: abonnementExpire ? 'not-allowed' : 'pointer',
+            }}
+            title={abonnementExpire ? 'Votre abonnement a expiré' : ''}
+          >
             <i className='bx bx-plus'></i>
             <span>Nouveau budget</span>
           </button>
@@ -529,24 +988,67 @@ export default function Budgets() {
       </div>
 
       {budgets.length > 0 && (
-        <div className="filter-tabs">
-          <button onClick={() => setFilterType('all')} className={`filter-btn ${filterType === 'all' ? 'active' : ''}`}>
-            <i className='bx bx-list-ul'></i>
-            <span>Tous ({budgets.length})</span>
-          </button>
-          <button onClick={() => setFilterType('encours')} className={`filter-btn ${filterType === 'encours' ? 'active' : ''}`}>
-            <i className='bx bx-time'></i>
-            <span>En cours ({budgetsEncoursCount})</span>
-          </button>
-          <button onClick={() => setFilterType('termine')} className={`filter-btn ${filterType === 'termine' ? 'active' : ''}`}>
-            <i className='bx bx-check-circle'></i>
-            <span>Terminés ({budgetsTerminesCount})</span>
-          </button>
-        </div>
+        <>
+          <div className="filter-tabs">
+            <button onClick={() => setFilterType('all')} className={`filter-btn ${filterType === 'all' ? 'active' : ''}`}>
+              <i className='bx bx-list-ul'></i>
+              <span>Tous ({budgets.length})</span>
+            </button>
+            <button onClick={() => setFilterType('encours')} className={`filter-btn ${filterType === 'encours' ? 'active' : ''}`}>
+              <i className='bx bx-time'></i>
+              <span>En cours ({budgetsEncoursCount})</span>
+            </button>
+            <button onClick={() => setFilterType('termine')} className={`filter-btn ${filterType === 'termine' ? 'active' : ''}`}>
+              <i className='bx bx-check-circle'></i>
+              <span>Terminés ({budgetsTerminesCount})</span>
+            </button>
+            <button onClick={() => setFilterType('depasse')} className={`filter-btn ${filterType === 'depasse' ? 'active' : ''}`}>
+              <i className='bx bx-error-circle'></i>
+              <span>Dépassés ({budgetsDepasseCount})</span>
+            </button>
+          </div>
+
+          <div className="search-container">
+            <div className="search-input-wrapper">
+              <i className='bx bx-search'></i>
+              <input
+                type="text"
+                placeholder="Rechercher un budget par catégorie..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="search-input"
+              />
+              {searchTerm && (
+                <button onClick={() => setSearchTerm('')} className="search-clear">
+                  <i className='bx bx-x'></i>
+                </button>
+              )}
+            </div>
+          </div>
+        </>
       )}
 
       {!loading && hasCategoriesSortie && budgets.length === 0 && !showQuickCreate && (
-        <button onClick={() => setShowQuickCreate(true)} className="quick-create-btn">
+        <button 
+          onClick={() => {
+            if (abonnementExpire) {
+              setPageMessage({ 
+                type: 'error', 
+                text: 'Votre abonnement a expiré. Vous ne pouvez pas créer de nouveaux budgets.' 
+              });
+              return;
+            }
+            if (!peutCreerBudget()) {
+              setLimitMessage(`Votre abonnement d'essai est limité à ${BUDGET_DAILY_LIMIT} budgets créés par jour. Vous avez atteint cette limite aujourd'hui. Revenez demain ou passez à un abonnement supérieur pour créer plus de budgets.`);
+              return;
+            }
+            setShowQuickCreate(true);
+          }} 
+          className="quick-create-btn"
+          style={{
+            opacity: abonnementExpire ? 0.6 : 1,
+          }}
+        >
           <i className='bx bx-plus-circle'></i>
           <span>Créer mon premier budget</span>
         </button>
@@ -563,6 +1065,19 @@ export default function Budgets() {
           </div>
           <form onSubmit={async (e) => {
             e.preventDefault();
+            if (abonnementExpire) {
+              setPageMessage({ 
+                type: 'error', 
+                text: 'Votre abonnement a expiré. Vous ne pouvez pas créer de nouveaux budgets.' 
+              });
+              setShowQuickCreate(false);
+              return;
+            }
+            if (!peutCreerBudget()) {
+              setShowQuickCreate(false);
+              setLimitMessage(`Votre abonnement d'essai est limité à ${BUDGET_DAILY_LIMIT} budgets créés par jour. Vous avez atteint cette limite aujourd'hui. Revenez demain ou passez à un abonnement supérieur pour créer plus de budgets.`);
+              return;
+            }
             const formData = new FormData(e.target);
             const data = {
               categorie: formData.get('categorie'),
@@ -572,11 +1087,29 @@ export default function Budgets() {
             };
             try {
               await api.post('/budgets/', data);
-              toast.success('Budget créé !');
+              incrementDailyCount(BUDGET_COUNT_KEY);
               setShowQuickCreate(false);
+              setPageMessage({ 
+                type: 'success', 
+                text: 'Budget créé avec succès !' 
+              });
+              setTimeout(() => setPageMessage(null), 3000);
               chargerDonnees();
             } catch (err) {
-              toast.error(err.response?.data?.detail || 'Erreur lors de la création');
+              const errorData = err.response?.data;
+              const status = err.response?.status;
+              
+              if (status === 403 && errorData?.error === 'abonnement_expire') {
+                setPageMessage({ 
+                  type: 'error', 
+                  text: 'Votre abonnement a expiré. Vous ne pouvez pas créer de budgets.' 
+                });
+                setShowQuickCreate(false);
+                return;
+              }
+              
+              const msg = errorData?.detail || 'Erreur lors de la création.';
+              setPageMessage({ type: 'error', text: msg });
             }
           }} className="quick-create-form">
             <select name="categorie" required>
@@ -655,10 +1188,21 @@ export default function Budgets() {
       ) : budgetsFiltres.length === 0 && budgets.length > 0 && filterType !== 'all' ? (
         <div className="empty-state">
           <i className='bx bx-filter-alt'></i>
-          <h3>Aucun budget {filterType === 'encours' ? 'en cours' : 'terminé'}</h3>
+          <h3>Aucun budget {filterType === 'encours' ? 'en cours' : filterType === 'termine' ? 'terminé' : 'dépassé'}</h3>
           <p>Aucun budget ne correspond à ce filtre.</p>
-          <button onClick={() => setFilterType('all')} className="primary-btn">
-            <i className='bx bx-list-ul'></i> Voir tous les budgets
+          {filterType !== 'termine' && (
+            <button onClick={() => { setFilterType('all'); setSearchTerm(''); }} className="primary-btn">
+              <i className='bx bx-list-ul'></i> Voir tous les budgets
+            </button>
+          )}
+        </div>
+      ) : budgetsFiltres.length === 0 && searchTerm ? (
+        <div className="empty-state">
+          <i className='bx bx-search-alt'></i>
+          <h3>Aucun budget trouvé</h3>
+          <p>Aucun budget ne correspond à la recherche "{searchTerm}"</p>
+          <button onClick={() => setSearchTerm('')} className="primary-btn">
+            <i className='bx bx-reset'></i> Réinitialiser la recherche
           </button>
         </div>
       ) : budgetsFiltres.length === 0 && !showQuickCreate ? (
@@ -666,46 +1210,49 @@ export default function Budgets() {
           <i className='bx bx-target-lock'></i>
           <h3>Aucun budget</h3>
           <p>Créez votre premier budget pour contrôler vos dépenses</p>
-          {hasCategoriesSortie && (
-            <button onClick={() => { setBudgetModal({}); setIsCreating(true); }} className="primary-btn">
-              <i className='bx bx-plus'></i> Créer un budget
-            </button>
-          )}
         </div>
       ) : (
         <div className="budgets-grid">
           {budgetsFiltres.map(budget => {
             const pct = Math.min(parseFloat(budget.pourcentage_utilise || 0), 100);
             const couleur = budget.couleur || '#6366f1';
-            const depasse = budget.est_depasse;
             const reste = parseFloat(budget.montant_prevu) - parseFloat(budget.montant_depense);
+            
             const estEncours = estBudgetEncours(budget);
+            const estDepasse = estBudgetDepasse(budget);
             const estTermine = estBudgetTermine(budget);
+            const estModifiable = estBudgetModifiable(budget);
+
+            let badgeType = '';
+            let badgeLabel = '';
+            let badgeClass = '';
+
+            if (estTermine) {
+              badgeType = 'termine';
+              badgeLabel = 'Terminé';
+              badgeClass = 'termine-badge';
+            } else if (estDepasse) {
+              badgeType = 'depasse';
+              badgeLabel = 'Dépassé';
+              badgeClass = 'depasse-badge';
+            } else if (estEncours) {
+              badgeType = 'encours';
+              badgeLabel = 'En cours';
+              badgeClass = 'encours-badge';
+            }
 
             return (
-              <div key={budget.id} className={`budget-card ${depasse ? 'depasse' : ''} ${estTermine ? 'termine' : ''}`} style={{ borderTopColor: couleur }}>
+              <div key={budget.id} className={`budget-card ${estDepasse ? 'depasse' : ''} ${estTermine ? 'termine' : ''}`} style={{ borderTopColor: couleur }}>
                 <div className="budget-card-header">
                   <div className="budget-category" style={{ color: couleur }}>
                     <i className='bx bx-category'></i>
                     <span>{budget.categorie_nom}</span>
                   </div>
                   <div className="budget-status-badges">
-                    {estEncours && (
-                      <div className="encours-badge" title="Budget en cours">
-                        <i className='bx bx-time'></i>
-                        <span>En cours</span>
-                      </div>
-                    )}
-                    {estTermine && (
-                      <div className="termine-badge" title="Budget terminé">
-                        <i className='bx bx-check-circle'></i>
-                        <span>Terminé</span>
-                      </div>
-                    )}
-                    {depasse && (
-                      <div className="depasse-badge" title="Budget dépassé">
-                        <i className='bx bx-error-circle'></i>
-                        <span>Dépassé</span>
+                    {badgeType && (
+                      <div className={badgeClass} title={`Budget ${badgeLabel.toLowerCase()}`}>
+                        <i className={`bx ${badgeType === 'termine' ? 'bx-check-circle' : badgeType === 'depasse' ? 'bx-error-circle' : 'bx-time'}`}></i>
+                        <span>{badgeLabel}</span>
                       </div>
                     )}
                   </div>
@@ -718,7 +1265,7 @@ export default function Budgets() {
                   </div>
                   <div className="stat-divider"></div>
                   <div className="stat-item">
-                    <span className="stat-label-small" style={{ color: depasse ? '#ef4444' : couleur }}>
+                    <span className="stat-label-small" style={{ color: estDepasse || estTermine ? '#ef4444' : couleur }}>
                       {parseFloat(budget.montant_depense).toLocaleString()} MRU
                     </span>
                     <span className="stat-sub">dépensé</span>
@@ -726,11 +1273,16 @@ export default function Budgets() {
                 </div>
 
                 <div className="progress-bar">
-                  <div className="progress-fill" style={{ width: `${pct}%`, background: depasse ? '#ef4444' : (pct > 80 ? '#f59e0b' : couleur) }}></div>
+                  <div className="progress-fill" style={{ 
+                    width: `${pct}%`, 
+                    background: estDepasse || estTermine ? '#ef4444' : (pct > 80 ? '#f59e0b' : couleur) 
+                  }}></div>
                 </div>
 
                 <div className="budget-card-footer">
-                  <div className="reste-info">
+                  <div className="reste-info" style={{ 
+                    color: estDepasse || estTermine ? '#ef4444' : (reste > 0 ? '#10b981' : '#f59e0b') 
+                  }}>
                     <i className='bx bx-wallet'></i>
                     <span>Reste: {reste.toLocaleString()} MRU</span>
                   </div>
@@ -738,17 +1290,74 @@ export default function Budgets() {
                 </div>
 
                 <div className="budget-actions">
-                  <button onClick={() => setDepenseModal(budget)} className="action-btn-depense" style={{ background: couleur }} title="Ajouter une dépense au budget">
+                  <button 
+                    onClick={() => {
+                      if (abonnementExpire) {
+                        setPageMessage({ 
+                          type: 'error', 
+                          text: 'Votre abonnement a expiré. Vous ne pouvez pas ajouter de dépenses.' 
+                        });
+                        return;
+                      }
+                      if (!peutAjouterDepense()) {
+                        setLimitMessage(`Votre abonnement d'essai est limité à ${DEPENSE_DAILY_LIMIT} dépenses de budget par jour. Vous avez atteint cette limite aujourd'hui. Revenez demain ou passez à un abonnement supérieur pour ajouter plus de dépenses.`);
+                        return;
+                      }
+                      setDepenseModal(budget);
+                    }} 
+                    className="action-btn-depense" 
+                    style={{ 
+                      background: (estDepasse || estTermine || !estModifiable || abonnementExpire) ? '#94a3b8' : couleur,
+                      opacity: (estDepasse || estTermine || !estModifiable || abonnementExpire) ? 0.6 : 1,
+                    }}
+                    disabled={estDepasse || estTermine || !estModifiable || abonnementExpire}
+                    title={(estDepasse || estTermine || !estModifiable) ? "Ce budget n'est plus actif" : "Ajouter une dépense au budget"}
+                  >
                     <i className='bx bx-money'></i>
                     <span>Dépenser</span>
                   </button>
                   <button onClick={() => setDepensesModal(budget)} className="action-btn-view" title="Voir les dépenses du budget">
                     <i className='bx bx-list-ul'></i>
                   </button>
-                  <button onClick={() => { setBudgetModal(budget); setIsCreating(false); }} className="action-btn-edit" title="Modifier">
+                  <button 
+                    onClick={() => { 
+                      if (abonnementExpire) {
+                        setPageMessage({ 
+                          type: 'error', 
+                          text: 'Votre abonnement a expiré. Vous ne pouvez pas modifier de budgets.' 
+                        });
+                        return;
+                      }
+                      if (!estModifiable) {
+                        setPageMessage({ 
+                          type: 'error', 
+                          text: 'Ce budget n\'est plus modifiable car la période est dépassée.' 
+                        });
+                        return;
+                      }
+                      setBudgetModal(budget); 
+                      setIsCreating(false); 
+                    }} 
+                    className="action-btn-edit" 
+                    style={{ 
+                      opacity: (estModifiable && !abonnementExpire) ? 1 : 0.5, 
+                      cursor: (estModifiable && !abonnementExpire) ? 'pointer' : 'not-allowed' 
+                    }}
+                    disabled={!estModifiable || abonnementExpire}
+                    title={!estModifiable ? "Ce budget n'est plus modifiable" : abonnementExpire ? "Votre abonnement a expiré" : "Modifier"}
+                  >
                     <i className='bx bx-edit-alt'></i>
                   </button>
-                  <button onClick={() => setConfirmSupprId(budget.id)} className="action-btn-delete" title="Supprimer">
+                  <button 
+                    onClick={() => setConfirmSupprId(budget.id)} 
+                    className="action-btn-delete" 
+                    style={{ 
+                      opacity: (estTermine || abonnementExpire) ? 0.5 : 1, 
+                      cursor: (estTermine || abonnementExpire) ? 'not-allowed' : 'pointer' 
+                    }}
+                    disabled={estTermine || abonnementExpire}
+                    title={estTermine ? "Impossible de supprimer un budget terminé" : abonnementExpire ? "Votre abonnement a expiré" : "Supprimer"}
+                  >
                     <i className='bx bx-trash'></i>
                   </button>
                 </div>
@@ -763,6 +1372,12 @@ export default function Budgets() {
           budget={depenseModal}
           onClose={() => setDepenseModal(null)}
           onSuccess={msg => { setDepenseModal(null); setSuccessMsg(msg); chargerDonnees(); }}
+          canSubmit={peutAjouterDepense() && !abonnementExpire}
+          onLimitReached={() => {
+            setDepenseModal(null);
+            setLimitMessage(`Votre abonnement d'essai est limité à ${DEPENSE_DAILY_LIMIT} dépenses de budget par jour. Vous avez atteint cette limite aujourd'hui. Revenez demain ou passez à un abonnement supérieur pour ajouter plus de dépenses.`);
+          }}
+          onMessage={handleModalMessage}
         />
       )}
       {depensesModal && (
@@ -774,6 +1389,13 @@ export default function Budgets() {
           categories={categories}
           onClose={() => { setBudgetModal(null); setIsCreating(false); }}
           onSuccess={() => { setBudgetModal(null); setIsCreating(false); chargerDonnees(); }}
+          canCreate={isCreating ? (peutCreerBudget() && !abonnementExpire) : true}
+          onLimitReached={() => {
+            setBudgetModal(null);
+            setIsCreating(false);
+            setLimitMessage(`Votre abonnement d'essai est limité à ${BUDGET_DAILY_LIMIT} budgets créés par jour. Vous avez atteint cette limite aujourd'hui. Revenez demain ou passez à un abonnement supérieur pour créer plus de budgets.`);
+          }}
+          onMessage={handleModalMessage}
         />
       )}
 
@@ -803,6 +1425,14 @@ export default function Budgets() {
           margin: 0 auto;
           padding: 20px 16px;
           font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(16px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
         }
 
         .modal-overlay {
@@ -1147,7 +1777,7 @@ export default function Budgets() {
         .filter-tabs {
           display: flex;
           gap: 10px;
-          margin-bottom: 24px;
+          margin-bottom: 16px;
           flex-wrap: wrap;
         }
 
@@ -1181,6 +1811,62 @@ export default function Budgets() {
           border-color: transparent;
           color: white;
           box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+
+        .search-container {
+          margin-bottom: 20px;
+        }
+
+        .search-input-wrapper {
+          position: relative;
+          display: flex;
+          align-items: center;
+          background: white;
+          border: 1.5px solid #e2e8f0;
+          border-radius: 12px;
+          padding: 0 12px;
+          transition: all 0.2s;
+        }
+
+        .search-input-wrapper:focus-within {
+          border-color: #6366f1;
+          box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        .search-input-wrapper i {
+          color: #94a3b8;
+          font-size: 1.2rem;
+        }
+
+        .search-input {
+          flex: 1;
+          padding: 12px 8px;
+          border: none;
+          outline: none;
+          font-size: 0.9rem;
+          background: transparent;
+          color: #1e293b;
+        }
+
+        .search-input::placeholder {
+          color: #94a3b8;
+        }
+
+        .search-clear {
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: #94a3b8;
+          padding: 4px 8px;
+          font-size: 1.2rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: color 0.2s;
+        }
+
+        .search-clear:hover {
+          color: #ef4444;
         }
 
         .transactions-list {
@@ -1328,7 +2014,7 @@ export default function Budgets() {
           box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
         }
 
-        .create-btn:hover {
+        .create-btn:hover:not(:disabled) {
           transform: translateY(-2px);
           box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
         }
@@ -1351,7 +2037,7 @@ export default function Budgets() {
           transition: all 0.2s;
         }
 
-        .quick-create-btn:hover {
+        .quick-create-btn:hover:not(:disabled) {
           border-color: #6366f1;
           background: #f8fafc;
           transform: translateY(-2px);
@@ -1420,6 +2106,10 @@ export default function Budgets() {
           margin-top: 4px;
         }
 
+        .quick-submit:hover {
+          background: #4f46e5;
+        }
+
         .warning-card.compact {
           background: #fffbeb;
           border: 1px solid #fde68a;
@@ -1465,6 +2155,10 @@ export default function Budgets() {
           align-items: center;
           gap: 6px;
           white-space: nowrap;
+        }
+
+        .warning-action-btn:hover {
+          background: #4f46e5;
         }
 
         .warning-banner.compact {
@@ -1719,8 +2413,13 @@ export default function Budgets() {
           transition: all 0.2s;
         }
 
-        .action-btn-depense:hover {
+        .action-btn-depense:hover:not(:disabled) {
           filter: brightness(0.9);
+        }
+
+        .action-btn-depense:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
         }
 
         .action-btn-view,
@@ -1745,14 +2444,24 @@ export default function Budgets() {
           color: #6366f1;
         }
 
+        .action-btn-edit:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
         .action-btn-delete {
           background: #fef2f2;
           color: #ef4444;
         }
 
+        .action-btn-delete:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
         .action-btn-view:hover,
-        .action-btn-edit:hover,
-        .action-btn-delete:hover {
+        .action-btn-edit:hover:not(:disabled),
+        .action-btn-delete:hover:not(:disabled) {
           transform: scale(0.95);
         }
 
@@ -1799,6 +2508,11 @@ export default function Budgets() {
           gap: 8px;
         }
 
+        .primary-btn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+
         .delete-confirm.compact {
           text-align: center;
           max-width: 320px;
@@ -1829,6 +2543,37 @@ export default function Budgets() {
           color: #64748b;
         }
 
+        .limit-confirm.compact {
+          text-align: center;
+          max-width: 320px;
+        }
+
+        .limit-icon {
+          width: 64px;
+          height: 64px;
+          background: #fff7ed;
+          border-radius: 32px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin: 0 auto 16px;
+          color: #f59e0b;
+          font-size: 32px;
+        }
+
+        .limit-confirm h3 {
+          margin: 0 0 8px;
+          font-size: 1.1rem;
+          color: #1e293b;
+        }
+
+        .limit-confirm p {
+          margin: 0 0 24px;
+          font-size: 0.8rem;
+          color: #64748b;
+          line-height: 1.5;
+        }
+
         .spinner {
           width: 16px;
           height: 16px;
@@ -1844,10 +2589,6 @@ export default function Budgets() {
           margin: 0 auto 16px;
           border: 3px solid #e2e8f0;
           border-top-color: #6366f1;
-        }
-
-        @keyframes spin {
-          to { transform: rotate(360deg); }
         }
 
         @media (max-width: 768px) {
@@ -1877,6 +2618,17 @@ export default function Budgets() {
           .filter-btn {
             flex: 1;
             justify-content: center;
+            font-size: 0.7rem;
+            padding: 8px 12px;
+          }
+
+          .search-input-wrapper {
+            padding: 0 10px;
+          }
+
+          .search-input {
+            font-size: 0.8rem;
+            padding: 10px 6px;
           }
 
           .budgets-grid {

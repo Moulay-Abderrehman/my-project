@@ -5,6 +5,7 @@ from .views import (
     SouscriptionView,
     AbonnementDetailView,
     PaiementListView,
+    AbonnementStatutView, #Nouveau
 )
 
 urlpatterns = [
@@ -13,6 +14,9 @@ urlpatterns = [
     path('souscrire/',         SouscriptionView.as_view(),              name='souscrire'),
     path('detail/',            AbonnementDetailView.as_view(),          name='abonnement-detail'),
     path('paiements/',         PaiementListView.as_view(),              name='paiements'),
+
+    path('statut/', AbonnementStatutView.as_view(), name='abonnement-statut'),  # Nouveau
+
 ]
 
 
