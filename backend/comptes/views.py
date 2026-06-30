@@ -30,6 +30,8 @@ from .utils import (
     verifier_code_reset, envoyer_email_reset,
     creer_abonnement_essai, envoyer_email_invitation,
     envoyer_email_verification_compte,
+    envoyer_email_abonnement,
+    envoyer_email_bienvenue_kyc_valide,
 )
 from logs.utils import enregistrer_log
 

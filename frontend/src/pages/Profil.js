@@ -4,18 +4,10 @@ import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
-// ── Tarifs selon type utilisateur ────────────────────────────────────────────
-// NOUVEAU — TARIFS étendu aux 5 durées (mensuel, 2_mois, 3_mois, 6_mois,
-// annuel), alignées sur backend/abonnements/views.py (TARIFS). Les valeurs
-// 'mensuel' et 'annuel' restent strictement identiques à avant.
 const TARIFS = {
   standard:   { mensuel: 1500, '2_mois': 2850, '3_mois': 4200, '6_mois': 8100,  annuel: 15000 },
   entreprise: { mensuel: 2500, '2_mois': 4750, '3_mois': 7000, '6_mois': 13500, annuel: 25000 },
 };
-
-// NOUVEAU — durée en jours par type d'abonnement, utilisée pour les calculs
-// d'affichage de date (écran "renouveler") ainsi que pour la barre de
-// progression existante (remplace les valeurs codées en dur 30/365).
 const DUREE_JOURS = {
   essai: 30, mensuel: 30, '2_mois': 60, '3_mois': 90, '6_mois': 180, annuel: 365,
 };
@@ -56,7 +48,6 @@ export default function Profil() {
   }, []);
 
   // ── Bannières de message (remplacent les toasts) ─────────────────────────
-  // Chaque section a sa propre bannière : { type: 'success' | 'error', text }
   const [msgProfil, setMsgProfil] = useState(null);
   const [msgSecurite, setMsgSecurite] = useState(null);
   const [msgAbonnement, setMsgAbonnement] = useState(null);
@@ -95,28 +86,12 @@ export default function Profil() {
   const [code, setCode] = useState('');
   const [loadingAbo, setLoadingAbo] = useState(false);
   const [successAbo, setSuccessAbo] = useState(null);
-
-  // ── NOUVEAU — Prévisualisation du renouvellement (mode + nouvelle date de
-  // fin + message), chargée depuis /abonnements/previsualiser-renouvellement/
-  // chaque fois que typeUser/typeAbo changent sur l'écran "renouveler" ou
-  // "choix". N'effectue aucun effet de bord côté backend (lecture seule).
   const [previewRenouvellement, setPreviewRenouvellement] = useState(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
-
-  // ── Sous-étapes du flux de paiement fusionné dans l'onglet Abonnement ────
-  // etapePaiement: 'renouveler' (écran de confirmation, affiché seulement si un
-  // abonnement actif existe déjà) -> 'choix' -> 'email' -> 'methode' -> 'upload'
-  // NOUVEAU — 'retour_trackpay' : écran de vérification après redirection TrackPay.
-  // L'état initial est déterminé dynamiquement (voir effet ci-dessous) selon
-  // qu'un abonnement actif existe déjà ou non.
   const [etapePaiement, setEtapePaiement] = useState('choix');
-
-  // ── Étape "méthode" : choix parmi 5 méthodes + compte d'encaissement ─────
-  // methodePaiement: 'rssbank' | 'sedad' | 'bankily' | 'masrivi' (manuelles) | 'trackpay' (automatique)
   const [methodePaiement, setMethodePaiement] = useState(null);
   const [compteEncaissement, setCompteEncaissement] = useState(null);
   const [loadingCompte, setLoadingCompte] = useState(false);
-
   // ── Étape "upload" : capture d'écran de confirmation (méthodes manuelles) ─
   const [captureFile, setCaptureFile] = useState(null);
   const [capturePreview, setCapturePreview] = useState(null);
@@ -132,7 +107,6 @@ export default function Profil() {
   const pollingTimeoutRef = useRef(null);
 
   // ── État "demande en cours" / "refusé" ───────────────────────────────────
-  // etatPaiement: { etat: 'en_attente' | 'refuse' | 'aucun', paiement: {...} | null }
   const [etatPaiement, setEtatPaiement] = useState(null);
   const [loadingEtatPaiement, setLoadingEtatPaiement] = useState(false);
 
@@ -154,11 +128,6 @@ export default function Profil() {
     }
   }, [activeTab]);
 
-  // ── NOUVEAU — Détecte le retour depuis TrackPay via un paramètre d'URL.
-  // TrackPay redirige l'utilisateur vers cette page après paiement ; on
-  // détecte ce retour via ?retour_trackpay=1 dans l'URL (à configurer comme
-  // URL de retour côté TrackPay si l'interface le permet), et on bascule
-  // directement sur l'écran de vérification + polling.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('retour_trackpay') === '1') {
@@ -167,21 +136,12 @@ export default function Profil() {
     }
   }, []);
 
-  // ── Initialise la sous-étape du flux de paiement à l'arrivée sur
-  // l'onglet Abonnement : si un abonnement actif existe déjà, on affiche
-  // d'abord l'écran de confirmation "Renouveler ?" (et on pré-remplit le
-  // type de compte / durée avec le plan actuel) ; sinon on va directement
-  // au formulaire de choix de plan (premier abonnement / essai expiré).
-  // NOUVEAU — ne s'applique pas si on est déjà sur 'retour_trackpay'
-  // (sinon ce retour serait écrasé par cet effet).
   useEffect(() => {
     if (activeTab === 'abonnement' && abonnement && etapePaiement !== 'retour_trackpay') {
       if (abonnement.est_actif && (abonnement.plan_nom || '') !== 'essai') {
         if (abonnement.type_utilisateur === 'standard' || abonnement.type_utilisateur === 'entreprise') {
           setTypeUser(abonnement.type_utilisateur);
         }
-        // NOUVEAU — pré-remplissage étendu aux 5 durées (au lieu de
-        // mensuel/annuel uniquement).
         if (['mensuel', '2_mois', '3_mois', '6_mois', 'annuel'].includes(abonnement.type)) {
           setTypeAbo(abonnement.type);
         }
@@ -202,11 +162,6 @@ export default function Profil() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [etapePaiement]);
 
-  // ── NOUVEAU — Charge la prévisualisation du renouvellement (mode +
-  // nouvelle date de fin + message d'autorisation) chaque fois que le plan
-  // ou la durée choisie change, sur les écrans 'renouveler' et 'choix'.
-  // Lecture seule côté backend (aucun effet de bord), voir
-  // PrevisualiserRenouvellementView dans views.py.
   useEffect(() => {
     if ((etapePaiement === 'renouveler' || etapePaiement === 'choix') && typeUser && typeAbo) {
       chargerPreviewRenouvellement();
@@ -247,9 +202,6 @@ export default function Profil() {
   const estEssai  = planNom === 'essai';
   const joursRest = abonnement?.jours_restants ?? 0;
 
-  // Le renouvellement anticipé est toujours autorisé : un utilisateur avec un
-  // abonnement actif peut relancer une demande de renouvellement à tout
-  // moment (l'admin / TrackPay gère la prise en compte côté backend).
   const peutSouscrire = () => true;
 
   const getIdLabel = () => (user?.document_type === 'passport' ? 'Numéro de passeport' : 'NNI');
@@ -388,12 +340,6 @@ export default function Profil() {
     }
   };
 
-  // ── Transition interne "choix" → "email" ──────────────────────────────────
-  // Remplace l'ancienne redirection navigate('/paiement') : on avance
-  // simplement d'une sous-étape à l'intérieur du même onglet Abonnement.
-  // NOUVEAU — bloque l'avancée si la prévisualisation indique que le
-  // renouvellement/changement n'est pas autorisé (règles métier), pour
-  // éviter d'amener l'utilisateur jusqu'à l'étape de paiement pour rien.
   const continuerVersPaiement = (e) => {
     e.preventDefault();
     if (previewRenouvellement && previewRenouvellement.autorise === false) {
@@ -411,9 +357,6 @@ export default function Profil() {
     chargerComptesEncaissement();
   };
 
-  // ── Étape "méthode" : charger les comptes d'encaissement (admin) ─────────
-  // NOUVEAU — couvre désormais 4 méthodes manuelles (rssbank/sedad/bankily/masrivi).
-  // TrackPay n'a pas de CompteEncaissement (paiement automatique).
   const chargerComptesEncaissement = async () => {
     setLoadingCompte(true);
     try {
@@ -430,10 +373,6 @@ export default function Profil() {
     setMethodePaiement(val);
   };
 
-  // NOUVEAU — methode n'est plus unique côté backend (plusieurs comptes
-  // possibles pour une même méthode) : on prend le premier compte actif
-  // trouvé pour cette méthode. Comportement par défaut simple ; à étendre
-  // plus tard si besoin d'afficher/choisir entre plusieurs comptes.
   const getCompteForMethode = (val) => {
     if (!Array.isArray(compteEncaissement)) return null;
     return compteEncaissement.find(c => c.methode === val) || null;
@@ -487,10 +426,6 @@ export default function Profil() {
   // ══════════════════════════════════════════════════════════════════════════
   // NOUVEAU — Flux TrackPay (paiement automatique)
   // ══════════════════════════════════════════════════════════════════════════
-
-  // ── Lance le paiement TrackPay : appelle le backend pour obtenir
-  // payment_url, puis redirige immédiatement l'utilisateur (pas d'étape
-  // "upload" pour cette méthode, contrairement aux 4 méthodes manuelles).
   const lancerPaiementTrackPay = async () => {
     setLoadingTrackPay(true);
     try {
@@ -513,8 +448,6 @@ export default function Profil() {
         reinitialiserFlowPaiement();
         await chargerEtatPaiement();
       } else if (data?.code === 'renouvellement_refuse') {
-        // NOUVEAU — même gestion que pour le flux manuel : message explicite
-        // + retour à l'étape "choix".
         showMsg(setMsgAbonnement, 'error', data.error || "Ce changement de plan n'est pas autorisé pour le moment.");
         setEtapePaiement('choix');
       } else {
@@ -524,10 +457,6 @@ export default function Profil() {
     }
   };
 
-  // ── Polling du statut après retour de TrackPay : interroge
-  // statut-paiement-en-cours/ toutes les 4 secondes jusqu'à ce que la
-  // demande ne soit plus 'en_attente' (confirmée par le webhook) ou jusqu'au
-  // timeout (~30s), pour laisser le temps au webhook TrackPay d'arriver.
   const demarrerPollingTrackPay = () => {
     setPollingTrackPay(true);
     setTrackPayTimeout(false);
@@ -536,9 +465,6 @@ export default function Profil() {
       try {
         const res = await api.get('/abonnements/statut-paiement-en-cours/');
         if (res.data?.etat !== 'en_attente') {
-          // Le paiement a été traité (confirmée -> plus en_attente, donc
-          // 'aucun' une fois l'Abonnement activé, ou 'refuse'/'echoue' selon
-          // l'issue) : on arrête le polling et on rafraîchit l'abonnement.
           arreterPollingTrackPay();
           await chargerAbonnement();
           await chargerEtatPaiement();
@@ -570,9 +496,6 @@ export default function Profil() {
     setPollingTrackPay(false);
   };
 
-  // Remet le flux interne à zéro après envoi (toujours vers "choix" : la
-  // demande venant d'être soumise, il n'y a pas lieu de repasser par l'écran
-  // de confirmation "renouveler") ────────────────────────────────────────────
   const reinitialiserFlowPaiement = () => {
     setEtapePaiement('choix');
     setCodeEnvoye(false);
@@ -582,8 +505,6 @@ export default function Profil() {
     setCaptureFile(null);
     setCapturePreview(null);
     setLoadingTrackPay(false);
-    // Nettoie le paramètre d'URL de retour TrackPay s'il est présent, pour
-    // éviter de re-déclencher 'retour_trackpay' lors d'un futur rechargement.
     if (window.location.search.includes('retour_trackpay')) {
       const url = new URL(window.location.href);
       url.searchParams.delete('retour_trackpay');
@@ -1133,7 +1054,7 @@ export default function Profil() {
                   color: T.text,
                   fontFamily: "'Outfit', sans-serif",
                 }}>
-                  Données d'identité
+                  Données Extraite
                 </h3>
               </div>
 
@@ -1165,7 +1086,7 @@ export default function Profil() {
                   </div>
                   <div>
                     <div style={{ fontWeight: 700, fontSize: isMobile ? 12 : 13, color: user?.is_kyc_verified ? '#065f46' : '#92400e' }}>
-                      {user?.is_kyc_verified ? 'Identité vérifiée' : 'Vérification en attente'}
+                      {user?.is_kyc_verified ? 'Votre compte est validée' : 'Vérification en attente'}
                     </div>
                     <div style={{ fontSize: 9, color: user?.is_kyc_verified ? '#047857' : '#b45309', marginTop: 2 }}>
                       {user?.is_kyc_verified ? 'Confirmée' : 'Vérifiez votre identité'}
@@ -1219,11 +1140,11 @@ export default function Profil() {
                         </div>
                         <div>
                           <div style={{ fontSize: 9, color: T.textLight, fontWeight: 600, marginBottom: 3 }}>Nom</div>
-                          <div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: T.text }}>{user?.nom_fr || user?.nom || '—'}</div>
+                          <div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: T.text }}>{user?.prenom_fr || user?.prenom || '—'}</div>
                         </div>
                         <div>
                           <div style={{ fontSize: 9, color: T.textLight, fontWeight: 600, marginBottom: 3 }}>Prénom</div>
-                          <div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: T.text }}>{user?.prenom_fr || user?.prenom || '—'}</div>
+                          <div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: T.text }}>{user?.nom_fr || user?.nom || '—'}</div>
                         </div>
                         <div>
                           <div style={{ fontSize: 9, color: T.textLight, fontWeight: 600, marginBottom: 3 }}>Nom du père</div>

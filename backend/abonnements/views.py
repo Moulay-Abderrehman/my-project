@@ -45,10 +45,10 @@ METHODES_MANUELLES = ('rssbank', 'sedad', 'bankily', 'masrivi')
 TYPES_ABONNEMENT_VALIDES = ('mensuel', '2_mois', '3_mois', '6_mois', 'annuel')
 
 # NOUVEAU — nombre de jours restants en-dessous duquel un changement de plan
-SEUIL_JOURS_CHANGEMENT_PLAN = 2
+SEUIL_JOURS_CHANGEMENT_PLAN = 5
 
 # NOUVEAU — nombre maximum de renouvellements autorisés pendant une même
-MAX_RENOUVELLEMENTS = 2
+MAX_RENOUVELLEMENTS = 3
 
 
 def _get_or_create_plan(nom_plan: str, defaults: dict) -> Plan:
@@ -280,7 +280,7 @@ class DemanderCodeSouscriptionView(APIView):
 
         if not ok:
             return Response({
-                'error': "Impossible d'envoyer le code par email. Vérifiez la configuration SMTP."
+                'error': "Impossible d'envoyer le code par email. essayer plus tard"
             }, status=500)
 
         return Response({

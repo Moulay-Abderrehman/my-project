@@ -6,6 +6,12 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.core.mail.backends.smtp import EmailBackend
 
+from .email_service import (
+    envoyer_email_microservice,
+    envoyer_email_avec_template,
+    envoyer_email_avec_contenu_html,
+    envoyer_email_avec_smtp_personnalise,
+)
 # ─── CODE RESET ──────────────────────────────────────────────────────────────
 def generer_code_reset(longueur: int = 6) -> str:
     return ''.join(random.choices(string.digits, k=longueur))
@@ -25,240 +31,240 @@ def verifier_code_reset(email: str, code_fourni: str) -> bool:
 
 # ─── EMAIL RESET MOT DE PASSE (Réinitialisation uniquement) ────────────────────
 def envoyer_email_reset(email: str, code: str) -> bool:
-    try:
-        context = ssl.create_default_context()
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
-        
-        from django.core.mail import get_connection
-        connection = get_connection(
-            host=settings.EMAIL_HOST,
-            port=settings.EMAIL_PORT,
-            username=settings.EMAIL_HOST_USER,
-            password=settings.EMAIL_HOST_PASSWORD,
-            use_tls=settings.EMAIL_USE_TLS,
-            fail_silently=False,
-        )
-        
-        send_mail(
-            subject="FinanceApp — 🔐 Réinitialisation de votre mot de passe",
-            message=f"Bonjour,\n\nVotre code de réinitialisation de mot de passe est : {code}\n\nCe code est valable 5 minutes.\n\nSi vous n'avez pas demandé cette réinitialisation, ignorez cet email.\n\nCordialement,\nL'équipe FinanceApp",
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[email],
-            html_message=f"""
-            <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:32px;background:#f8fafc;border-radius:16px;">
-                <div style="text-align:center;margin-bottom:24px;">
-                    <div style="display:inline-block;background:linear-gradient(135deg,#0c2e7c,#1e4db7);border-radius:14px;padding:12px 24px;">
-                        <span style="color:#fff;font-weight:900;font-size:20px;">FinanceApp</span>
-                    </div>
-                </div>
-                <div style="background:#fff;border-radius:12px;padding:28px;box-shadow:0 2px 12px rgba(0,0,0,0.07);">
-                    <h2 style="margin:0 0 12px;color:#1e293b;">🔐 Réinitialisation du mot de passe</h2>
-                    <p style="color:#64748b;font-size:14px;margin:0 0 20px;">
-                        Vous avez demandé à réinitialiser votre mot de passe.
-                        Voici votre code de vérification :
-                    </p>
-                    <div style="text-align:center;background:#eef2ff;border-radius:12px;padding:24px;margin-bottom:20px;">
-                        <span style="font-size:42px;font-weight:900;letter-spacing:14px;color:#0c2e7c;">{code}</span>
-                    </div>
-                    <p style="color:#64748b;font-size:14px;margin:0 0 10px;">
-                        Ce code est <strong>valable 5 minutes</strong>.
-                    </p>
-                    <p style="color:#94a3b8;font-size:12px;margin:0;">
-                        Si vous n'avez pas demandé cette réinitialisation, ignorez cet email.
-                    </p>
-                </div>
-                <p style="text-align:center;margin-top:16px;color:#94a3b8;font-size:11px;">© 2025 FinanceApp - Gestion financière intelligente</p>
-            </div>
-            """,
-            fail_silently=False,
-            connection=connection,
-        )
-        return True
-    except Exception as e:
-        print(f"[EMAIL RESET ERROR] {e}")
-        return False
+    """
+    Envoie un email de réinitialisation de mot de passe via le microservice.
+    """
+    subject = "FinanceApp — 🔐 Réinitialisation de votre mot de passe"
+    
+    # Message texte (fallback)
+    message = f"""Bonjour,
 
+Votre code de réinitialisation de mot de passe est : {code}
+
+Ce code est valable 5 minutes.
+
+Si vous n'avez pas demandé cette réinitialisation, ignorez cet email.
+
+Cordialement,
+L'équipe FinanceApp"""
+    
+    # Message HTML
+    html_message = f"""
+    <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:32px;background:#f8fafc;border-radius:16px;">
+        <div style="text-align:center;margin-bottom:24px;">
+            <div style="display:inline-block;background:linear-gradient(135deg,#0c2e7c,#1e4db7);border-radius:14px;padding:12px 24px;">
+                <span style="color:#fff;font-weight:900;font-size:20px;">FinanceApp</span>
+            </div>
+        </div>
+        <div style="background:#fff;border-radius:12px;padding:28px;box-shadow:0 2px 12px rgba(0,0,0,0.07);">
+            <h2 style="margin:0 0 12px;color:#1e293b;">🔐 Réinitialisation du mot de passe</h2>
+            <p style="color:#64748b;font-size:14px;margin:0 0 20px;">
+                Vous avez demandé à réinitialiser votre mot de passe.
+                Voici votre code de vérification :
+            </p>
+            <div style="text-align:center;background:#eef2ff;border-radius:12px;padding:24px;margin-bottom:20px;">
+                <span style="font-size:42px;font-weight:900;letter-spacing:14px;color:#0c2e7c;">{code}</span>
+            </div>
+            <p style="color:#64748b;font-size:14px;margin:0 0 10px;">
+                Ce code est <strong>valable 5 minutes</strong>.
+            </p>
+            <p style="color:#94a3b8;font-size:12px;margin:0;">
+                Si vous n'avez pas demandé cette réinitialisation, ignorez cet email.
+            </p>
+        </div>
+        <p style="text-align:center;margin-top:16px;color:#94a3b8;font-size:11px;">© 2025 FinanceApp - Gestion financière intelligente</p>
+    </div>
+    """
+    
+    return envoyer_email_avec_contenu_html(
+        to=email,
+        subject=subject,
+        message=message,
+        html_message=html_message,
+        sender_name="FinanceApp",
+        sender_color="#0c2e7c",
+    )
 
 # ─── EMAIL CONFIRMATION CREATION DE COMPTE ─────────────────────────────────────
 def envoyer_email_verification_compte(user) -> bool:
-    """Envoie un email avec le code de vérification pour la création de compte"""
+    """
+    Envoie un email de vérification pour la création de compte via le microservice.
+    """
     code = user.code_confirmation
     email = user.email
     
     if not email or not code:
         return False
     
-    try:
-        context = ssl.create_default_context()
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
-        
-        from django.core.mail import get_connection
-        connection = get_connection(
-            host=settings.EMAIL_HOST,
-            port=settings.EMAIL_PORT,
-            username=settings.EMAIL_HOST_USER,
-            password=settings.EMAIL_HOST_PASSWORD,
-            use_tls=settings.EMAIL_USE_TLS,
-            fail_silently=False,
-        )
-        
-        send_mail(
-            subject="FinanceApp — 🎉 Bienvenue ! Vérifiez votre adresse email",
-            message=f"Bonjour {user.prenom},\n\nMerci d'avoir créé un compte sur FinanceApp !\n\nVotre code de vérification est : {code}\n\nCe code est valable 5 minutes.\n\nPour finaliser votre inscription, saisissez ce code sur la page de vérification.\n\nCordialement,\nL'équipe FinanceApp",
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[email],
-            html_message=f"""
-            <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:32px;background:#f8fafc;border-radius:16px;">
-                <div style="text-align:center;margin-bottom:24px;">
-                    <div style="display:inline-block;background:linear-gradient(135deg,#0c2e7c,#1e4db7);border-radius:14px;padding:12px 24px;">
-                        <span style="color:#fff;font-weight:900;font-size:20px;">FinanceApp</span>
-                    </div>
-                </div>
-                <div style="background:#fff;border-radius:12px;padding:28px;box-shadow:0 2px 12px rgba(0,0,0,0.07);">
-                    <h2 style="margin:0 0 12px;color:#1e293b;">🎉 Bienvenue sur FinanceApp !</h2>
-                    <p style="color:#64748b;font-size:14px;margin:0 0 10px;">
-                        Bonjour <strong>{user.prenom} {user.nom}</strong>,
-                    </p>
-                    <p style="color:#64748b;font-size:14px;margin:0 0 20px;">
-                        Merci d'avoir créé un compte. Pour finaliser votre inscription,
-                        veuillez saisir le code de vérification ci-dessous :
-                    </p>
-                    <div style="text-align:center;background:#eef2ff;border-radius:12px;padding:24px;margin-bottom:20px;">
-                        <span style="font-size:42px;font-weight:900;letter-spacing:14px;color:#0c2e7c;">{code}</span>
-                    </div>
-                    <p style="color:#64748b;font-size:14px;margin:0 0 10px;">
-                        Ce code est <strong>valable 5 minutes</strong>.
-                    </p>
-                    <p style="color:#94a3b8;font-size:12px;margin:0;">
-                        Une fois vérifié, vous pourrez profiter de votre essai gratuit de 14 jours !
-                    </p>
-                </div>
-                <p style="text-align:center;margin-top:16px;color:#94a3b8;font-size:11px;">© 2025 FinanceApp - Gestion financière intelligente</p>
+    subject = "FinanceApp — 🎉 Bienvenue ! Vérifiez votre adresse email"
+    
+    message = f"""Bonjour {user.prenom},
+
+        Merci d'avoir créé un compte sur FinanceApp !
+
+        Votre code de vérification est : {code}
+
+        Ce code est valable 5 minutes.
+
+        Pour finaliser votre inscription, saisissez ce code sur la page de vérification.
+
+        Cordialement,
+        L'équipe FinanceApp"""
+    
+    html_message = f"""
+    <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:32px;background:#f8fafc;border-radius:16px;">
+        <div style="text-align:center;margin-bottom:24px;">
+            <div style="display:inline-block;background:linear-gradient(135deg,#0c2e7c,#1e4db7);border-radius:14px;padding:12px 24px;">
+                <span style="color:#fff;font-weight:900;font-size:20px;">FinanceApp</span>
             </div>
-            """,
-            fail_silently=False,
-            connection=connection,
-        )
-        return True
-    except Exception as e:
-        print(f"[EMAIL VERIFICATION ERROR] {e}")
-        return False
+        </div>
+        <div style="background:#fff;border-radius:12px;padding:28px;box-shadow:0 2px 12px rgba(0,0,0,0.07);">
+            <h2 style="margin:0 0 12px;color:#1e293b;">🎉 Bienvenue sur FinanceApp !</h2>
+            <p style="color:#64748b;font-size:14px;margin:0 0 10px;">
+                Bonjour <strong>{user.prenom} {user.nom}</strong>,
+            </p>
+            <p style="color:#64748b;font-size:14px;margin:0 0 20px;">
+                Merci d'avoir créé un compte. Pour finaliser votre inscription,
+                veuillez saisir le code de vérification ci-dessous :
+            </p>
+            <div style="text-align:center;background:#eef2ff;border-radius:12px;padding:24px;margin-bottom:20px;">
+                <span style="font-size:42px;font-weight:900;letter-spacing:14px;color:#0c2e7c;">{code}</span>
+            </div>
+            <p style="color:#64748b;font-size:14px;margin:0 0 10px;">
+                Ce code est <strong>valable 5 minutes</strong>.
+            </p>
+            <p style="color:#94a3b8;font-size:12px;margin:0;">
+                Une fois vérifié, vous pourrez profiter de votre essai gratuit de 14 jours !
+            </p>
+        </div>
+        <p style="text-align:center;margin-top:16px;color:#94a3b8;font-size:11px;">© 2025 FinanceApp - Gestion financière intelligente</p>
+    </div>
+    """
+    
+    return envoyer_email_avec_contenu_html(
+        to=email,
+        subject=subject,
+        message=message,
+        html_message=html_message,
+        sender_name="FinanceApp",
+        sender_color="#0c2e7c",
+    )
 
 
 # ─── EMAIL CONFIRMATION ABONNEMENT ────────────────────────────────────────────
 def envoyer_email_abonnement(email: str, code: str, plan_nom: str, montant: float) -> bool:
-    """Envoie un email avec le code de confirmation pour l'abonnement"""
-    try:
-        context = ssl.create_default_context()
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
-        
-        from django.core.mail import get_connection
-        connection = get_connection(
-            host=settings.EMAIL_HOST,
-            port=settings.EMAIL_PORT,
-            username=settings.EMAIL_HOST_USER,
-            password=settings.EMAIL_HOST_PASSWORD,
-            use_tls=settings.EMAIL_USE_TLS,
-            fail_silently=False,
-        )
-        
-        montant_str = f"{montant:,.0f} MRU".replace(",", " ")
-        
-        send_mail(
-            subject=f"FinanceApp — ⭐ Confirmation de votre abonnement {plan_nom.capitalize()}",
-            message=f"Bonjour,\n\nVous êtes sur le point de souscrire à l'abonnement {plan_nom.capitalize()} au prix de {montant_str}.\n\nVotre code de confirmation est : {code}\n\nCe code est valable 5 minutes.\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez cet email.\n\nCordialement,\nL'équipe FinanceApp",
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[email],
-            html_message=f"""
-            <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:32px;background:#f8fafc;border-radius:16px;">
-                <div style="text-align:center;margin-bottom:24px;">
-                    <div style="display:inline-block;background:linear-gradient(135deg,#0c2e7c,#1e4db7);border-radius:14px;padding:12px 24px;">
-                        <span style="color:#fff;font-weight:900;font-size:20px;">FinanceApp</span>
-                    </div>
-                </div>
-                <div style="background:#fff;border-radius:12px;padding:28px;box-shadow:0 2px 12px rgba(0,0,0,0.07);">
-                    <h2 style="margin:0 0 12px;color:#1e293b;">⭐ Confirmation de votre abonnement</h2>
-                    <p style="color:#64748b;font-size:14px;margin:0 0 10px;">
-                        Vous êtes sur le point de souscrire à l'abonnement :
-                    </p>
-                    <div style="background:#ecfdf5;border-radius:10px;padding:16px;margin-bottom:20px;text-align:center;">
-                        <span style="font-size:18px;font-weight:700;color:#065f46;">{plan_nom.capitalize()}</span>
-                        <span style="font-size:16px;color:#047857;margin-left:10px;">→ {montant_str}</span>
-                    </div>
-                    <p style="color:#64748b;font-size:14px;margin:0 0 20px;">
-                        Voici votre code de confirmation :
-                    </p>
-                    <div style="text-align:center;background:#eef2ff;border-radius:12px;padding:24px;margin-bottom:20px;">
-                        <span style="font-size:42px;font-weight:900;letter-spacing:14px;color:#0c2e7c;">{code}</span>
-                    </div>
-                    <p style="color:#64748b;font-size:14px;margin:0 0 10px;">
-                        Ce code est <strong>valable 5 minutes</strong>.
-                    </p>
-                    <p style="color:#94a3b8;font-size:12px;margin:0;">
-                        Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.
-                    </p>
-                </div>
-                <p style="text-align:center;margin-top:16px;color:#94a3b8;font-size:11px;">© 2025 FinanceApp - Gestion financière intelligente</p>
-            </div>
-            """,
-            fail_silently=False,
-            connection=connection,
-        )
-        return True
-    except Exception as e:
-        print(f"[EMAIL ABONNEMENT ERROR] {e}")
-        return False
+    """
+    Envoie un email de confirmation d'abonnement via le microservice.
+    """
+    montant_str = f"{montant:,.0f} MRU".replace(",", " ")
+    
+    subject = f"FinanceApp — ⭐ Confirmation de votre abonnement {plan_nom.capitalize()}"
+    
+    message = f"""Bonjour,
 
+        Vous êtes sur le point de souscrire à l'abonnement {plan_nom.capitalize()} au prix de {montant_str}.
+
+        Votre code de confirmation est : {code}
+
+        Ce code est valable 5 minutes.
+
+        Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.
+
+        Cordialement,
+        L'équipe FinanceApp"""
+    
+    html_message = f"""
+    <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:32px;background:#f8fafc;border-radius:16px;">
+        <div style="text-align:center;margin-bottom:24px;">
+            <div style="display:inline-block;background:linear-gradient(135deg,#0c2e7c,#1e4db7);border-radius:14px;padding:12px 24px;">
+                <span style="color:#fff;font-weight:900;font-size:20px;">FinanceApp</span>
+            </div>
+        </div>
+        <div style="background:#fff;border-radius:12px;padding:28px;box-shadow:0 2px 12px rgba(0,0,0,0.07);">
+            <h2 style="margin:0 0 12px;color:#1e293b;">⭐ Confirmation de votre abonnement</h2>
+            <p style="color:#64748b;font-size:14px;margin:0 0 10px;">
+                Vous êtes sur le point de souscrire à l'abonnement :
+            </p>
+            <div style="background:#ecfdf5;border-radius:10px;padding:16px;margin-bottom:20px;text-align:center;">
+                <span style="font-size:18px;font-weight:700;color:#065f46;">{plan_nom.capitalize()}</span>
+                <span style="font-size:16px;color:#047857;margin-left:10px;">→ {montant_str}</span>
+            </div>
+            <p style="color:#64748b;font-size:14px;margin:0 0 20px;">
+                Voici votre code de confirmation :
+            </p>
+            <div style="text-align:center;background:#eef2ff;border-radius:12px;padding:24px;margin-bottom:20px;">
+                <span style="font-size:42px;font-weight:900;letter-spacing:14px;color:#0c2e7c;">{code}</span>
+            </div>
+            <p style="color:#64748b;font-size:14px;margin:0 0 10px;">
+                Ce code est <strong>valable 5 minutes</strong>.
+            </p>
+            <p style="color:#94a3b8;font-size:12px;margin:0;">
+                Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.
+            </p>
+        </div>
+        <p style="text-align:center;margin-top:16px;color:#94a3b8;font-size:11px;">© 2025 FinanceApp - Gestion financière intelligente</p>
+    </div>
+    """
+    
+    return envoyer_email_avec_contenu_html(
+        to=email,
+        subject=subject,
+        message=message,
+        html_message=html_message,
+        sender_name="FinanceApp",
+        sender_color="#0c2e7c",
+    )
 
 # ─── EMAIL INVITATION EMPLOYÉ ─────────────────────────────────────────────────
 def envoyer_email_invitation(email_employe: str, admin_user, lien: str) -> bool:
-    try:
-        send_mail(
-            subject=f"FinanceApp — Invitation de {admin_user.prenom} {admin_user.nom}",
-            message=f"Vous avez été invité(e). Cliquez ici pour activer votre compte : {lien}",
-            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@financeapp.com'),
-            recipient_list=[email_employe],
-            html_message=f"""
-            <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#f8fafc;border-radius:16px;">
-              <div style="text-align:center;margin-bottom:24px;">
-                <div style="display:inline-block;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:14px;padding:12px 24px;">
-                  <span style="color:#fff;font-weight:900;font-size:20px;">FinanceApp</span>
-                </div>
-              </div>
-              <div style="background:#fff;border-radius:12px;padding:28px;box-shadow:0 2px 12px rgba(0,0,0,0.07);">
-                <h2 style="margin:0 0 12px;color:#1e293b;">🎉 Vous avez été invité(e) !</h2>
-                <p style="color:#64748b;font-size:14px;margin:0 0 16px;">
-                  <strong>{admin_user.prenom} {admin_user.nom}</strong> vous invite à rejoindre
-                  son espace <strong>FinanceApp Entreprise</strong>.
-                </p>
-                <p style="color:#64748b;font-size:14px;margin:0 0 24px;">
-                  Cliquez sur le bouton ci-dessous pour créer votre mot de passe et activer votre compte.
-                  Ce lien est valable <strong>7 jours</strong>.
-                </p>
-                <div style="text-align:center;margin-bottom:20px;">
-                  <a href="{lien}" style="
+    """
+    Envoie une invitation par email via le microservice.
+    """
+    subject = f"FinanceApp — Invitation de {admin_user.prenom} {admin_user.nom}"
+    
+    message = f"""Vous avez été invité(e). Cliquez ici pour activer votre compte : {lien}"""
+    
+    html_message = f"""
+    <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#f8fafc;border-radius:16px;">
+        <div style="text-align:center;margin-bottom:24px;">
+            <div style="display:inline-block;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:14px;padding:12px 24px;">
+                <span style="color:#fff;font-weight:900;font-size:20px;">FinanceApp</span>
+            </div>
+        </div>
+        <div style="background:#fff;border-radius:12px;padding:28px;box-shadow:0 2px 12px rgba(0,0,0,0.07);">
+            <h2 style="margin:0 0 12px;color:#1e293b;">🎉 Vous avez été invité(e) !</h2>
+            <p style="color:#64748b;font-size:14px;margin:0 0 16px;">
+                <strong>{admin_user.prenom} {admin_user.nom}</strong> vous invite à rejoindre
+                son espace <strong>FinanceApp Entreprise</strong>.
+            </p>
+            <p style="color:#64748b;font-size:14px;margin:0 0 24px;">
+                Cliquez sur le bouton ci-dessous pour créer votre mot de passe et activer votre compte.
+                Ce lien est valable <strong>7 jours</strong>.
+            </p>
+            <div style="text-align:center;margin-bottom:20px;">
+                <a href="{lien}" style="
                     display:inline-block;background:linear-gradient(135deg,#6366f1,#8b5cf6);
                     color:#fff;text-decoration:none;border-radius:10px;
                     padding:14px 32px;font-weight:700;font-size:15px;
                     box-shadow:0 4px 16px rgba(99,102,241,0.35);
-                  ">✅ Activer mon compte</a>
-                </div>
-                <p style="color:#94a3b8;font-size:11px;word-break:break-all;">
-                  Lien direct : {lien}
-                </p>
-              </div>
-              <p style="text-align:center;margin-top:16px;color:#94a3b8;font-size:11px;">© 2025 FinanceApp</p>
+                ">✅ Activer mon compte</a>
             </div>
-            """,
-            fail_silently=False,
-        )
-        return True
-    except Exception as e:
-        print(f"[EMAIL INVITATION ERROR] {e}")
-        return False
+            <p style="color:#94a3b8;font-size:11px;word-break:break-all;">
+                Lien direct : {lien}
+            </p>
+        </div>
+        <p style="text-align:center;margin-top:16px;color:#94a3b8;font-size:11px;">© 2025 FinanceApp</p>
+    </div>
+    """
+    
+    return envoyer_email_avec_contenu_html(
+        to=email_employe,
+        subject=subject,
+        message=message,
+        html_message=html_message,
+        sender_name="FinanceApp",
+        sender_color="#6366f1",
+    )
 
 
 # ─── CRÉATION ABONNEMENT ESSAI ────────────────────────────────────────────────
@@ -287,76 +293,60 @@ def creer_abonnement_essai(user) -> None:
     )
 
 
-
 def envoyer_email_bienvenue_kyc_valide(user) -> bool:
     """
-    Envoie un email de bienvenue à l'utilisateur une fois que son identité
-    a été vérifiée avec succès (KYC approuvé via Nova Face API).
+    Envoie un email de bienvenue après validation KYC via le microservice.
     """
     email = user.email
     if not email:
         return False
+    
+    subject = "FinanceApp — ✅ Bienvenue ! Votre compte est validé"
+    
+    message = f"""Bonjour {user.prenom},
 
-    try:
-        context = ssl.create_default_context()
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
+        Bienvenue à FinanceApp ! Votre identité a été vérifiée avec succès et votre compte est désormais validé.
 
-        from django.core.mail import get_connection
-        connection = get_connection(
-            host=settings.EMAIL_HOST,
-            port=settings.EMAIL_PORT,
-            username=settings.EMAIL_HOST_USER,
-            password=settings.EMAIL_HOST_PASSWORD,
-            use_tls=settings.EMAIL_USE_TLS,
-            fail_silently=False,
-        )
+        Vous pouvez dès maintenant profiter de toutes les fonctionnalités de l'application : gestion de vos transactions, budgets, et bien plus.
 
-        send_mail(
-            subject="FinanceApp — ✅ Bienvenue ! Votre compte est validé",
-            message=(
-                f"Bonjour {user.prenom},\n\n"
-                "Bienvenue à FinanceApp ! Votre identité a été vérifiée avec succès "
-                "et votre compte est désormais validé.\n\n"
-                "Vous pouvez dès maintenant profiter de toutes les fonctionnalités de "
-                "l'application : gestion de vos transactions, budgets, et bien plus.\n\n"
-                "Cordialement,\nL'équipe FinanceApp"
-            ),
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[email],
-            html_message=f"""
-            <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:32px;background:#f8fafc;border-radius:16px;">
-                <div style="text-align:center;margin-bottom:24px;">
-                    <div style="display:inline-block;background:linear-gradient(135deg,#0c2e7c,#1e4db7);border-radius:14px;padding:12px 24px;">
-                        <span style="color:#fff;font-weight:900;font-size:20px;">FinanceApp</span>
-                    </div>
-                </div>
-                <div style="background:#fff;border-radius:12px;padding:28px;box-shadow:0 2px 12px rgba(0,0,0,0.07);">
-                    <div style="text-align:center;margin-bottom:18px;">
-                        <div style="width:64px;height:64px;border-radius:50%;background:#ecfdf5;display:inline-flex;align-items:center;justify-content:center;">
-                            <span style="font-size:32px;">✅</span>
-                        </div>
-                    </div>
-                    <h2 style="margin:0 0 12px;color:#1e293b;text-align:center;">Bienvenue à FinanceApp !</h2>
-                    <p style="color:#64748b;font-size:14px;margin:0 0 10px;">
-                        Bonjour <strong>{user.prenom} {user.nom}</strong>,
-                    </p>
-                    <p style="color:#64748b;font-size:14px;margin:0 0 20px;line-height:1.6;">
-                        Votre identité a été vérifiée avec succès et <strong>votre compte est maintenant validé</strong>.
-                        Vous pouvez dès à présent profiter de toutes les fonctionnalités de FinanceApp :
-                        gestion de vos transactions, suivi de budgets, et bien plus encore.
-                    </p>
-                    <div style="background:#ecfdf5;border-radius:10px;padding:16px;margin-bottom:8px;text-align:center;">
-                        <span style="font-size:15px;font-weight:700;color:#065f46;">🎉 Compte vérifié et actif</span>
-                    </div>
-                </div>
-                <p style="text-align:center;margin-top:16px;color:#94a3b8;font-size:11px;">© 2025 FinanceApp - Gestion financière intelligente</p>
+        Cordialement,
+        L'équipe FinanceApp"""
+    
+    html_message = f"""
+    <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:32px;background:#f8fafc;border-radius:16px;">
+        <div style="text-align:center;margin-bottom:24px;">
+            <div style="display:inline-block;background:linear-gradient(135deg,#0c2e7c,#1e4db7);border-radius:14px;padding:12px 24px;">
+                <span style="color:#fff;font-weight:900;font-size:20px;">FinanceApp</span>
             </div>
-            """,
-            fail_silently=False,
-            connection=connection,
-        )
-        return True
-    except Exception as e:
-        print(f"[EMAIL BIENVENUE KYC ERROR] {e}")
-        return False
+        </div>
+        <div style="background:#fff;border-radius:12px;padding:28px;box-shadow:0 2px 12px rgba(0,0,0,0.07);">
+            <div style="text-align:center;margin-bottom:18px;">
+                <div style="width:64px;height:64px;border-radius:50%;background:#ecfdf5;display:inline-flex;align-items:center;justify-content:center;">
+                    <span style="font-size:32px;">✅</span>
+                </div>
+            </div>
+            <h2 style="margin:0 0 12px;color:#1e293b;text-align:center;">Bienvenue à FinanceApp !</h2>
+            <p style="color:#64748b;font-size:14px;margin:0 0 10px;">
+                Bonjour <strong>{user.prenom} {user.nom}</strong>,
+            </p>
+            <p style="color:#64748b;font-size:14px;margin:0 0 20px;line-height:1.6;">
+                Votre identité a été vérifiée avec succès et <strong>votre compte est maintenant validé</strong>.
+                Vous pouvez dès à présent profiter de toutes les fonctionnalités de FinanceApp :
+                gestion de vos transactions, suivi de budgets, et bien plus encore.
+            </p>
+            <div style="background:#ecfdf5;border-radius:10px;padding:16px;margin-bottom:8px;text-align:center;">
+                <span style="font-size:15px;font-weight:700;color:#065f46;">🎉 Compte vérifié et actif</span>
+            </div>
+        </div>
+        <p style="text-align:center;margin-top:16px;color:#94a3b8;font-size:11px;">© 2025 FinanceApp - Gestion financière intelligente</p>
+    </div>
+    """
+    
+    return envoyer_email_avec_contenu_html(
+        to=email,
+        subject=subject,
+        message=message,
+        html_message=html_message,
+        sender_name="FinanceApp",
+        sender_color="#0c2e7c",
+    )

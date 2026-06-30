@@ -198,8 +198,13 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
-
-# ========== EMAIL ==========
+# ========== EMAIL MICROSERVICE ==========
+EMAIL_MICROSERVICE_URL = os.getenv('EMAIL_MICROSERVICE_URL', 'https://bmnext.pythonanywhere.com')
+EMAIL_MICROSERVICE_API_KEY = os.getenv('EMAIL_MICROSERVICE_API_KEY', '')
+EMAIL_MICROSERVICE_SENDER_ID = os.getenv('EMAIL_MICROSERVICE_SENDER_ID', 'financeapp')
+EMAIL_MICROSERVICE_TIMEOUT = int(os.getenv('EMAIL_MICROSERVICE_TIMEOUT', 30))
+# ========== EMAIL SMTP ==========
+'''
 EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
 EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
 EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
@@ -208,7 +213,7 @@ EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
 EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'False') == 'True'
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', f'FinanceApp <{EMAIL_HOST_USER}>')
-
+'''
 # ========== SSO CONFIGURATION ==========
 SSO_ENABLED = os.getenv('SSO_ENABLED', 'False') == 'True'
 SSO_CLIENT_ID = os.getenv('SSO_CLIENT_ID', '')
@@ -259,7 +264,8 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
 
 # ── SSL Fix pour Django EmailBackend ─────────────────────────────────────────
 
-# ========== CORRECTION SSL POUR GMAIL (PORT 587 STARTTLS) ==========
+# ========== CORRECTION SSL POUR GMAIL (PORT 587 STARTTLS) : pour completer la configuration smtp ==========
+'''
 import ssl
 import smtplib
 from django.core.mail.backends import smtp as django_smtp
@@ -287,3 +293,4 @@ def _patched_open(self):
 
 django_smtp.EmailBackend.open = _patched_open
 
+'''
