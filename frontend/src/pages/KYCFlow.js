@@ -525,35 +525,64 @@ export default function KYCFlow() {
     } finally { setLoading(false); }
   };
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // ⚡ FIX: handleVerifyFace corrigé avec vérification de l'existence de result
+  // ════════════════════════════════════════════════════════════════════════════
   const handleVerifyFace = async () => {
     if (!selfieBlob) return;
     setLoading(true);
     clearBanner();
     try {
       const result = await kycService.verifyFace(userId, selfieBlob);
-      result.document_type = docType; 
-      setFaceResult(result);
-      if (result.verified) {
-        if (result.access_token) {
-          localStorage.setItem('access_token', result.access_token);
-          localStorage.setItem('refresh_token', result.refresh_token);
-          if (result.user) {
-            localStorage.setItem('user', JSON.stringify(result.user));
-            await connexion(result.user.email, null, true);
+      
+      // ✅ FIX: Vérifier que result existe avant de lui assigner une propriété
+      if (result && typeof result === 'object') {
+        result.document_type = docType;
+        setFaceResult(result);
+        
+        if (result.verified) {
+          if (result.access_token) {
+            localStorage.setItem('access_token', result.access_token);
+            localStorage.setItem('refresh_token', result.refresh_token);
+            if (result.user) {
+              localStorage.setItem('user', JSON.stringify(result.user));
+              await connexion(result.user.email, null, true);
+            }
           }
+          localStorage.removeItem('temp_user_id');
+          localStorage.removeItem('temp_session_token');
+          setStep(5);
+          showBanner('✅ Identité vérifiée avec succès !', 'success');
         }
-        localStorage.removeItem('temp_user_id');
-        localStorage.removeItem('temp_session_token');
-        setStep(5);
-        showBanner('✅ Identité vérifiée avec succès !', 'success');
+      } else {
+        // Cas où result est undefined ou null
+        console.warn('[KYC] Résultat de vérification invalide:', result);
+        showBanner('Erreur de vérification: réponse invalide du serveur', 'error');
+        setFaceResult({
+          verified: false,
+          similarity_score: 0,
+          message: 'Réponse invalide du serveur'
+        });
       }
     } catch (err) {
-      const errData = err.response?.data;
-      errData.document_type = docType;
-      setFaceResult(errData || { verified: false, similarity_score: 0, message: 'Erreur de vérification.' });
+      const errData = err.response?.data || {};
+      // ✅ FIX: Vérifier que errData existe avant de lui assigner une propriété
+      if (errData && typeof errData === 'object') {
+        errData.document_type = docType;
+      }
+      setFaceResult(errData || {
+        verified: false,
+        similarity_score: 0,
+        message: 'Erreur de vérification.'
+      });
       showBanner(errData?.message || 'Visage non reconnu. Réessayez.', 'error');
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
+  // ════════════════════════════════════════════════════════════════════════════
+  // FIN DU FIX
+  // ════════════════════════════════════════════════════════════════════════════
 
   // ════════════════════════════════════════════════════════════════════════════
   // ÉTAPE 0 — Introduction
@@ -854,7 +883,7 @@ export default function KYCFlow() {
   // ════════════════════════════════════════════════════════════════════════════
   if (step === 3) {
     const confidence = extractedData?.confidence_score
-      ? Math.round(extractedData.confidence_score * 100) : null;
+      ? Math.round(extractedData.confidence_score ) : null;
     return (
       <div style={S.page}>
         <div style={{ ...S.card, maxWidth: 520 }}>
@@ -1216,7 +1245,7 @@ export default function KYCFlow() {
                 }}>
                   <i className="bx bx-check-circle" style={{ fontSize: 22, color: T.success }} />
                   <span style={{ fontSize: 13, color: T.success }}>
-                    ✅ {faceResult.message || 'Identité vérifiée avec succès !'}
+                     {faceResult.message || 'Identité vérifiée avec succès !'}
                   </span>
                 </div>
               )}

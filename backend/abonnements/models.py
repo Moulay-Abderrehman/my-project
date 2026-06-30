@@ -1,4 +1,6 @@
+#backend/abonnements/models.py
 from django.db import models
+from django.conf import settings
 from django.utils import timezone
 import uuid
 
@@ -51,6 +53,9 @@ class Abonnement(models.Model):
     TYPE_CHOICES = [
         ('essai',   'Essai'),
         ('mensuel', 'Mensuel'),
+        ('2_mois',  '2 Mois'),
+        ('3_mois',  '3 Mois'),
+        ('6_mois',  '6 Mois'),
         ('annuel',  'Annuel'),
     ]
     STATUT_CHOICES = [
@@ -58,6 +63,16 @@ class Abonnement(models.Model):
         ('expire',     'Expiré'),
         ('en_attente', 'En attente'),
     ]
+
+
+    DUREE_JOURS_MAP = {
+        'essai':   30,
+        'mensuel': 30,
+        '2_mois':  60,
+        '3_mois':  90,
+        '6_mois':  180,
+        'annuel':  365,
+    }
 
     id          = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     utilisateur = models.OneToOneField(
@@ -71,6 +86,7 @@ class Abonnement(models.Model):
     date_fin    = models.DateTimeField()
     statut      = models.CharField(max_length=15, choices=STATUT_CHOICES, default='actif')
     montant     = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    nb_renouvellements = models.PositiveIntegerField(default=0)
 
     # ── méthodes utilitaires ─────────────────────────────────────────────────
     def est_actif(self):
@@ -88,7 +104,11 @@ class Abonnement(models.Model):
         """Retourne le nombre max de catégories perso selon le plan."""
         if self.plan:
             return self.plan.nb_categories_max
-        return 2   # défaut essai
+        return 2  
+    
+    @property
+    def duree_jours(self):
+        return self.DUREE_JOURS_MAP.get(self.type, 30)
 
     def __str__(self):
         return f"{self.utilisateur} — {self.type} ({self.statut})"
@@ -103,6 +123,34 @@ class Paiement(models.Model):
         ('en_attente', 'En attente'),
         ('confirme',   'Confirmé'),
         ('echoue',     'Échoué'),
+        ('refuse',     'Refusé'),  
+    ]
+
+    METHODE_CHOICES = [
+        ('mobile_money', 'Mobile Money'),
+        ('rssbank',      'RSSBank'),
+        ('sedad',        'Sedad'),        
+        ('bankily',      'Bankily'),      
+        ('masrivi',      'Masrivi'),      
+        ('trackpay',     'TrackPay'),
+    ]
+
+    TYPE_ABONNEMENT_DEMANDE_CHOICES = [
+        ('mensuel', 'Mensuel'),
+        ('2_mois',  '2 Mois'),
+        ('3_mois',  '3 Mois'),
+        ('6_mois',  '6 Mois'),
+        ('annuel',  'Annuel'),
+    ]
+    TYPE_UTILISATEUR_DEMANDE_CHOICES = [
+        ('standard',   'Standard'),
+        ('entreprise', 'Entreprise'),
+    ]
+
+    MODE_RENOUVELLEMENT_CHOICES = [
+        ('nouveau',      'Nouveau (depuis essai/expiré)'),
+        ('prolongation', 'Prolongation (même plan)'),
+        ('changement',   'Changement de plan autorisé'),
     ]
 
     id            = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -111,9 +159,31 @@ class Paiement(models.Model):
     )
     montant       = models.DecimalField(max_digits=10, decimal_places=2)
     date_paiement = models.DateTimeField(auto_now_add=True)
-    methode       = models.CharField(max_length=50, default='mobile_money')
+    methode       = models.CharField(max_length=50, default='mobile_money', choices=METHODE_CHOICES)
     statut        = models.CharField(max_length=15, choices=STATUT_CHOICES, default='en_attente')
     reference     = models.CharField(max_length=100, blank=True)
+
+    # ── Champs flux de paiement avec validation manuelle admin ──────────────
+    capture_ecran = models.ImageField(upload_to='paiements/', null=True, blank=True)
+    raison_refus  = models.TextField(blank=True, null=True)
+    valide_par    = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='paiements_valides',
+    )
+    date_validation = models.DateTimeField(null=True, blank=True)
+
+    type_abonnement_demande  = models.CharField(
+        max_length=10, choices=TYPE_ABONNEMENT_DEMANDE_CHOICES, blank=True, null=True
+    )
+    type_utilisateur_demande = models.CharField(
+        max_length=20, choices=TYPE_UTILISATEUR_DEMANDE_CHOICES, blank=True, null=True
+    )
+    mode_renouvellement = models.CharField(
+        max_length=20, choices=MODE_RENOUVELLEMENT_CHOICES, blank=True, null=True
+    )
+
+
+    reference_trackpay = models.CharField(max_length=100, blank=True, null=True, db_index=True)
 
     def __str__(self):
         return f"Paiement {self.reference} — {self.statut}"
@@ -121,3 +191,27 @@ class Paiement(models.Model):
     class Meta:
         verbose_name = "Paiement"
 
+
+# ─── COMPTE D'ENCAISSEMENT ───────────────────────────────────────────────────
+class CompteEncaissement(models.Model):
+    METHODE_CHOICES = [
+        ('rssbank',  'RSSBank'),
+        ('sedad',    'Sedad'),     
+        ('bankily',  'Bankily'),   
+        ('masrivi',  'Masrivi'),   
+        ('trackpay', 'TrackPay'),
+    ]
+
+    id             = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    methode        = models.CharField(max_length=20, choices=METHODE_CHOICES, db_index=True)
+    numero_compte  = models.CharField(max_length=100)
+    nom_titulaire  = models.CharField(max_length=150)
+    instructions   = models.TextField(blank=True, null=True)
+    actif          = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "Compte d'encaissement"
+        verbose_name_plural = "Comptes d'encaissement"
+
+    def __str__(self):
+        return f"{self.get_methode_display()} — {self.numero_compte}"

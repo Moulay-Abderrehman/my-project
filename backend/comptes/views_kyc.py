@@ -428,14 +428,14 @@ class KYCFaceVerifyView(APIView):
     Reçoit le selfie de l'utilisateur.
     
     Logique complète:
-    1. Convertir face_image_document (base64) en bytes
-    2. Enrôler le visage du document dans Nova (/face/enroll)
+    1. Si Nova n'a pas le visage → l'enrôler (/face/enroll)
+    2. Si Nova a déjà le visage (User already enrolled) → continuer directement
     3. Vérifier le selfie contre le visage enrôlé (/face/verify)
     4. Si decision == "allow" → activer le compte
     5. Sinon → rejeter et demander un nouveau selfie
-
     """
     permission_classes = [AllowAny]
+
     def extract_and_enhance_face_from_image(self, document_image_bytes, face_bbox=None):
         """
         Extrait et améliore le visage depuis l'image complète du document
@@ -463,34 +463,24 @@ class KYCFaceVerifyView(APIView):
             faces = face_cascade.detectMultiScale(gray, 1.1, 5)
             
             if len(faces) == 0:
-                # Essayer avec un autre classifieur
                 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_alt2.xml')
                 faces = face_cascade.detectMultiScale(gray, 1.1, 5)
             
             if len(faces) > 0:
-                # Prendre le plus grand visage
                 x, y, w, h = max(faces, key=lambda rect: rect[2] * rect[3])
-                
-                # Ajouter une marge de 20%
                 margin = int(max(w, h) * 0.2)
                 x = max(0, x - margin)
                 y = max(0, y - margin)
                 w = min(image.width - x, w + 2 * margin)
                 h = min(image.height - y, h + 2 * margin)
-                
-                # Extraire le visage
                 face_img = image.crop((x, y, x + w, y + h))
-                
-                # Redimensionner à 512x512
                 face_img = face_img.resize((512, 512), Image.LANCZOS)
                 
-                # Améliorer la qualité
                 enhancer = ImageEnhance.Contrast(face_img)
                 face_img = enhancer.enhance(1.8)
                 enhancer = ImageEnhance.Sharpness(face_img)
                 face_img = enhancer.enhance(1.5)
                 
-                # Sauvegarder
                 img_byte_arr = io.BytesIO()
                 face_img.save(img_byte_arr, format='JPEG', quality=95)
                 img_byte_arr.seek(0)
@@ -529,7 +519,6 @@ class KYCFaceVerifyView(APIView):
             }, status=400)
 
         # ── Vérif 2: image de référence présente ─────────────────────────────
-        # Récupérer depuis le champ document_full_image
         document_full_b64 = getattr(user, 'document_full_image', None) or user.face_image_document
         
         if not document_full_b64:
@@ -538,7 +527,6 @@ class KYCFaceVerifyView(APIView):
                 'verified': False,
             }, status=400)
 
-        # Convertir l'image complète du document en bytes
         document_bytes = base64_to_bytes(document_full_b64)
         
         if not document_bytes:
@@ -573,20 +561,31 @@ class KYCFaceVerifyView(APIView):
         user.selfie_profil = ContentFile(selfie_bytes, name=f'selfie_{user_id}.jpg')
         user.save(update_fields=['selfie_profil'])
 
-        # ── Étape 1: Enrôler le visage du document dans Nova ─────────────────
+        # ══════════════════════════════════════════════════════════════════════
+        # Étape 1: Enrôler le visage du document dans Nova (si pas déjà fait)
+        # ══════════════════════════════════════════════════════════════════════
+        enroll_success = False
+        already_enrolled = False
+        
         try:
-            # Envoyer l'image COMPLÈTE du document (pas le crop)
             enroll_result = nova_enroll(
                 user_id=str(user_id),
-                image_bytes=document_bytes,  # ← Image complète
+                image_bytes=document_bytes,
                 filename=f"document_{user_id}.jpg"
             )
             print(f"[KYC] Nova enroll result: {enroll_result}")
+            enroll_success = True
             
         except Exception as e:
-            print(f"[KYC] Erreur Nova enroll: {e}")
+            error_msg = str(e)
+            print(f"[KYC] Erreur Nova enroll: {error_msg}")
             
-            if "failed to extract features" in str(e):
+            # ✅ NOUVEAU: Vérifier si l'utilisateur est déjà enrôlé
+            if "User already enrolled" in error_msg or "already enrolled" in error_msg.lower():
+                print(f"[KYC] ✅ Utilisateur {user_id} déjà enrôlé dans Nova - continuer")
+                already_enrolled = True
+                enroll_success = True  # On considère que c'est un succès
+            elif "failed to extract features" in error_msg.lower():
                 return Response({
                     'error': 'Le visage sur le document n\'a pas pu être détecté.',
                     'verified': False,
@@ -596,12 +595,22 @@ class KYCFaceVerifyView(APIView):
                 }, status=400)
             else:
                 return Response({
-                    'error': f'Service de vérification faciale indisponible: {str(e)}',
+                    'error': f'Service de vérification faciale indisponible: {error_msg}',
                     'verified': False,
                     'can_retry': True,
                 }, status=503)
 
-        # ── Étape 2: Vérifier le selfie contre le visage enrôlé ──────────────
+        # Si l'enrôlement a échoué pour une autre raison
+        if not enroll_success:
+            return Response({
+                'error': 'Impossible d\'enrôler le visage. Veuillez réessayer.',
+                'verified': False,
+                'can_retry': True,
+            }, status=503)
+
+        # ══════════════════════════════════════════════════════════════════════
+        # Étape 2: Vérifier le selfie contre le visage enrôlé
+        # ══════════════════════════════════════════════════════════════════════
         try:
             verify_result = nova_verify(
                 user_id=str(user_id),
@@ -655,6 +664,26 @@ class KYCFaceVerifyView(APIView):
             except Exception as e:
                 print(f"[KYC] Warning solde: {e}")
 
+            # Notification de bienvenue
+            try:
+                from notifications.models import Notification
+                Notification.objects.create(
+                    utilisateur=user,
+                    type='info',
+                    message=(
+                        "🎉 Bienvenue à FinanceApp ! Votre identité a été vérifiée "
+                        "et votre compte est désormais validé."
+                    ),
+                )
+            except Exception as e:
+                print(f"[KYC] Warning notification bienvenue: {e}")
+
+            try:
+                from .utils import envoyer_email_bienvenue_kyc_valide
+                envoyer_email_bienvenue_kyc_valide(user)
+            except Exception as e:
+                print(f"[KYC] Warning email bienvenue: {e}")
+
             from rest_framework_simplejwt.tokens import RefreshToken
             refresh = RefreshToken.for_user(user)
 
@@ -697,7 +726,6 @@ class KYCFaceVerifyView(APIView):
                 'suggestion':       'Prenez un selfie bien éclairé, de face, sans lunettes ni masque.',
                 'can_retry':        True,
             }, status=400)
-
 # ══════════════════════════════════════════════════════════════════════════════
 # VUE 4 : Statut KYC de l'utilisateur connecté
 # ══════════════════════════════════════════════════════════════════════════════

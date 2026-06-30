@@ -220,6 +220,31 @@ SSO_REDIRECT_URI = os.getenv('SSO_REDIRECT_URI', '')
 SSO_JWKS_URL = os.getenv('SSO_JWKS_URL', '')
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 
+
+TRACKPAY_API_KEY        = os.environ.get('TRACKPAY_API_KEY', '')
+TRACKPAY_WEBHOOK_SECRET = os.environ.get('TRACKPAY_WEBHOOK_SECRET', '')
+TRACKPAY_API_URL        = os.environ.get(
+    'TRACKPAY_API_URL',
+    'https://config-ap28-1mhk.onrender.com/api/payments/create/'
+)
+
+# NOUVEAU — 10 variables au lieu de 4 (5 durées x 2 types d'utilisateur)
+TRACKPAY_PLAN_ID_STANDARD_MENSUEL   = os.environ.get('TRACKPAY_PLAN_ID_STANDARD_MENSUEL', '')
+TRACKPAY_PLAN_ID_STANDARD_2_MOIS    = os.environ.get('TRACKPAY_PLAN_ID_STANDARD_2_MOIS', '')
+TRACKPAY_PLAN_ID_STANDARD_3_MOIS    = os.environ.get('TRACKPAY_PLAN_ID_STANDARD_3_MOIS', '')
+TRACKPAY_PLAN_ID_STANDARD_6_MOIS    = os.environ.get('TRACKPAY_PLAN_ID_STANDARD_6_MOIS', '')
+TRACKPAY_PLAN_ID_STANDARD_ANNUEL    = os.environ.get('TRACKPAY_PLAN_ID_STANDARD_ANNUEL', '')
+TRACKPAY_PLAN_ID_ENTREPRISE_MENSUEL = os.environ.get('TRACKPAY_PLAN_ID_ENTREPRISE_MENSUEL', '')
+TRACKPAY_PLAN_ID_ENTREPRISE_2_MOIS  = os.environ.get('TRACKPAY_PLAN_ID_ENTREPRISE_2_MOIS', '')
+TRACKPAY_PLAN_ID_ENTREPRISE_3_MOIS  = os.environ.get('TRACKPAY_PLAN_ID_ENTREPRISE_3_MOIS', '')
+TRACKPAY_PLAN_ID_ENTREPRISE_6_MOIS  = os.environ.get('TRACKPAY_PLAN_ID_ENTREPRISE_6_MOIS', '')
+TRACKPAY_PLAN_ID_ENTREPRISE_ANNUEL  = os.environ.get('TRACKPAY_PLAN_ID_ENTREPRISE_ANNUEL', '')
+
+TRACKPAY_CALLBACK_BASE_URL = os.environ.get(
+    'TRACKPAY_CALLBACK_BASE_URL',
+    'https://PLACEHOLDER-A-REMPLACER.exemple.mr'
+)
+
 # KYC / OCR / FACE CONFIG
 # API OCR (Railway)
 OCR_API_URL = os.getenv("OCR_API_URL")
@@ -261,33 +286,4 @@ def _patched_open(self):
     return True
 
 django_smtp.EmailBackend.open = _patched_open
-#print("Patch SSL appliqué pour Gmail (STARTTLS port 587)")
 
-'''import ssl
-from django.core.mail.backends import smtp as django_smtp
-
-# Créer un contexte SSL permissif
-_ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-_ssl_context.check_hostname = False
-_ssl_context.verify_mode = ssl.CERT_NONE
-
-# Patcher le EmailBackend de Django pour utiliser ce contexte
-_original_open = django_smtp.EmailBackend.open
-
-def _patched_open(self):
-    if self.connection:
-        return False
-    import smtplib
-    self.connection = smtplib.SMTP_SSL(
-        self.host, self.port,
-        context=_ssl_context,
-        timeout=self.timeout,
-    )
-    self.connection.ehlo()
-    if self.username and self.password:
-        self.connection.login(self.username, self.password)
-    return True
-
-django_smtp.EmailBackend.open = _patched_open
-print("✅ Patch SSL appliqué pour Gmail (mode permissif)")
-'''

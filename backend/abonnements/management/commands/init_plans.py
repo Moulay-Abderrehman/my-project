@@ -1,13 +1,15 @@
+#backend/abonnements/management/commands/init_plans.py
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from datetime import timedelta
 
 class Command(BaseCommand):
-    help = "Initialise les plans et catégories de base."
+    help = "Initialise les plans, catégories de base, et comptes d'encaissement."
 
     def handle(self, *args, **kwargs):
         self._init_plans()
         self._init_categories()
+        self._init_comptes_encaissement()  # NOUVEAU
         self.stdout.write(self.style.SUCCESS("✅ Initialisation terminée."))
 
     def _init_plans(self):
@@ -57,3 +59,34 @@ class Command(BaseCommand):
         ]
         for c in categories:
             Categorie.objects.get_or_create(nom=c['nom'], utilisateur=None, defaults=c)
+
+    # ── NOUVEAU — Pré-remplissage des 2 comptes d'encaissement par défaut ───
+    def _init_comptes_encaissement(self):
+        from abonnements.models import CompteEncaissement
+
+        comptes_data = [
+            {
+                'methode': 'rssbank',
+                'numero_compte': 'À CONFIGURER',
+                'nom_titulaire': 'À CONFIGURER',
+                'instructions': "Effectuez le virement puis prenez une capture d'écran de la confirmation.",
+                'actif': True,
+            },
+            {
+                'methode': 'trackpay',
+                'numero_compte': 'À CONFIGURER',
+                'nom_titulaire': 'À CONFIGURER',
+                'instructions': "Effectuez le paiement puis prenez une capture d'écran de la confirmation.",
+                'actif': True,
+            },
+        ]
+        for c in comptes_data:
+            CompteEncaissement.objects.get_or_create(
+                methode=c['methode'],
+                defaults={
+                    'numero_compte': c['numero_compte'],
+                    'nom_titulaire': c['nom_titulaire'],
+                    'instructions': c['instructions'],
+                    'actif': c['actif'],
+                },
+            )

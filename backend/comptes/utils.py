@@ -285,3 +285,78 @@ def creer_abonnement_essai(user) -> None:
             'montant': 0,
         }
     )
+
+
+
+def envoyer_email_bienvenue_kyc_valide(user) -> bool:
+    """
+    Envoie un email de bienvenue à l'utilisateur une fois que son identité
+    a été vérifiée avec succès (KYC approuvé via Nova Face API).
+    """
+    email = user.email
+    if not email:
+        return False
+
+    try:
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+
+        from django.core.mail import get_connection
+        connection = get_connection(
+            host=settings.EMAIL_HOST,
+            port=settings.EMAIL_PORT,
+            username=settings.EMAIL_HOST_USER,
+            password=settings.EMAIL_HOST_PASSWORD,
+            use_tls=settings.EMAIL_USE_TLS,
+            fail_silently=False,
+        )
+
+        send_mail(
+            subject="FinanceApp — ✅ Bienvenue ! Votre compte est validé",
+            message=(
+                f"Bonjour {user.prenom},\n\n"
+                "Bienvenue à FinanceApp ! Votre identité a été vérifiée avec succès "
+                "et votre compte est désormais validé.\n\n"
+                "Vous pouvez dès maintenant profiter de toutes les fonctionnalités de "
+                "l'application : gestion de vos transactions, budgets, et bien plus.\n\n"
+                "Cordialement,\nL'équipe FinanceApp"
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[email],
+            html_message=f"""
+            <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:32px;background:#f8fafc;border-radius:16px;">
+                <div style="text-align:center;margin-bottom:24px;">
+                    <div style="display:inline-block;background:linear-gradient(135deg,#0c2e7c,#1e4db7);border-radius:14px;padding:12px 24px;">
+                        <span style="color:#fff;font-weight:900;font-size:20px;">FinanceApp</span>
+                    </div>
+                </div>
+                <div style="background:#fff;border-radius:12px;padding:28px;box-shadow:0 2px 12px rgba(0,0,0,0.07);">
+                    <div style="text-align:center;margin-bottom:18px;">
+                        <div style="width:64px;height:64px;border-radius:50%;background:#ecfdf5;display:inline-flex;align-items:center;justify-content:center;">
+                            <span style="font-size:32px;">✅</span>
+                        </div>
+                    </div>
+                    <h2 style="margin:0 0 12px;color:#1e293b;text-align:center;">Bienvenue à FinanceApp !</h2>
+                    <p style="color:#64748b;font-size:14px;margin:0 0 10px;">
+                        Bonjour <strong>{user.prenom} {user.nom}</strong>,
+                    </p>
+                    <p style="color:#64748b;font-size:14px;margin:0 0 20px;line-height:1.6;">
+                        Votre identité a été vérifiée avec succès et <strong>votre compte est maintenant validé</strong>.
+                        Vous pouvez dès à présent profiter de toutes les fonctionnalités de FinanceApp :
+                        gestion de vos transactions, suivi de budgets, et bien plus encore.
+                    </p>
+                    <div style="background:#ecfdf5;border-radius:10px;padding:16px;margin-bottom:8px;text-align:center;">
+                        <span style="font-size:15px;font-weight:700;color:#065f46;">🎉 Compte vérifié et actif</span>
+                    </div>
+                </div>
+                <p style="text-align:center;margin-top:16px;color:#94a3b8;font-size:11px;">© 2025 FinanceApp - Gestion financière intelligente</p>
+            </div>
+            """,
+            fail_silently=False,
+            connection=connection,
+        )
+        return True
+    except Exception as e:
+        print(f"[EMAIL BIENVENUE KYC ERROR] {e}")
+        return False

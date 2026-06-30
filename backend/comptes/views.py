@@ -29,7 +29,7 @@ from .utils import (
     generer_code_reset, sauvegarder_code_reset,
     verifier_code_reset, envoyer_email_reset,
     creer_abonnement_essai, envoyer_email_invitation,
-    envoyer_email_verification_compte,  # NOUVELLE IMPORT
+    envoyer_email_verification_compte,
 )
 from logs.utils import enregistrer_log
 
@@ -39,14 +39,11 @@ def _est_compte_entreprise(user) -> bool:
     Retourne True si l'utilisateur est de type entreprise.
     Vérifie le role ET le plan d'abonnement actif pour être robuste.
     """
-    # Vérification 1 : via le champ role
     if user.role == 'entreprise':
         return True
-    # Vérification 2 : via l'abonnement actif (cas où le role n'a pas encore été mis à jour)
     try:
         abo = user.abonnement
         if abo.est_actif() and abo.get_plan_nom() == 'entreprise':
-            # Synchroniser le role si nécessaire
             if user.role != 'entreprise':
                 user.role = 'entreprise'
                 user.save(update_fields=['role'])
@@ -54,8 +51,6 @@ def _est_compte_entreprise(user) -> bool:
     except Exception:
         pass
     return False
-
-# fin
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -67,15 +62,12 @@ def generer_token_invitation():
     return secrets.token_urlsafe(32)
 
 
-# ─── NOUVELLE FONCTION : Email confirmation création de compte ───────────────
 def envoyer_email_confirmation(user):
     """Envoie un code de confirmation à l'email de l'utilisateur pour la création de compte"""
     code = generer_code_6chiffres()
     user.code_confirmation = code
     user.code_confirmation_expire = timezone.now() + timedelta(minutes=5)
     user.save(update_fields=['code_confirmation', 'code_confirmation_expire'])
-    
-    # Utiliser la nouvelle fonction dédiée à la vérification de compte
     return envoyer_email_verification_compte(user)
 
 
@@ -90,11 +82,9 @@ class InscriptionView(generics.CreateAPIView):
             email = request.data.get('email', '').lower()
             telephone = request.data.get('telephone', '')
             
-            # Vérifier si l'utilisateur existe déjà
             existing_user = Utilisateur.objects.filter(email=email).first()
             
             if existing_user:
-                # Utilisateur existe et KYC complété
                 if existing_user.is_kyc_verified and existing_user.is_active:
                     return Response({
                         "status": "existing_user",
@@ -102,11 +92,8 @@ class InscriptionView(generics.CreateAPIView):
                         "user_id": str(existing_user.id),
                         "redirect_to": "/connexion"
                     }, status=status.HTTP_200_OK)
-                
-                # Utilisateur existe mais KYC incomplet
                 else:
                     session = KYCVerificationSession.objects.filter(email=email).first()
-                    
                     if not session:
                         session_token = str(uuid.uuid4())
                         session = KYCVerificationSession.objects.create(
@@ -121,7 +108,6 @@ class InscriptionView(generics.CreateAPIView):
                             user_id=str(existing_user.id),
                         )
                     
-                    # Envoyer code de vérification
                     code = generer_code_6chiffres()
                     existing_user.code_confirmation = code
                     existing_user.code_confirmation_expire = timezone.now() + timedelta(minutes=5)
@@ -135,7 +121,6 @@ class InscriptionView(generics.CreateAPIView):
                         "redirect_to": "/kyc/document"
                     }, status=status.HTTP_200_OK)
             
-            # Nouvel utilisateur
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             validated_data = serializer.validated_data
@@ -152,16 +137,13 @@ class InscriptionView(generics.CreateAPIView):
             user.set_password(validated_data.get('password', ''))
             user.save()
             
-            # Générer et envoyer le code
             code = generer_code_6chiffres()
             user.code_confirmation = code
             user.code_confirmation_expire = timezone.now() + timedelta(minutes=5)
             user.save(update_fields=['code_confirmation', 'code_confirmation_expire'])
             
-            # Envoyer l'email
             envoyer_email_verification_compte(user)
             
-            # Créer la session KYC
             session_token = str(uuid.uuid4())
             session = KYCVerificationSession.objects.create(
                 session_token=session_token,
@@ -247,17 +229,39 @@ class RenvoyerCodeView(APIView):
         return Response({'message': 'Un nouveau code a été envoyé à votre email.'})
 
 
-# ─── CONNEXION ─────────────────────────────────────────────────────────────────
+# ─── CONNEXION (VERSION CORRIGÉE) ─────────────────────────────────────────────
 class ConnexionView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
         try:
-            serializer = ConnexionSerializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
-            user = serializer.validated_data['user']
+            email = request.data.get('email', '').lower()
+            password = request.data.get('password', '')
             
-            # Vérifier si le KYC est complété
+            # ── Vérification 1 : L'email existe-t-il ? ──────────────────────
+            try:
+                user = Utilisateur.objects.get(email=email)
+            except Utilisateur.DoesNotExist:
+                return Response({
+                    "error": "email_not_found",
+                    "message": "Cette adresse email n'existe pas. Veuillez vérifier votre saisie ou créer un compte."
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # ── Vérification 2 : Le mot de passe est-il correct ? ────────────
+            if not user.check_password(password):
+                return Response({
+                    "error": "invalid_password",
+                    "message": "Le mot de passe est incorrect. Veuillez réessayer."
+                }, status=status.HTTP_401_UNAUTHORIZED)
+            
+            # ── Vérification 3 : Le compte est-il actif ? ─────────────────────
+            if not user.is_active:
+                return Response({
+                    "error": "account_inactive",
+                    "message": "Ce compte est désactivé. Veuillez contacter le support."
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            # ── Vérification 4 : KYC est-il complété ? ───────────────────────
             if not user.is_kyc_verified:
                 session = KYCVerificationSession.objects.filter(user_id=str(user.id)).first()
                 
@@ -283,7 +287,7 @@ class ConnexionView(APIView):
                     "redirect_to": "/kyc"
                 }, status=status.HTTP_403_FORBIDDEN)
             
-            # Connexion normale
+            # ── Connexion normale ─────────────────────────────────────────────
             refresh = RefreshToken.for_user(user)
             enregistrer_log(user, "CONNEXION", "Connexion réussie", request)
             
@@ -295,10 +299,12 @@ class ConnexionView(APIView):
             
         except Exception as e:
             print(f"Erreur connexion: {e}")
+            import traceback
+            traceback.print_exc()
             return Response({
                 "error": "connexion_failed",
-                "message": "Email ou mot de passe incorrect."
-            }, status=status.HTTP_400_BAD_REQUEST)
+                "message": "Une erreur est survenue lors de la connexion."
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # ─── DECONNEXION ──────────────────────────────────────────────────────────────
@@ -355,7 +361,7 @@ class ChangerMotDePasseView(APIView):
         return Response({'message': 'Mot de passe modifié avec succès.'})
 
 
-# ─── MOT DE PASSE OUBLIE (envoi code par email) ───────────────────────────────
+# ─── MOT DE PASSE OUBLIE ──────────────────────────────────────────────────────
 class MotDePasseOublieView(APIView):
     permission_classes = [AllowAny]
 
@@ -366,16 +372,13 @@ class MotDePasseOublieView(APIView):
         try:
             user = Utilisateur.objects.get(email=email)
         except Utilisateur.DoesNotExist:
-            # Sécurité : ne pas révéler si l'email existe
             return Response({'message': 'Si cet email est enregistré, un code vous a été envoyé.'})
 
-        # Utiliser envoyer_email_reset pour la réinitialisation (pas envoyer_email_confirmation)
         code = generer_code_6chiffres()
         user.code_confirmation = code
         user.code_confirmation_expire = timezone.now() + timedelta(minutes=5)
         user.save(update_fields=['code_confirmation', 'code_confirmation_expire'])
         
-        # Envoyer email de réinitialisation avec la fonction dédiée
         envoyer_email_reset(email, code)
         
         enregistrer_log(user, "SECURITE", "Demande réinitialisation mot de passe", request)
@@ -436,19 +439,17 @@ class ContactView(APIView):
         Notification.objects.create(
             utilisateur=user,
             type='info',
-            message=f"✅ Votre message a bien été envoyé.\n\nVotre message : {message}",
+            message=f" Votre message a bien été envoyé.\n\nVotre message : {message}",
         )
         enregistrer_log(user, "CONTACT", "Message de contact envoyé", request)
         return Response({'message': 'Message envoyé avec succès.'})
 
 
-# Ajoute:
 # ─── INVITATION EMPLOYÉ ───────────────────────────────────────────────────────
 class InviterEmployeView(APIView):
     permission_classes = [IsAuthenticated]
  
     def post(self, request):
-        # ── Vérification entreprise ───────────────────────────────────────────
         if not _est_compte_entreprise(request.user):
             return Response(
                 {'error': "Seul un compte Entreprise peut inviter des employés. "
@@ -460,11 +461,9 @@ class InviterEmployeView(APIView):
         serializer.is_valid(raise_exception=True)
         email_employe = serializer.validated_data['email_employe']
  
-        # ── Cas : se-même ────────────────────────────────────────────────────
         if (request.user.email or '').lower() == email_employe.lower():
             return Response({'error': "Vous ne pouvez pas vous inviter vous-même."}, status=400)
  
-        # ── Cas : email déjà associé à un compte actif ───────────────────────
         compte_actif = Utilisateur.objects.filter(
             email__iexact=email_employe, is_active=True
         ).first()
@@ -477,17 +476,14 @@ class InviterEmployeView(APIView):
                 status=400
             )
  
-        # ── Cas : invitation déjà en attente → supprimer et renvoyer ─────────
         invitation_pending = Utilisateur.objects.filter(
             email__iexact=email_employe,
             is_active=False,
             token_invitation__isnull=False,
         ).first()
         if invitation_pending:
-            # Supprimer l'ancienne invitation pour en créer une nouvelle
             invitation_pending.delete()
  
-        # ── Créer l'invitation ────────────────────────────────────────────────
         token = secrets.token_urlsafe(32)
         employe = Utilisateur(
             telephone=f"+222_tmp_{secrets.token_hex(4)}",
@@ -503,7 +499,6 @@ class InviterEmployeView(APIView):
         employe.set_unusable_password()
         employe.save()
  
-        # ── Envoyer l'email ───────────────────────────────────────────────────
         lien = f"http://localhost:3000/activer-employe?token={token}"
         email_ok = envoyer_email_invitation(email_employe, request.user, lien)
  
@@ -514,8 +509,6 @@ class InviterEmployeView(APIView):
         )
  
         if not email_ok:
-            # Invitation créée mais email non envoyé (SMTP non configuré)
-            # On retourne le lien pour permettre un partage manuel
             return Response({
                 'message':  f"Invitation créée pour {email_employe}.",
                 'lien':     lien,
@@ -526,26 +519,20 @@ class InviterEmployeView(APIView):
             'message': f"Invitation envoyée à {email_employe}. "
                        "L'employé recevra un lien valable 7 jours.",
         }, status=201)
-# fin
 
 
 class MesEmployesView(generics.ListAPIView):
-    """
-    Retourne la liste des employés liés au compte entreprise connecté.
-    Accessible uniquement aux utilisateurs de type 'entreprise'.
-    """
-    serializer_class   = UtilisateurSerializer
+    serializer_class = UtilisateurSerializer
     permission_classes = [IsAuthenticated]
-    pagination_class   = None
+    pagination_class = None
  
     def get_queryset(self):
         user = self.request.user
         if user.role != 'entreprise':
             return Utilisateur.objects.none()
         return Utilisateur.objects.filter(entreprise=user).order_by('-date_inscription')
- 
 
-# ─── LISTE EMPLOYES (par l'entreprise) ───────────────────────────────────────
+
 class ListeEmployesView(generics.ListAPIView):
     serializer_class = UtilisateurSerializer
     permission_classes = [IsAuthenticated]
@@ -556,7 +543,7 @@ class ListeEmployesView(generics.ListAPIView):
         return Utilisateur.objects.filter(entreprise=self.request.user, role='employe')
 
 
-# ─── VÉRIFIER TOKEN INVITATION ────────────────────────────
+# ─── VÉRIFIER TOKEN INVITATION ──────────────────────────────────────────────
 class VerifierInvitationView(APIView):
     permission_classes = [AllowAny]
  
@@ -575,7 +562,8 @@ class VerifierInvitationView(APIView):
             'entreprise_nom': str(user.entreprise) if user.entreprise else '',
         })
  
-# ─── ACTIVATION COMPTE EMPLOYE (via lien invitation) ─────────────────────────
+
+# ─── ACTIVATION COMPTE EMPLOYE ──────────────────────────────────────────────
 class ActiverCompteEmployeView(APIView):
     permission_classes = [AllowAny]
 
@@ -592,7 +580,6 @@ class ActiverCompteEmployeView(APIView):
         if user.token_invitation_expire and timezone.now() > user.token_invitation_expire:
             return Response({'error': 'Ce lien d\'invitation a expiré.'}, status=400)
 
-        # Activer le compte
         user.telephone = data['telephone']
         user.nom = data['nom']
         user.prenom = data['prenom']
@@ -603,7 +590,6 @@ class ActiverCompteEmployeView(APIView):
         user.email_verifie = True
         user.save()
 
-        # Créer le solde
         from transactions.models import Solde
         Solde.objects.get_or_create(utilisateur=user)
 
@@ -617,8 +603,8 @@ class ActiverCompteEmployeView(APIView):
             "user": UtilisateurSerializer(user).data,
         })
     
-# ─── CONNEXION GOOGLE OAUTH ───────────────────────────────────────────────────
 
+# ─── CONNEXION GOOGLE OAUTH ───────────────────────────────────────────────────
 class GoogleAuthView(APIView):
     permission_classes = [AllowAny]
  
@@ -626,34 +612,32 @@ class GoogleAuthView(APIView):
         import requests as req_lib
         import os
  
-        code         = request.data.get('code', '').strip()
+        code = request.data.get('code', '').strip()
         redirect_uri = request.data.get('redirect_uri', '').strip()
  
         if not code:
             return Response({'error': 'Code Google manquant.'}, status=400)
  
-        GOOGLE_CLIENT_ID     = os.environ.get('GOOGLE_CLIENT_ID', '')
+        GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
         GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
  
         if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
             return Response({'error': "Google OAuth n'est pas configuré."}, status=500)
  
-        # Échanger le code contre un access_token
         token_resp = req_lib.post('https://oauth2.googleapis.com/token', data={
-            'code':          code,
-            'client_id':     GOOGLE_CLIENT_ID,
+            'code': code,
+            'client_id': GOOGLE_CLIENT_ID,
             'client_secret': GOOGLE_CLIENT_SECRET,
-            'redirect_uri':  redirect_uri,
-            'grant_type':    'authorization_code',
+            'redirect_uri': redirect_uri,
+            'grant_type': 'authorization_code',
         }, timeout=10)
  
         if token_resp.status_code != 200:
             return Response({'error': "Impossible d'échanger le code Google."}, status=400)
  
-        token_data   = token_resp.json()
+        token_data = token_resp.json()
         access_token = token_data.get('access_token')
  
-        # Récupérer le profil Google
         profile_resp = req_lib.get(
             'https://www.googleapis.com/oauth2/v2/userinfo',
             headers={'Authorization': f'Bearer {access_token}'},
@@ -662,24 +646,24 @@ class GoogleAuthView(APIView):
         if profile_resp.status_code != 200:
             return Response({'error': 'Impossible de récupérer le profil Google.'}, status=400)
  
-        profile   = profile_resp.json()
+        profile = profile_resp.json()
         google_id = profile.get('id')
-        email     = (profile.get('email') or '').lower()
-        prenom    = profile.get('given_name') or profile.get('name', 'Utilisateur').split()[0]
-        nom       = profile.get('family_name') or (profile.get('name', '').split()[-1] if ' ' in profile.get('name', '') else 'Google')
-        photo     = profile.get('picture', '')
-        email_ok  = profile.get('verified_email', False)
+        email = (profile.get('email') or '').lower()
+        prenom = profile.get('given_name') or profile.get('name', 'Utilisateur').split()[0]
+        nom = profile.get('family_name') or (profile.get('name', '').split()[-1] if ' ' in profile.get('name', '') else 'Google')
+        photo = profile.get('picture', '')
+        email_ok = profile.get('verified_email', False)
  
         if not email or not google_id:
             return Response({'error': 'Profil Google incomplet.'}, status=400)
  
-        user   = None
+        user = None
         need_password_setup = False
  
         # Chercher par google_id
         try:
             user = Utilisateur.objects.get(google_id=google_id)
-            user.email        = email
+            user.email = email
             user.email_verifie = email_ok
             user.google_photo = photo
             user.save(update_fields=['email', 'email_verifie', 'google_photo'])
@@ -692,10 +676,11 @@ class GoogleAuthView(APIView):
         if not user:
             existing_user = Utilisateur.objects.filter(email=email).first()
             if existing_user:
-                # Mettre à jour l'utilisateur existant avec google_id
-                existing_user.google_id = google_id
-                existing_user.save(update_fields=['google_id'])
-                user = existing_user
+                # Email existe déjà - retourner une erreur spécifique
+                return Response({
+                    "email_exists": True,
+                    "message": "Cette adresse email est déjà associée à un compte existant. Veuillez vous connecter avec vos identifiants habituels."
+                }, status=status.HTTP_409_CONFLICT)
             else:
                 user = Utilisateur.objects.create_google_user(
                     email=email, google_id=google_id, nom=nom, prenom=prenom,
@@ -703,7 +688,6 @@ class GoogleAuthView(APIView):
                 )
                 need_password_setup = True
  
-        # Créer un nouvel utilisateur Google
         if not user:
             user = Utilisateur.objects.create_google_user(
                 email=email, google_id=google_id, nom=nom, prenom=prenom,
@@ -715,33 +699,27 @@ class GoogleAuthView(APIView):
             from .utils import creer_abonnement_essai
             creer_abonnement_essai(user)
  
-        # ── LOGIQUE KYC ──────────────────────────────────────────────────────
-        # Si l'utilisateur doit créer un mot de passe → KYC pas encore fait
         if need_password_setup:
             return Response({
                 "need_password_setup": True,
                 "user": UtilisateurSerializer(user).data,
             })
  
-        # Utilisateur existant avec mot de passe
-        # Vérifier si le KYC est fait
         if not user.is_kyc_verified:
-            # KYC non fait → retourner les infos pour redirection KYC côté frontend
             return Response({
                 "need_password_setup": False,
-                "kyc_required":        True,
-                "user":                UtilisateurSerializer(user).data,
+                "kyc_required": True,
+                "user": UtilisateurSerializer(user).data,
             })
  
-        # Utilisateur complet → connexion normale
         refresh = RefreshToken.for_user(user)
         enregistrer_log(user, "CONNEXION_GOOGLE", f"Connexion Google : {email}", request)
         return Response({
-            "refresh":              str(refresh),
-            "access":               str(refresh.access_token),
-            "user":                 UtilisateurSerializer(user).data,
-            "need_password_setup":  False,
-            "kyc_required":         False,
+            "refresh": str(refresh),
+            "access": str(refresh.access_token),
+            "user": UtilisateurSerializer(user).data,
+            "need_password_setup": False,
+            "kyc_required": False,
         })
 
 
@@ -749,8 +727,8 @@ class GoogleSetPasswordView(APIView):
     permission_classes = [AllowAny]
  
     def post(self, request):
-        user_id          = request.data.get('user_id')
-        password         = request.data.get('password')
+        user_id = request.data.get('user_id')
+        password = request.data.get('password')
         confirm_password = request.data.get('confirm_password')
  
         if not user_id or not password:
@@ -765,12 +743,9 @@ class GoogleSetPasswordView(APIView):
             user.set_password(password)
             user.save()
  
-            # ── NE PAS connecter l'utilisateur ici ──────────────────────────
-            # Il doit d'abord passer par le KYC.
-            # Le frontend va rediriger vers /kyc après cet appel.
             return Response({
-                'message':    'Mot de passe créé. Passez à la vérification d\'identité.',
-                'user_id':    str(user.id),
+                'message': 'Mot de passe créé. Passez à la vérification de kyc.',
+                'user_id': str(user.id),
                 'kyc_required': not user.is_kyc_verified,
             })
             

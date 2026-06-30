@@ -76,11 +76,56 @@ function parseBudgetMessage(message) {
 }
 
 // ─── PARSING ABONNEMENT ───────────────────────────────────────────────────────
+// NOUVEAU — étendu pour couvrir tous les préfixes pipe-delimited émis par le
+// backend (views.py / admin.py) : ABONNEMENT_ACTIVE, ABONNEMENT_EN_ATTENTE,
+// ABONNEMENT_REFUSE, ABONNEMENT_PAIEMENT_ECHOUE, ABONNEMENT_EXPIRE.
+// Retourne désormais { etat, ...champs } afin que l'appelant puisse adapter
+// son rendu selon l'état, plutôt que de tout traiter comme une activation.
+//
+// Le champ "raison" (texte libre saisi par l'admin, peut contenir ':' ou '|')
+// est volontairement reconstruit à part : on ne le découpe jamais sur ses
+// propres ':' ou '|' internes, contrairement aux autres champs structurés.
+const ABONNEMENT_PREFIXES = {
+  'ABONNEMENT_ACTIVE':          'active',
+  'ABONNEMENT_EN_ATTENTE':      'attente',
+  'ABONNEMENT_REFUSE':          'refuse',
+  'ABONNEMENT_PAIEMENT_ECHOUE': 'echoue',
+  'ABONNEMENT_EXPIRE':          'expire',
+};
+
 function parseAbonnementMessage(message) {
-  if (!message || !message.startsWith('ABONNEMENT_ACTIVE|')) return null;
-  return Object.fromEntries(
-    message.split('|').slice(1).map(p => p.split(':'))
-  );
+  if (!message) return null;
+
+  const prefix = Object.keys(ABONNEMENT_PREFIXES).find(p => message.startsWith(p + '|'));
+  if (!prefix) return null;
+
+  const etat = ABONNEMENT_PREFIXES[prefix];
+  const reste = message.slice(prefix.length + 1); // tout après "PREFIX|"
+  const segments = reste.split('|');
+
+  const data = { etat };
+  segments.forEach(seg => {
+    const idx = seg.indexOf(':');
+    if (idx === -1) return;
+    const key = seg.slice(0, idx).trim();
+    const value = seg.slice(idx + 1).trim(); // tout le reste, même avec ':' ou '|' internes
+    data[key] = value;
+  });
+
+  return data;
+}
+
+// ─── Libellés méthode de paiement (cohérent avec Profile.js) ─────────────────
+function methodeLabel(m) {
+  const labels = {
+    rssbank: 'RSSBank',
+    sedad: 'Sedad',
+    bankily: 'Bankily',
+    masrivi: 'Masrivi',
+    trackpay: 'TrackPay',
+    mobile_money: 'Mobile Money',
+  };
+  return labels[m] || m || '—';
 }
 
 export default function Notifications() {
@@ -227,6 +272,9 @@ export default function Notifications() {
   const nonLues = notifications.filter(n => !n.est_lue).length;
   const types = [...new Set(notifications.map(n => n.type))];
 
+  // NOUVEAU — 4 nouvelles entrées pour distinguer visuellement chaque état du
+  // cycle de vie d'un abonnement/paiement (au lieu de tout regrouper sous
+  // 'info' ou 'warning' comme avant). Box-icons distincts par état.
   const getTypeConfig = (type) => {
     const configs = {
       budget_termine: {
@@ -261,6 +309,39 @@ export default function Notifications() {
         label: 'Abonnement',
         gradient: 'linear-gradient(135deg, #3b82f6, #2563eb)',
       },
+      // ── NOUVEAU — états dédiés du cycle de vie abonnement/paiement ──────
+      abonnement_active: {
+        icon: 'bx-crown',
+        color: '#10b981',
+        bg: '#ecfdf5',
+        border: '#a7f3d0',
+        label: 'Activé',
+        gradient: 'linear-gradient(135deg, #10b981, #059669)',
+      },
+      abonnement_attente: {
+        icon: 'bx-time-five',
+        color: '#f59e0b',
+        bg: '#fffbeb',
+        border: '#fde68a',
+        label: 'En attente',
+        gradient: 'linear-gradient(135deg, #f59e0b, #d97706)',
+      },
+      abonnement_refuse: {
+        icon: 'bx-x-circle',
+        color: '#ef4444',
+        bg: '#fef2f2',
+        border: '#fecaca',
+        label: 'Refusé',
+        gradient: 'linear-gradient(135deg, #ef4444, #dc2626)',
+      },
+      abonnement_expire: {
+        icon: 'bx-calendar-x',
+        color: '#94a3b8',
+        bg: '#f8fafc',
+        border: '#e2e8f0',
+        label: 'Expiré',
+        gradient: 'linear-gradient(135deg, #64748b, #475569)',
+      },
       info: {
         icon: 'bx-info-circle',
         color: '#10b981',
@@ -278,6 +359,57 @@ export default function Notifications() {
       label: 'Notif',
       gradient: 'linear-gradient(135deg, #64748b, #475569)',
     };
+  };
+
+  // NOUVEAU — config visuelle dédiée par état d'abonnement (indépendante du
+  // type de notification), utilisée pour les rendus carte/modal personnalisés
+  // ci-dessous. Permet une icône/couleur cohérente même si le `type` stocké
+  // en base est encore l'ancien 'info'/'warning' sur des notifications
+  // historiques (avant ce changement).
+  const getAboEtatConfig = (etat) => {
+    const configs = {
+      active: {
+        icon: 'bx-check-shield',
+        color: '#10b981',
+        bg: '#ecfdf5',
+        border: '#a7f3d0',
+        gradient: 'linear-gradient(135deg, #10b981, #059669)',
+        titre: 'Abonnement activé',
+      },
+      attente: {
+        icon: 'bx-time-five',
+        color: '#f59e0b',
+        bg: '#fffbeb',
+        border: '#fde68a',
+        gradient: 'linear-gradient(135deg, #f59e0b, #d97706)',
+        titre: 'Demande en attente',
+      },
+      refuse: {
+        icon: 'bx-x-circle',
+        color: '#ef4444',
+        bg: '#fef2f2',
+        border: '#fecaca',
+        gradient: 'linear-gradient(135deg, #ef4444, #dc2626)',
+        titre: 'Demande refusée',
+      },
+      echoue: {
+        icon: 'bx-error-circle',
+        color: '#ef4444',
+        bg: '#fef2f2',
+        border: '#fecaca',
+        gradient: 'linear-gradient(135deg, #ef4444, #dc2626)',
+        titre: 'Paiement échoué',
+      },
+      expire: {
+        icon: 'bx-calendar-x',
+        color: '#94a3b8',
+        bg: '#f8fafc',
+        border: '#e2e8f0',
+        gradient: 'linear-gradient(135deg, #64748b, #475569)',
+        titre: 'Abonnement expiré',
+      },
+    };
+    return configs[etat];
   };
 
   const formatMontant = (val) => {
@@ -362,6 +494,9 @@ export default function Notifications() {
           .confirm-dialog {
             width: 90% !important;
             margin: 16px !important;
+          }
+          .abo-grid {
+            grid-template-columns: 1fr !important;
           }
         }
       `}</style>
@@ -671,6 +806,12 @@ export default function Notifications() {
             const cfg = getTypeConfig(n.type);
             const budgetData = parseBudgetMessage(n.message);
             const aboData = parseAbonnementMessage(n.message);
+            // NOUVEAU — config visuelle spécifique à l'état d'abonnement, qui
+            // prime sur cfg (basée sur n.type) lorsque le message est bien un
+            // message d'abonnement structuré. Garantit un rendu cohérent même
+            // sur d'anciennes notifications encore en type='info'/'warning'.
+            const aboCfg = aboData ? getAboEtatConfig(aboData.etat) : null;
+            const displayCfg = aboCfg || cfg;
             
             return (
               <div
@@ -678,11 +819,11 @@ export default function Notifications() {
                 className="notif-card"
                 onClick={() => openModal(n)}
                 style={{
-                  background: n.est_lue ? '#fff' : cfg.bg,
+                  background: n.est_lue ? '#fff' : displayCfg.bg,
                   borderRadius: 14,
-                  border: `1px solid ${n.est_lue ? '#e2e8f0' : cfg.border}`,
+                  border: `1px solid ${n.est_lue ? '#e2e8f0' : displayCfg.border}`,
                   padding: '12px',
-                  boxShadow: n.est_lue ? '0 1px 2px rgba(0,0,0,0.03)' : `0 2px 8px ${cfg.color}15`,
+                  boxShadow: n.est_lue ? '0 1px 2px rgba(0,0,0,0.03)' : `0 2px 8px ${displayCfg.color}15`,
                   opacity: n.est_lue ? 0.85 : 1,
                   animation: `slideIn 0.2s ease ${index * 0.03}s both`,
                   position: 'relative',
@@ -697,7 +838,7 @@ export default function Notifications() {
                     height: 0,
                     borderStyle: 'solid',
                     borderWidth: '0 30px 30px 0',
-                    borderColor: `transparent ${cfg.color} transparent transparent`,
+                    borderColor: `transparent ${displayCfg.color} transparent transparent`,
                   }} />
                 )}
 
@@ -706,14 +847,14 @@ export default function Notifications() {
                     width: 36,
                     height: 36,
                     borderRadius: 10,
-                    background: `${cfg.color}15`,
+                    background: `${displayCfg.color}15`,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     flexShrink: 0,
-                    color: cfg.color,
+                    color: displayCfg.color,
                   }}>
-                    <i className={`bx ${cfg.icon}`} style={{ fontSize: 18 }} />
+                    <i className={`bx ${displayCfg.icon}`} style={{ fontSize: 18 }} />
                   </div>
 
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -723,15 +864,15 @@ export default function Notifications() {
                         fontWeight: 600,
                         textTransform: 'uppercase',
                         letterSpacing: '0.3px',
-                        color: cfg.color,
-                        background: `${cfg.color}10`,
+                        color: displayCfg.color,
+                        background: `${displayCfg.color}10`,
                         borderRadius: 10,
                         padding: '2px 8px',
                       }}>
-                        {cfg.label}
+                        {aboCfg ? aboCfg.titre : cfg.label}
                       </span>
                       {!n.est_lue && (
-                        <span style={{ fontSize: 9, color: cfg.color, display: 'flex', alignItems: 'center', gap: 3 }}>
+                        <span style={{ fontSize: 9, color: displayCfg.color, display: 'flex', alignItems: 'center', gap: 3 }}>
                           <i className='bx bx-circle' style={{ fontSize: 6 }} />
                           Nouveau
                         </span>
@@ -768,11 +909,50 @@ export default function Notifications() {
                         </div>
                       </div>
                     ) : aboData ? (
+                      // ── NOUVEAU — rendu carte dédié par état d'abonnement ──
                       <div>
                         <h3 style={{ margin: 0, fontSize: 12, fontWeight: 700, color: '#1e293b' }}>
-                          Abonnement {aboData.plan} {aboData.type}
+                          {aboData.plan && aboData.type ? `${aboData.plan} ${aboData.type}` : 'Abonnement'}
                         </h3>
-                        <p style={{ margin: '2px 0 0', fontSize: 10, color: cfg.color }}>Activé avec succès</p>
+
+                        {aboData.etat === 'active' && (
+                          <p style={{ margin: '2px 0 0', fontSize: 10, color: displayCfg.color, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <i className='bx bx-check-circle' style={{ fontSize: 11 }} />
+                            Activé avec succès
+                          </p>
+                        )}
+
+                        {aboData.etat === 'attente' && (
+                          <p style={{ margin: '2px 0 0', fontSize: 10, color: displayCfg.color, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <i className='bx bx-loader-circle' style={{ fontSize: 11 }} />
+                            Via {methodeLabel(aboData.methode)} — en attente de validation
+                          </p>
+                        )}
+
+                        {aboData.etat === 'refuse' && (
+                          <p style={{ margin: '2px 0 0', fontSize: 10, color: displayCfg.color, lineHeight: 1.4, display: 'flex', alignItems: 'flex-start', gap: 4 }}>
+                            <i className='bx bx-error-circle' style={{ fontSize: 11, marginTop: 1, flexShrink: 0 }} />
+                            <span>
+                              {aboData.raison
+                                ? (aboData.raison.length > 70 ? aboData.raison.slice(0, 70) + '...' : aboData.raison)
+                                : 'Demande refusée'}
+                            </span>
+                          </p>
+                        )}
+
+                        {aboData.etat === 'echoue' && (
+                          <p style={{ margin: '2px 0 0', fontSize: 10, color: displayCfg.color, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <i className='bx bx-x-circle' style={{ fontSize: 11 }} />
+                            Paiement TrackPay non confirmé
+                          </p>
+                        )}
+
+                        {aboData.etat === 'expire' && (
+                          <p style={{ margin: '2px 0 0', fontSize: 10, color: displayCfg.color, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <i className='bx bx-refresh' style={{ fontSize: 11 }} />
+                            Retour à l'essai gratuit
+                          </p>
+                        )}
                       </div>
                     ) : (
                       <p style={{ margin: 0, fontSize: 12, color: '#334155', lineHeight: 1.4 }}>
@@ -829,6 +1009,8 @@ export default function Notifications() {
         const cfg = getTypeConfig(selectedNotif.type);
         const budgetData = parseBudgetMessage(selectedNotif.message);
         const aboData = parseAbonnementMessage(selectedNotif.message);
+        const aboCfg = aboData ? getAboEtatConfig(aboData.etat) : null;
+        const displayCfg = aboCfg || cfg;
         
         return (
           <div
@@ -870,17 +1052,17 @@ export default function Notifications() {
                     width: 40,
                     height: 40,
                     borderRadius: 12,
-                    background: `${cfg.color}15`,
+                    background: `${displayCfg.color}15`,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: cfg.color,
+                    color: displayCfg.color,
                   }}>
-                    <i className={`bx ${cfg.icon}`} style={{ fontSize: 22 }} />
+                    <i className={`bx ${displayCfg.icon}`} style={{ fontSize: 22 }} />
                   </div>
                   <div>
                     <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1e293b' }}>
-                      {cfg.label}
+                      {aboCfg ? aboCfg.titre : cfg.label}
                     </h2>
                     <p style={{ margin: '2px 0 0', fontSize: 11, color: '#64748b' }}>
                       {new Date(selectedNotif.date_creation).toLocaleDateString('fr-FR', {
@@ -1006,9 +1188,10 @@ export default function Notifications() {
                   )}
                 </div>
               ) : aboData ? (
+                // ── NOUVEAU — rendu modal dédié par état d'abonnement ──────
                 <div>
                   <div style={{
-                    background: `linear-gradient(135deg, ${cfg.color}10, ${cfg.color}05)`,
+                    background: `linear-gradient(135deg, ${displayCfg.color}10, ${displayCfg.color}05)`,
                     borderRadius: 16,
                     padding: 16,
                     marginBottom: 16,
@@ -1017,43 +1200,159 @@ export default function Notifications() {
                     <div style={{
                       width: 60,
                       height: 60,
-                      background: `linear-gradient(135deg, ${cfg.color}, ${cfg.color}cc)`,
+                      background: displayCfg.gradient,
                       borderRadius: 20,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       margin: '0 auto 12px',
                     }}>
-                      <i className='bx bx-crown' style={{ fontSize: 28, color: '#fff' }} />
+                      <i className={`bx ${displayCfg.icon}`} style={{ fontSize: 28, color: '#fff' }} />
                     </div>
                     <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1e293b' }}>
-                      Abonnement {aboData.plan} {aboData.type}
+                      {aboData.plan && aboData.type ? `Abonnement ${aboData.plan} ${aboData.type}` : 'Abonnement'}
                     </h3>
-                    <p style={{ margin: '4px 0 0', fontSize: 12, color: cfg.color }}>Activé avec succès</p>
+                    <p style={{ margin: '4px 0 0', fontSize: 12, color: displayCfg.color, fontWeight: 600 }}>
+                      {aboCfg?.titre}
+                    </p>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-                    <div style={{ background: '#f8fafc', borderRadius: 12, padding: 12 }}>
-                      <i className='bx bx-calendar' style={{ fontSize: 16, color: cfg.color }} />
-                      <p style={{ margin: '8px 0 4px', fontSize: 11, color: '#64748b' }}>Date de début</p>
-                      <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>{aboData.debut}</p>
+                  {/* ── État : ACTIVÉ ── */}
+                  {aboData.etat === 'active' && (
+                    <div className="abo-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                      <div style={{ background: '#f8fafc', borderRadius: 12, padding: 12 }}>
+                        <i className='bx bx-calendar' style={{ fontSize: 16, color: displayCfg.color }} />
+                        <p style={{ margin: '8px 0 4px', fontSize: 11, color: '#64748b' }}>Date de début</p>
+                        <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>{aboData.debut || '—'}</p>
+                      </div>
+                      <div style={{ background: '#f8fafc', borderRadius: 12, padding: 12 }}>
+                        <i className='bx bx-calendar-check' style={{ fontSize: 16, color: displayCfg.color }} />
+                        <p style={{ margin: '8px 0 4px', fontSize: 11, color: '#64748b' }}>Date de fin</p>
+                        <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>{aboData.fin || '—'}</p>
+                      </div>
+                      <div style={{ background: '#f8fafc', borderRadius: 12, padding: 12 }}>
+                        <i className='bx bx-coin' style={{ fontSize: 16, color: displayCfg.color }} />
+                        <p style={{ margin: '8px 0 4px', fontSize: 11, color: '#64748b' }}>Montant</p>
+                        <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>{aboData.montant ? `${aboData.montant} MRU` : '—'}</p>
+                      </div>
+                      <div style={{ background: '#f8fafc', borderRadius: 12, padding: 12 }}>
+                        <i className='bx bx-time' style={{ fontSize: 16, color: displayCfg.color }} />
+                        <p style={{ margin: '8px 0 4px', fontSize: 11, color: '#64748b' }}>Durée</p>
+                        <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>{aboData.duree || '—'}</p>
+                      </div>
                     </div>
-                    <div style={{ background: '#f8fafc', borderRadius: 12, padding: 12 }}>
-                      <i className='bx bx-calendar-check' style={{ fontSize: 16, color: cfg.color }} />
-                      <p style={{ margin: '8px 0 4px', fontSize: 11, color: '#64748b' }}>Date de fin</p>
-                      <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>{aboData.fin}</p>
+                  )}
+
+                  {/* ── État : EN ATTENTE ── */}
+                  {aboData.etat === 'attente' && (
+                    <>
+                      <div style={{
+                        background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12,
+                        padding: 14, marginBottom: 14, display: 'flex', alignItems: 'flex-start', gap: 10,
+                      }}>
+                        <i className='bx bx-info-circle' style={{ fontSize: 18, color: '#b45309', flexShrink: 0, marginTop: 1 }} />
+                        <p style={{ margin: 0, fontSize: 12, color: '#92400e', lineHeight: 1.5 }}>
+                          {aboData.methode === 'trackpay'
+                            ? "Votre paiement TrackPay est en attente de confirmation. L'activation se fera automatiquement dès réception."
+                            : "Votre demande est en attente de validation par notre équipe. Vous serez notifié dès qu'elle sera traitée."}
+                        </p>
+                      </div>
+                      <div className="abo-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                        <div style={{ background: '#f8fafc', borderRadius: 12, padding: 12 }}>
+                          <i className='bx bx-credit-card' style={{ fontSize: 16, color: displayCfg.color }} />
+                          <p style={{ margin: '8px 0 4px', fontSize: 11, color: '#64748b' }}>Méthode</p>
+                          <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>{methodeLabel(aboData.methode)}</p>
+                        </div>
+                        <div style={{ background: '#f8fafc', borderRadius: 12, padding: 12 }}>
+                          <i className='bx bx-coin' style={{ fontSize: 16, color: displayCfg.color }} />
+                          <p style={{ margin: '8px 0 4px', fontSize: 11, color: '#64748b' }}>Montant</p>
+                          <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>{aboData.montant ? `${aboData.montant} MRU` : '—'}</p>
+                        </div>
+                        <div style={{ background: '#f8fafc', borderRadius: 12, padding: 12, gridColumn: '1 / -1' }}>
+                          <i className='bx bx-calendar' style={{ fontSize: 16, color: displayCfg.color }} />
+                          <p style={{ margin: '8px 0 4px', fontSize: 11, color: '#64748b' }}>Envoyée le</p>
+                          <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>{aboData.date || '—'}</p>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* ── État : REFUSÉ ── */}
+                  {aboData.etat === 'refuse' && (
+                    <>
+                      <div style={{
+                        background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12,
+                        padding: 14, marginBottom: 14,
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                          <i className='bx bx-message-square-error' style={{ fontSize: 16, color: '#dc2626' }} />
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#991b1b' }}>Motif du refus</span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: 13, color: '#991b1b', lineHeight: 1.6 }}>
+                          {aboData.raison || "Aucune raison n'a été fournie."}
+                        </p>
+                      </div>
+                      <div className="abo-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                        <div style={{ background: '#f8fafc', borderRadius: 12, padding: 12 }}>
+                          <i className='bx bx-credit-card' style={{ fontSize: 16, color: displayCfg.color }} />
+                          <p style={{ margin: '8px 0 4px', fontSize: 11, color: '#64748b' }}>Méthode</p>
+                          <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>{methodeLabel(aboData.methode)}</p>
+                        </div>
+                        <div style={{ background: '#f8fafc', borderRadius: 12, padding: 12 }}>
+                          <i className='bx bx-calendar' style={{ fontSize: 16, color: displayCfg.color }} />
+                          <p style={{ margin: '8px 0 4px', fontSize: 11, color: '#64748b' }}>Refusée le</p>
+                          <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>{aboData.date || '—'}</p>
+                        </div>
+                      </div>
+                      <div style={{
+                        marginTop: 12, padding: 12, background: '#eff6ff', border: '1px solid #bfdbfe',
+                        borderRadius: 12, display: 'flex', alignItems: 'center', gap: 8,
+                      }}>
+                        <i className='bx bx-refresh' style={{ fontSize: 16, color: '#2563eb' }} />
+                        <p style={{ margin: 0, fontSize: 11, color: '#1e40af' }}>
+                          Vous pouvez soumettre une nouvelle demande depuis votre profil, onglet Abonnement.
+                        </p>
+                      </div>
+                    </>
+                  )}
+
+                  {/* ── État : ÉCHEC TRACKPAY ── */}
+                  {aboData.etat === 'echoue' && (
+                    <>
+                      <div style={{
+                        background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12,
+                        padding: 14, marginBottom: 14, display: 'flex', alignItems: 'flex-start', gap: 10,
+                      }}>
+                        <i className='bx bx-error-circle' style={{ fontSize: 18, color: '#dc2626', flexShrink: 0, marginTop: 1 }} />
+                        <p style={{ margin: 0, fontSize: 12, color: '#991b1b', lineHeight: 1.5 }}>
+                          Le paiement via TrackPay n'a pas pu être confirmé. Aucun montant n'a été activé sur votre compte.
+                        </p>
+                      </div>
+                      <div style={{
+                        padding: 12, background: '#eff6ff', border: '1px solid #bfdbfe',
+                        borderRadius: 12, display: 'flex', alignItems: 'center', gap: 8,
+                      }}>
+                        <i className='bx bx-refresh' style={{ fontSize: 16, color: '#2563eb' }} />
+                        <p style={{ margin: 0, fontSize: 11, color: '#1e40af' }}>
+                          Vous pouvez retenter le paiement depuis votre profil, onglet Abonnement.
+                        </p>
+                      </div>
+                    </>
+                  )}
+
+                  {/* ── État : EXPIRÉ ── */}
+                  {aboData.etat === 'expire' && (
+                    <div style={{
+                      background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12,
+                      padding: 14, display: 'flex', alignItems: 'flex-start', gap: 10,
+                    }}>
+                      <i className='bx bx-info-circle' style={{ fontSize: 18, color: '#64748b', flexShrink: 0, marginTop: 1 }} />
+                      <p style={{ margin: 0, fontSize: 12, color: '#475569', lineHeight: 1.5 }}>
+                        Votre abonnement <strong>{aboData.plan}</strong> est arrivé à expiration le {aboData.date}.
+                        Vous êtes repassé à l'essai gratuit. Renouvelez depuis votre profil pour retrouver l'accès complet.
+                      </p>
                     </div>
-                    <div style={{ background: '#f8fafc', borderRadius: 12, padding: 12 }}>
-                      <i className='bx bx-coin' style={{ fontSize: 16, color: cfg.color }} />
-                      <p style={{ margin: '8px 0 4px', fontSize: 11, color: '#64748b' }}>Montant</p>
-                      <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>{aboData.montant} MRU</p>
-                    </div>
-                    <div style={{ background: '#f8fafc', borderRadius: 12, padding: 12 }}>
-                      <i className='bx bx-time' style={{ fontSize: 16, color: cfg.color }} />
-                      <p style={{ margin: '8px 0 4px', fontSize: 11, color: '#64748b' }}>Durée</p>
-                      <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>{aboData.duree}</p>
-                    </div>
-                  </div>
+                  )}
                 </div>
               ) : (
                 <div>
@@ -1097,7 +1396,7 @@ export default function Notifications() {
                   onClick={closeModal}
                   style={{
                     flex: 1,
-                    background: cfg.gradient,
+                    background: displayCfg.gradient,
                     color: '#fff',
                     border: 'none',
                     borderRadius: 12,

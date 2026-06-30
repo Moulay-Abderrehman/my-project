@@ -1,6 +1,6 @@
+//frontend/src/pages/AuthChoix.js
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import toast from 'react-hot-toast';
 import api from '../api/axios';
 
 // ─── Google OAuth helper ─────────────────────────────────────────────────────
@@ -9,14 +9,28 @@ const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
 export default function AuthChoix() {
   const navigate = useNavigate();
   const [mode, setMode] = useState('choix'); // 'choix' | 'sso'
-  const [domaine, setDomaine] = useState('financeapp.com'); // ← MODIFICATION
+  const [domaine, setDomaine] = useState('financeapp.com');
   const [loadingGoogle, setLoadingGoogle] = useState(false);
   const [loadingSSO, setLoadingSSO] = useState(false);
+  
+  // ── États pour les messages personnalisés ──────────────────────────────────
+  const [message, setMessage] = useState({ type: '', text: '' });
+  const [showMessage, setShowMessage] = useState(false);
+
+  // ── Fonction pour afficher un message ─────────────────────────────────────
+  const showCustomMessage = (type, text) => {
+    setMessage({ type, text });
+    setShowMessage(true);
+    // Auto-hide après 5 secondes
+    setTimeout(() => {
+      setShowMessage(false);
+    }, 5000);
+  };
 
   // ── Continuer avec Google ─────────────────────────────────────────────────
   const continuerGoogle = () => {
     if (!GOOGLE_CLIENT_ID) {
-      toast.error("Google OAuth n'est pas configuré. Configurez REACT_APP_GOOGLE_CLIENT_ID.");
+      showCustomMessage('error', "Google OAuth n'est pas configuré. Configurez REACT_APP_GOOGLE_CLIENT_ID.");
       return;
     }
     setLoadingGoogle(true);
@@ -36,11 +50,11 @@ export default function AuthChoix() {
     navigate('/connexion');
   };
 
-  // ── Continuer avec SSO (modifié pour utiliser l'API) ──────────────────────
+  // ── Continuer avec SSO ──────────────────────────────────────────────────
   const continuerSSO = async (e) => {
     e.preventDefault();
     if (!domaine.trim()) { 
-      toast.error('Entrez votre domaine ou email professionnel.'); 
+      showCustomMessage('error', 'Entrez votre domaine ou email professionnel.');
       return; 
     }
     
@@ -50,20 +64,18 @@ export default function AuthChoix() {
     setLoadingSSO(true);
     
     try {
-      // Appeler l'API backend pour obtenir l'URL de redirection SSO
       const response = await api.get(`/comptes/auth/sso/?domain=${dom}`);      
       console.log('[SSO] Réponse:', response.data);
       if (response.data && response.data.auth_url) {
-        // Rediriger vers le serveur SSO
         window.location.href = response.data.auth_url;
       } else {
-        toast.error('Erreur de configuration SSO.');
+        showCustomMessage('error', 'Erreur de configuration SSO.');
         setLoadingSSO(false);
       }
     } catch (error) {
       console.error('[SSO] Erreur détaillée:', error);
       console.error('[SSO] Response:', error.response);
-      toast.error(error.response?.data?.error || 'Impossible de contacter le serveur SSO. Réessayez plus tard.');
+      showCustomMessage('error', error.response?.data?.error || 'Impossible de contacter le serveur SSO. Réessayez plus tard.');
       setLoadingSSO(false);
     }
   };
@@ -95,6 +107,50 @@ export default function AuthChoix() {
         }} />
       </div>
 
+      {/* ── Message personnalisé ────────────────────────────────────────────── */}
+      {showMessage && (
+        <div style={{
+          position: 'fixed',
+          top: 20,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 9999,
+          padding: '16px 24px',
+          borderRadius: 12,
+          backgroundColor: message.type === 'error' ? '#fee2e2' : '#dbeafe',
+          color: message.type === 'error' ? '#991b1b' : '#1e3a8a',
+          border: `1px solid ${message.type === 'error' ? '#fecaca' : '#bfdbfe'}`,
+          boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
+          maxWidth: '90%',
+          width: 'auto',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          animation: 'slideDown 0.3s ease-out',
+        }}>
+          <span style={{ fontSize: 20 }}>
+            {message.type === 'error' ? '⚠️' : 'ℹ️'}
+          </span>
+          <span style={{ fontSize: 14, fontWeight: 500, fontFamily: "'Sora', sans-serif" }}>
+            {message.text}
+          </span>
+          <button
+            onClick={() => setShowMessage(false)}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: 18,
+              color: message.type === 'error' ? '#991b1b' : '#1e3a8a',
+              opacity: 0.7,
+              padding: '0 4px',
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* ── Panneau gauche (Hero) ─────────────────────────────────────────── */}
       <div style={{
         flex: '1 1 500px',
@@ -103,20 +159,59 @@ export default function AuthChoix() {
         position: 'relative', zIndex: 1,
       }} className="auth-hero">
         
-        {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 60 }}>
-          <div style={{
-            width: 38, height: 38, borderRadius: 10,
-            background: '#fff',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
+        {/* Logo - Moderne et fantastique (agrandi) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 60 }}>
+          {/* Nouveau logo moderne avec effet de brillance - TAILLE AGRANDIE */}
+          <div className="logo-icon" style={{ 
+            width: 48, 
+            height: 48, 
+            borderRadius: 14, 
+            background: 'linear-gradient(135deg, #0c2e7c, #1e4db7, #3b82f6)', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            boxShadow: '0 6px 20px rgba(59,130,246,0.5)',
+            position: 'relative',
+            overflow: 'hidden',
           }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0c2e7c" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>
+            {/* Effet de brillance */}
+            <div style={{
+              position: 'absolute',
+              top: -18,
+              left: -18,
+              width: 36,
+              height: 36,
+              background: 'rgba(255,255,255,0.25)',
+              borderRadius: '50%',
+              transform: 'rotate(45deg)',
+            }} />
+            <div style={{
+              position: 'absolute',
+              bottom: -12,
+              right: -12,
+              width: 30,
+              height: 30,
+              background: 'rgba(255,255,255,0.15)',
+              borderRadius: '50%',
+            }} />
+            
+            {/* Logo SVG - Graphique financier moderne (agrandi) */}
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 13L8 8L13 13L21 5" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M21 12V19H3V5H12" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="18" cy="8" r="2" stroke="#fff" strokeWidth="1.5"/>
+              <path d="M8 11L8 16" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeDasharray="2 2"/>
             </svg>
           </div>
-          <span style={{ fontWeight: 700, fontSize: 18, color: '#fff', letterSpacing: '-0.3px' }}>
-            Finance<span style={{ color: '#dbeafe' }}>App</span>
-          </span>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+            <span style={{ fontWeight: 800, fontSize: 22, color: '#fff', letterSpacing: '-0.3px' }}>
+              Finance<span style={{ color: '#dbeafe' }}>App</span>
+            </span>
+            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.5px', fontWeight: 500 }}>
+              Smart Finance
+            </span>
+          </div>
         </div>
 
         {/* Titre */}
@@ -254,7 +349,7 @@ export default function AuthChoix() {
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
                   </svg>
-                  Continuer avec SSO
+                  Continuer avec NovaSSO
                 </button>
               </div>
 
@@ -288,7 +383,7 @@ export default function AuthChoix() {
                 Connexion SSO
               </h2>
               <p style={{ fontSize: 13, color: '#64748b', marginBottom: 24 }}>
-                Connexion sécurisée via <strong>financeapp.com</strong>  {/* ← MODIFICATION */}
+                Connexion sécurisée via <strong>financeapp.com</strong>
               </p>
 
               <form onSubmit={continuerSSO} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -345,7 +440,7 @@ export default function AuthChoix() {
               </form>
 
               <p style={{ marginTop: 20, fontSize: 12, color: '#94a3b8', textAlign: 'center' }}>
-                Vous serez redirigé vers le portail d'authentification de FinanceApp.  {/* ← MODIFICATION */}
+                Vous serez redirigé vers le portail d'authentification de FinanceApp.
               </p>
             </>
           )}
@@ -360,6 +455,16 @@ export default function AuthChoix() {
         }
         @keyframes spin {
           to { transform: rotate(360deg); }
+        }
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            transform: translateX(-50%) translateY(-20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+          }
         }
         @media (max-width: 900px) {
           .auth-hero { 

@@ -1,13 +1,23 @@
 // frontend/src/pages/Profile.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
 // ── Tarifs selon type utilisateur ────────────────────────────────────────────
+// NOUVEAU — TARIFS étendu aux 5 durées (mensuel, 2_mois, 3_mois, 6_mois,
+// annuel), alignées sur backend/abonnements/views.py (TARIFS). Les valeurs
+// 'mensuel' et 'annuel' restent strictement identiques à avant.
 const TARIFS = {
-  standard:   { mensuel: 1500,  annuel: 15000 },
-  entreprise: { mensuel: 2500,  annuel: 25000 },
+  standard:   { mensuel: 1500, '2_mois': 2850, '3_mois': 4200, '6_mois': 8100,  annuel: 15000 },
+  entreprise: { mensuel: 2500, '2_mois': 4750, '3_mois': 7000, '6_mois': 13500, annuel: 25000 },
+};
+
+// NOUVEAU — durée en jours par type d'abonnement, utilisée pour les calculs
+// d'affichage de date (écran "renouveler") ainsi que pour la barre de
+// progression existante (remplace les valeurs codées en dur 30/365).
+const DUREE_JOURS = {
+  essai: 30, mensuel: 30, '2_mois': 60, '3_mois': 90, '6_mois': 180, annuel: 365,
 };
 
 // ── DESIGN TOKENS ─────────────────────────────────────────────────────────────
@@ -86,6 +96,46 @@ export default function Profil() {
   const [loadingAbo, setLoadingAbo] = useState(false);
   const [successAbo, setSuccessAbo] = useState(null);
 
+  // ── NOUVEAU — Prévisualisation du renouvellement (mode + nouvelle date de
+  // fin + message), chargée depuis /abonnements/previsualiser-renouvellement/
+  // chaque fois que typeUser/typeAbo changent sur l'écran "renouveler" ou
+  // "choix". N'effectue aucun effet de bord côté backend (lecture seule).
+  const [previewRenouvellement, setPreviewRenouvellement] = useState(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+
+  // ── Sous-étapes du flux de paiement fusionné dans l'onglet Abonnement ────
+  // etapePaiement: 'renouveler' (écran de confirmation, affiché seulement si un
+  // abonnement actif existe déjà) -> 'choix' -> 'email' -> 'methode' -> 'upload'
+  // NOUVEAU — 'retour_trackpay' : écran de vérification après redirection TrackPay.
+  // L'état initial est déterminé dynamiquement (voir effet ci-dessous) selon
+  // qu'un abonnement actif existe déjà ou non.
+  const [etapePaiement, setEtapePaiement] = useState('choix');
+
+  // ── Étape "méthode" : choix parmi 5 méthodes + compte d'encaissement ─────
+  // methodePaiement: 'rssbank' | 'sedad' | 'bankily' | 'masrivi' (manuelles) | 'trackpay' (automatique)
+  const [methodePaiement, setMethodePaiement] = useState(null);
+  const [compteEncaissement, setCompteEncaissement] = useState(null);
+  const [loadingCompte, setLoadingCompte] = useState(false);
+
+  // ── Étape "upload" : capture d'écran de confirmation (méthodes manuelles) ─
+  const [captureFile, setCaptureFile] = useState(null);
+  const [capturePreview, setCapturePreview] = useState(null);
+  const [loadingEnvoiPaiement, setLoadingEnvoiPaiement] = useState(false);
+
+  // ── NOUVEAU — Étape TrackPay : lancement de la redirection ───────────────
+  const [loadingTrackPay, setLoadingTrackPay] = useState(false);
+
+  // ── NOUVEAU — Étape "retour_trackpay" : polling du statut après redirection
+  const [pollingTrackPay, setPollingTrackPay] = useState(false);
+  const [trackPayTimeout, setTrackPayTimeout] = useState(false);
+  const pollingIntervalRef = useRef(null);
+  const pollingTimeoutRef = useRef(null);
+
+  // ── État "demande en cours" / "refusé" ───────────────────────────────────
+  // etatPaiement: { etat: 'en_attente' | 'refuse' | 'aucun', paiement: {...} | null }
+  const [etatPaiement, setEtatPaiement] = useState(null);
+  const [loadingEtatPaiement, setLoadingEtatPaiement] = useState(false);
+
   // ── Contact ───────────────────────────────────────────────────────────────
   const [formContact, setFormContact] = useState('');
   const [loadingContact, setLoadingContact] = useState(false);
@@ -97,6 +147,99 @@ export default function Profil() {
     }
   }, [user]);
 
+  // ── Charger l'état du paiement en cours / refusé à l'arrivée sur l'onglet ──
+  useEffect(() => {
+    if (activeTab === 'abonnement') {
+      chargerEtatPaiement();
+    }
+  }, [activeTab]);
+
+  // ── NOUVEAU — Détecte le retour depuis TrackPay via un paramètre d'URL.
+  // TrackPay redirige l'utilisateur vers cette page après paiement ; on
+  // détecte ce retour via ?retour_trackpay=1 dans l'URL (à configurer comme
+  // URL de retour côté TrackPay si l'interface le permet), et on bascule
+  // directement sur l'écran de vérification + polling.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('retour_trackpay') === '1') {
+      setActiveTab('abonnement');
+      setEtapePaiement('retour_trackpay');
+    }
+  }, []);
+
+  // ── Initialise la sous-étape du flux de paiement à l'arrivée sur
+  // l'onglet Abonnement : si un abonnement actif existe déjà, on affiche
+  // d'abord l'écran de confirmation "Renouveler ?" (et on pré-remplit le
+  // type de compte / durée avec le plan actuel) ; sinon on va directement
+  // au formulaire de choix de plan (premier abonnement / essai expiré).
+  // NOUVEAU — ne s'applique pas si on est déjà sur 'retour_trackpay'
+  // (sinon ce retour serait écrasé par cet effet).
+  useEffect(() => {
+    if (activeTab === 'abonnement' && abonnement && etapePaiement !== 'retour_trackpay') {
+      if (abonnement.est_actif && (abonnement.plan_nom || '') !== 'essai') {
+        if (abonnement.type_utilisateur === 'standard' || abonnement.type_utilisateur === 'entreprise') {
+          setTypeUser(abonnement.type_utilisateur);
+        }
+        // NOUVEAU — pré-remplissage étendu aux 5 durées (au lieu de
+        // mensuel/annuel uniquement).
+        if (['mensuel', '2_mois', '3_mois', '6_mois', 'annuel'].includes(abonnement.type)) {
+          setTypeAbo(abonnement.type);
+        }
+        setEtapePaiement('renouveler');
+      } else {
+        setEtapePaiement('choix');
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, abonnement]);
+
+  // ── NOUVEAU — Lance le polling dès qu'on arrive sur l'écran retour_trackpay
+  useEffect(() => {
+    if (etapePaiement === 'retour_trackpay') {
+      demarrerPollingTrackPay();
+    }
+    return () => arreterPollingTrackPay();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [etapePaiement]);
+
+  // ── NOUVEAU — Charge la prévisualisation du renouvellement (mode +
+  // nouvelle date de fin + message d'autorisation) chaque fois que le plan
+  // ou la durée choisie change, sur les écrans 'renouveler' et 'choix'.
+  // Lecture seule côté backend (aucun effet de bord), voir
+  // PrevisualiserRenouvellementView dans views.py.
+  useEffect(() => {
+    if ((etapePaiement === 'renouveler' || etapePaiement === 'choix') && typeUser && typeAbo) {
+      chargerPreviewRenouvellement();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [etapePaiement, typeUser, typeAbo]);
+
+  const chargerPreviewRenouvellement = async () => {
+    setLoadingPreview(true);
+    try {
+      const res = await api.get('/abonnements/previsualiser-renouvellement/', {
+        params: { type_utilisateur: typeUser, type_abonnement: typeAbo },
+      });
+      setPreviewRenouvellement(res.data);
+    } catch (err) {
+      setPreviewRenouvellement(null);
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
+
+  const chargerEtatPaiement = async () => {
+    setLoadingEtatPaiement(true);
+    try {
+      const res = await api.get('/abonnements/statut-paiement-en-cours/');
+      setEtatPaiement(res.data);
+    } catch (err) {
+      setEtatPaiement(null);
+    } finally {
+      setLoadingEtatPaiement(false);
+    }
+  };
+
   const montantCalc = TARIFS[typeUser]?.[typeAbo] || 500;
   const estCompteGoogle = user?.est_compte_google || (user?.telephone && user.telephone.startsWith('+222_g_'));
   const aboActif  = abonnement?.est_actif;
@@ -104,11 +247,10 @@ export default function Profil() {
   const estEssai  = planNom === 'essai';
   const joursRest = abonnement?.jours_restants ?? 0;
 
-  const peutSouscrire = () => {
-    if (!aboActif) return true;
-    if (estEssai) return true;
-    return joursRest <= 5;
-  };
+  // Le renouvellement anticipé est toujours autorisé : un utilisateur avec un
+  // abonnement actif peut relancer une demande de renouvellement à tout
+  // moment (l'admin / TrackPay gère la prise en compte côté backend).
+  const peutSouscrire = () => true;
 
   const getIdLabel = () => (user?.document_type === 'passport' ? 'Numéro de passeport' : 'NNI');
 
@@ -120,6 +262,15 @@ export default function Profil() {
     if (!path) return null;
     if (path.startsWith('http://') || path.startsWith('https://')) return path;
     return `http://localhost:8000${path}`;
+  };
+
+  // NOUVEAU — label lisible pour une durée (utilisé dans la grille de choix,
+  // l'écran "renouveler" et les récapitulatifs).
+  const dureeLabel = (val) => {
+    const labels = {
+      mensuel: 'Mensuel', '2_mois': '2 Mois', '3_mois': '3 Mois', '6_mois': '6 Mois', annuel: 'Annuel',
+    };
+    return labels[val] || val;
   };
 
   // ── Handlers ──────────────────────────────────────────────────────────────
@@ -205,9 +356,8 @@ export default function Profil() {
   };
 
   const demanderCode = async (e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
     if (!emailAbo) return showMsg(setMsgAbonnement, 'error', "L'email est obligatoire.");
-    if (!peutSouscrire()) { showMsg(setMsgAbonnement, 'error', `Abonnement actif. Il vous reste ${joursRest} jours.`); return; }
     setLoadingCode(true);
     try {
       await api.post('/abonnements/demander-code/', { email: emailAbo, type_abonnement: typeAbo, type_utilisateur: typeUser });
@@ -223,7 +373,6 @@ export default function Profil() {
   const confirmerAbonnement = async (e) => {
     e.preventDefault();
     if (!code) return showMsg(setMsgAbonnement, 'error', 'Entrez le code reçu par email.');
-    if (!peutSouscrire()) { showMsg(setMsgAbonnement, 'error', `Abonnement actif. Il vous reste ${joursRest} jours.`); return; }
     setLoadingAbo(true);
     try {
       const res = await api.post('/abonnements/souscrire/', {
@@ -236,6 +385,209 @@ export default function Profil() {
       showMsg(setMsgAbonnement, 'error', err.response?.data?.error || 'Code invalide ou expiré.');
     } finally {
       setLoadingAbo(false);
+    }
+  };
+
+  // ── Transition interne "choix" → "email" ──────────────────────────────────
+  // Remplace l'ancienne redirection navigate('/paiement') : on avance
+  // simplement d'une sous-étape à l'intérieur du même onglet Abonnement.
+  // NOUVEAU — bloque l'avancée si la prévisualisation indique que le
+  // renouvellement/changement n'est pas autorisé (règles métier), pour
+  // éviter d'amener l'utilisateur jusqu'à l'étape de paiement pour rien.
+  const continuerVersPaiement = (e) => {
+    e.preventDefault();
+    if (previewRenouvellement && previewRenouvellement.autorise === false) {
+      showMsg(setMsgAbonnement, 'error', previewRenouvellement.message || 'Ce changement de plan n\'est pas autorisé pour le moment.');
+      return;
+    }
+    setEtapePaiement('email');
+  };
+
+  // ── Étape "email" : vérifier le code à 6 chiffres puis avancer ───────────
+  const verifierCodeEtContinuer = async (e) => {
+    e.preventDefault();
+    if (!code || code.length !== 6) return showMsg(setMsgAbonnement, 'error', 'Entrez le code à 6 chiffres reçu par email.');
+    setEtapePaiement('methode');
+    chargerComptesEncaissement();
+  };
+
+  // ── Étape "méthode" : charger les comptes d'encaissement (admin) ─────────
+  // NOUVEAU — couvre désormais 4 méthodes manuelles (rssbank/sedad/bankily/masrivi).
+  // TrackPay n'a pas de CompteEncaissement (paiement automatique).
+  const chargerComptesEncaissement = async () => {
+    setLoadingCompte(true);
+    try {
+      const res = await api.get('/abonnements/comptes-encaissement/');
+      setCompteEncaissement(res.data || []);
+    } catch (err) {
+      showMsg(setMsgAbonnement, 'error', 'Impossible de récupérer les informations de paiement.');
+    } finally {
+      setLoadingCompte(false);
+    }
+  };
+
+  const choisirMethodePaiement = (val) => {
+    setMethodePaiement(val);
+  };
+
+  // NOUVEAU — methode n'est plus unique côté backend (plusieurs comptes
+  // possibles pour une même méthode) : on prend le premier compte actif
+  // trouvé pour cette méthode. Comportement par défaut simple ; à étendre
+  // plus tard si besoin d'afficher/choisir entre plusieurs comptes.
+  const getCompteForMethode = (val) => {
+    if (!Array.isArray(compteEncaissement)) return null;
+    return compteEncaissement.find(c => c.methode === val) || null;
+  };
+
+  // ── Étape "upload" : capture d'écran de confirmation (méthodes manuelles) ─
+  const handleCaptureChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { showMsg(setMsgAbonnement, 'error', 'Image max 5 Mo.'); return; }
+    setCaptureFile(file);
+    setCapturePreview(URL.createObjectURL(file));
+  };
+
+  const envoyerPaiement = async () => {
+    if (!captureFile) return showMsg(setMsgAbonnement, 'error', "Veuillez ajouter une capture d'écran de confirmation.");
+    setLoadingEnvoiPaiement(true);
+    try {
+      const fd = new FormData();
+      fd.append('type_abonnement', typeAbo);
+      fd.append('type_utilisateur', typeUser);
+      fd.append('methode', methodePaiement);
+      fd.append('capture_ecran', captureFile);
+
+      await api.post('/abonnements/initier-paiement/', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      showMsg(setMsgAbonnement, 'success', 'Votre abonnement est en attente de validation par notre équipe.');
+      reinitialiserFlowPaiement();
+      await chargerEtatPaiement();
+    } catch (err) {
+      const data = err.response?.data;
+      if (data?.code === 'paiement_deja_en_attente' || (data?.error && data.error.includes('déjà'))) {
+        showMsg(setMsgAbonnement, 'error', data.error || 'Vous avez déjà une demande en attente de validation.');
+        reinitialiserFlowPaiement();
+        await chargerEtatPaiement();
+      } else if (data?.code === 'renouvellement_refuse') {
+        // NOUVEAU — message explicite renvoyé par verifier_regles_renouvellement,
+        // on retourne l'utilisateur à l'étape "choix" pour qu'il ajuste son choix.
+        showMsg(setMsgAbonnement, 'error', data.error || "Ce changement de plan n'est pas autorisé pour le moment.");
+        setEtapePaiement('choix');
+      } else {
+        showMsg(setMsgAbonnement, 'error', data?.error || "Erreur lors de l'envoi du paiement.");
+      }
+    } finally {
+      setLoadingEnvoiPaiement(false);
+    }
+  };
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // NOUVEAU — Flux TrackPay (paiement automatique)
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // ── Lance le paiement TrackPay : appelle le backend pour obtenir
+  // payment_url, puis redirige immédiatement l'utilisateur (pas d'étape
+  // "upload" pour cette méthode, contrairement aux 4 méthodes manuelles).
+  const lancerPaiementTrackPay = async () => {
+    setLoadingTrackPay(true);
+    try {
+      const res = await api.post('/abonnements/initier-paiement-trackpay/', {
+        type_abonnement: typeAbo,
+        type_utilisateur: typeUser,
+      });
+      const paymentUrl = res.data?.payment_url;
+      if (!paymentUrl) {
+        showMsg(setMsgAbonnement, 'error', "Impossible de démarrer le paiement TrackPay.");
+        setLoadingTrackPay(false);
+        return;
+      }
+      // Redirection vers TrackPay — l'utilisateur quitte l'app jusqu'à son retour.
+      window.location.href = paymentUrl;
+    } catch (err) {
+      const data = err.response?.data;
+      if (data?.code === 'paiement_deja_en_attente' || (data?.error && data.error.includes('déjà'))) {
+        showMsg(setMsgAbonnement, 'error', data.error || 'Vous avez déjà une demande en attente de validation.');
+        reinitialiserFlowPaiement();
+        await chargerEtatPaiement();
+      } else if (data?.code === 'renouvellement_refuse') {
+        // NOUVEAU — même gestion que pour le flux manuel : message explicite
+        // + retour à l'étape "choix".
+        showMsg(setMsgAbonnement, 'error', data.error || "Ce changement de plan n'est pas autorisé pour le moment.");
+        setEtapePaiement('choix');
+      } else {
+        showMsg(setMsgAbonnement, 'error', data?.error || "Erreur lors de l'initialisation du paiement TrackPay.");
+      }
+      setLoadingTrackPay(false);
+    }
+  };
+
+  // ── Polling du statut après retour de TrackPay : interroge
+  // statut-paiement-en-cours/ toutes les 4 secondes jusqu'à ce que la
+  // demande ne soit plus 'en_attente' (confirmée par le webhook) ou jusqu'au
+  // timeout (~30s), pour laisser le temps au webhook TrackPay d'arriver.
+  const demarrerPollingTrackPay = () => {
+    setPollingTrackPay(true);
+    setTrackPayTimeout(false);
+
+    const verifier = async () => {
+      try {
+        const res = await api.get('/abonnements/statut-paiement-en-cours/');
+        if (res.data?.etat !== 'en_attente') {
+          // Le paiement a été traité (confirmée -> plus en_attente, donc
+          // 'aucun' une fois l'Abonnement activé, ou 'refuse'/'echoue' selon
+          // l'issue) : on arrête le polling et on rafraîchit l'abonnement.
+          arreterPollingTrackPay();
+          await chargerAbonnement();
+          await chargerEtatPaiement();
+          showMsg(setMsgAbonnement, 'success', 'Paiement traité ! Votre abonnement a été mis à jour.');
+          reinitialiserFlowPaiement();
+        }
+      } catch {
+        // En cas d'erreur réseau ponctuelle, on continue simplement le polling.
+      }
+    };
+
+    verifier(); // premier appel immédiat
+    pollingIntervalRef.current = window.setInterval(verifier, 4000);
+    pollingTimeoutRef.current = window.setTimeout(() => {
+      setTrackPayTimeout(true);
+      arreterPollingTrackPay();
+    }, 30000);
+  };
+
+  const arreterPollingTrackPay = () => {
+    if (pollingIntervalRef.current) {
+      window.clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+    if (pollingTimeoutRef.current) {
+      window.clearTimeout(pollingTimeoutRef.current);
+      pollingTimeoutRef.current = null;
+    }
+    setPollingTrackPay(false);
+  };
+
+  // Remet le flux interne à zéro après envoi (toujours vers "choix" : la
+  // demande venant d'être soumise, il n'y a pas lieu de repasser par l'écran
+  // de confirmation "renouveler") ────────────────────────────────────────────
+  const reinitialiserFlowPaiement = () => {
+    setEtapePaiement('choix');
+    setCodeEnvoye(false);
+    setCode('');
+    setMethodePaiement(null);
+    setCompteEncaissement(null);
+    setCaptureFile(null);
+    setCapturePreview(null);
+    setLoadingTrackPay(false);
+    // Nettoie le paramètre d'URL de retour TrackPay s'il est présent, pour
+    // éviter de re-déclencher 'retour_trackpay' lors d'un futur rechargement.
+    if (window.location.search.includes('retour_trackpay')) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('retour_trackpay');
+      window.history.replaceState({}, '', url.toString());
     }
   };
 
@@ -289,6 +641,31 @@ export default function Profil() {
   const titleSize = isMobile ? 15 : 18;
   const sectionIconSize = isMobile ? 28 : 34;
 
+  // ── helpers d'affichage état paiement ─────────────────────────────────────
+  const demandeEnCours = etatPaiement?.etat === 'en_attente' ? etatPaiement.paiement : null;
+  const dernierRefus    = etatPaiement?.etat === 'refuse' ? etatPaiement.paiement : null;
+
+  // NOUVEAU — labels étendus aux 5 méthodes
+  const methodeLabel = (m) => {
+    const labels = {
+      rssbank:  'RSSBank',
+      sedad:    'Sedad',
+      bankily:  'Bankily',
+      masrivi:  'Masrivi',
+      trackpay: 'TrackPay',
+    };
+    return labels[m] || m;
+  };
+
+  // ── Indicateur de sous-étapes du flux de paiement interne ────────────────
+  const etapesPaiement = [
+    { id: 'choix',   label: 'Plan',         icon: 'bx-crown' },
+    { id: 'email',   label: 'Email',        icon: 'bx-envelope' },
+    { id: 'methode', label: 'Paiement',     icon: 'bx-credit-card' },
+    { id: 'upload',  label: 'Confirmation', icon: 'bx-image' },
+  ];
+  const etapePaiementIndex = etapesPaiement.findIndex(e => e.id === etapePaiement);
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -323,6 +700,8 @@ export default function Profil() {
         @media (max-width: 480px) {
           .grid-2 { grid-template-columns: 1fr !important; gap: 12px !important; }
           .plan-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
+          .duree-grid { grid-template-columns: 1fr 1fr !important; }
+          .methode-grid { grid-template-columns: 1fr 1fr !important; }
         }
       `}</style>
 
@@ -546,7 +925,7 @@ export default function Profil() {
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════════
-            TAB — INFORMATIONS (version compacte)
+            TAB — INFORMATIONS (version compacte) — INTACT
         ════════════════════════════════════════════════════════════════════ */}
         {activeTab === 'informations' && (
           <div className="prof-fade" style={{ ...cardStyle, padding: cardPadding }}>
@@ -912,7 +1291,7 @@ export default function Profil() {
         )}
 
         {/* ═══════════════════════════════════════════════════════════════════
-            TAB — SÉCURITÉ (version compacte)
+            TAB — SÉCURITÉ (version compacte) — INTACT
         ════════════════════════════════════════════════════════════════════ */}
         {activeTab === 'securite' && (
           <div className="prof-fade" style={{ ...cardStyle, padding: cardPadding }}>
@@ -1098,7 +1477,11 @@ export default function Profil() {
         )}
 
         {/* ═══════════════════════════════════════════════════════════════════
-            TAB — ABONNEMENT (version compacte)
+            TAB — ABONNEMENT
+            Sous-étapes internes : 'renouveler' -> 'choix' -> 'email' ->
+            'methode' -> 'upload' (méthodes manuelles uniquement),
+            'methode' -> redirection directe (TrackPay, pas d'étape upload),
+            NOUVEAU : 'retour_trackpay' (écran de polling après redirection).
         ════════════════════════════════════════════════════════════════════ */}
         {activeTab === 'abonnement' && (
           <div className="prof-fade">
@@ -1123,6 +1506,7 @@ export default function Profil() {
               </div>
             )}
 
+            {/* ── Bloc statut d'abonnement existant — INTACT, non modifié ── */}
             {abonnement && (
               <div style={{
                 ...cardStyle,
@@ -1158,7 +1542,7 @@ export default function Profil() {
                     height: '100%',
                     borderRadius: 99,
                     background: joursRest <= 7 ? T.danger : aboActif ? '#059669' : T.textLight,
-                    width: `${Math.min((joursRest / (abonnement.type === 'mensuel' ? 30 : abonnement.type === 'essai' ? 15 : 365)) * 100, 100)}%`,
+                    width: `${Math.min((joursRest / (DUREE_JOURS[abonnement.type] || 30)) * 100, 100)}%`,
                   }} />
                 </div>
                 <p style={{ margin: '8px 0 0', fontSize: 9, color: T.textMid }}>
@@ -1167,6 +1551,7 @@ export default function Profil() {
               </div>
             )}
 
+            {/* ── Ancien écran de succès (souscription instantanée legacy) — INTACT ── */}
             {successAbo && (
               <div style={{
                 ...cardStyle,
@@ -1211,140 +1596,880 @@ export default function Profil() {
               </div>
             )}
 
-            {!successAbo && (
-              <div style={{ ...cardStyle, padding: cardPadding }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
-                  <div style={{ width: sectionIconSize, height: sectionIconSize, borderRadius: 8, background: 'linear-gradient(135deg, #ede9fe, #c4b5fd)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <i className='bx bx-crown' style={{ fontSize: isMobile ? 14 : 16, color: '#6366f1' }} />
+            {/* ═══════════════════════════════════════════════════════════════
+                NOUVELLE SOUS-ÉTAPE "retour_trackpay" — écran de vérification
+                affiché juste après la redirection depuis TrackPay. Polling
+                automatique de statut-paiement-en-cours/ (voir
+                demarrerPollingTrackPay) jusqu'à confirmation ou timeout.
+                Affiché en priorité, avant même successAbo/demandeEnCours, car
+                c'est un état transitoire spécifique au retour de paiement.
+            ════════════════════════════════════════════════════════════════ */}
+            {etapePaiement === 'retour_trackpay' && (
+              <div className="prof-fade" style={{ ...cardStyle, padding: cardPadding, textAlign: 'center' }}>
+                <div style={{
+                  width: isMobile ? 52 : 64,
+                  height: isMobile ? 52 : 64,
+                  borderRadius: '50%',
+                  background: trackPayTimeout ? T.warningSoft : T.primarySoft,
+                  margin: '0 auto 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  {pollingTrackPay ? (
+                    <Spinner big color={T.primary} />
+                  ) : (
+                    <i className={trackPayTimeout ? 'bx bx-time-five' : 'bx bx-check-circle'}
+                      style={{ fontSize: isMobile ? 24 : 28, color: trackPayTimeout ? '#b45309' : T.primary }} />
+                  )}
+                </div>
+
+                <h3 style={{
+                  margin: '0 0 8px',
+                  fontSize: isMobile ? 16 : 19,
+                  fontWeight: 800,
+                  color: T.text,
+                  fontFamily: "'Outfit', sans-serif",
+                }}>
+                  {trackPayTimeout ? 'Vérification en cours' : 'Vérification de votre paiement...'}
+                </h3>
+
+                <p style={{
+                  margin: '0 auto 18px',
+                  maxWidth: 380,
+                  fontSize: isMobile ? 12 : 13,
+                  color: T.textMid,
+                  lineHeight: 1.5,
+                }}>
+                  {trackPayTimeout
+                    ? "La confirmation de TrackPay peut prendre quelques minutes. Vous serez notifié dès que votre abonnement sera activé. Vous pouvez aussi vérifier à nouveau ci-dessous."
+                    : "Nous attendons la confirmation de TrackPay. Cela ne prend généralement que quelques secondes."}
+                </p>
+
+                <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 10, maxWidth: 380, margin: '0 auto' }}>
+                  {trackPayTimeout && (
+                    <button
+                      type="button"
+                      onClick={demarrerPollingTrackPay}
+                      className="btn-hover"
+                      style={{
+                        flex: 1, padding: isMobile ? '11px' : '12px',
+                        background: `linear-gradient(135deg, ${T.primary}, #8b5cf6)`,
+                        color: T.white, border: 'none', borderRadius: T.radiusSm,
+                        fontWeight: 700, fontSize: isMobile ? 12 : 13,
+                        cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                      }}>
+                      <i className='bx bx-refresh' /> Vérifier à nouveau
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => { arreterPollingTrackPay(); reinitialiserFlowPaiement(); chargerEtatPaiement(); }}
+                    style={{
+                      flex: 1, background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.radiusSm,
+                      padding: isMobile ? '11px' : '12px', cursor: 'pointer', fontSize: isMobile ? 12 : 13,
+                      color: T.textMid, fontWeight: 600,
+                    }}>Retour à mon abonnement</button>
+                </div>
+              </div>
+            )}
+
+            {/* ═══════════════════════════════════════════════════════════════
+                État 2 : Demande en cours (Paiement en_attente)
+                Remplace le formulaire de choix de plan tant qu'une demande
+                est en attente de validation par l'admin (méthodes manuelles)
+                ou en attente de webhook (TrackPay).
+            ════════════════════════════════════════════════════════════════ */}
+            {!successAbo && etapePaiement !== 'retour_trackpay' && demandeEnCours && (
+              <div className="prof-fade" style={{ ...cardStyle, padding: cardPadding }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                  <div style={{
+                    width: sectionIconSize, height: sectionIconSize, borderRadius: 8,
+                    background: T.warningSoft, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <i className='bx bx-time-five' style={{ fontSize: isMobile ? 14 : 16, color: '#b45309' }} />
                   </div>
                   <h3 style={{ margin: 0, fontSize: titleSize, fontWeight: 800, color: T.text, fontFamily: "'Outfit', sans-serif" }}>
-                    {aboActif && !estEssai ? 'Renouveler' : 'Souscrire'}
+                    Demande en cours
                   </h3>
                 </div>
 
-                {!codeEnvoye ? (
-                  <form onSubmit={demanderCode} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                <div style={{
+                  background: T.warningSoft, border: '1px solid #fde68a', borderRadius: 12,
+                  padding: isMobile ? '12px 14px' : '16px 20px', marginBottom: 12,
+                }}>
+                  <p style={{ margin: '0 0 10px', fontSize: isMobile ? 11 : 12, color: '#92400e' }}>
+                    {demandeEnCours.methode === 'trackpay'
+                      ? "Votre paiement TrackPay est en attente de confirmation. L'activation se fait automatiquement dès réception de la confirmation."
+                      : "Votre demande d'abonnement est en attente de validation par notre équipe. Vous serez notifié dès qu'elle sera traitée."}
+                  </p>
+                  <div className="grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
                     <div>
-                      <label style={{ fontSize: 10, fontWeight: 600, color: T.textMid, marginBottom: 6, display: 'block' }}>Type de compte</label>
-                      <div className="plan-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
-                        {[
-                          { val: 'standard', icon: 'bx-user', label: 'Standard', desc: 'Usage personnel', price: TARIFS.standard.mensuel },
-                          { val: 'entreprise', icon: 'bx-buildings', label: 'Entreprise', desc: 'Multi-utilisateurs', price: TARIFS.entreprise.mensuel },
-                        ].map(opt => {
-                          const active = typeUser === opt.val;
-                          return (
-                            <div key={opt.val} onClick={() => setTypeUser(opt.val)} style={{
-                              border: `2px solid ${active ? T.primary : T.border}`,
-                              borderRadius: 12,
-                              padding: isMobile ? '10px' : '14px',
-                              cursor: 'pointer',
-                              background: active ? T.primarySoft : T.white,
-                            }}>
-                              <i className={`bx ${opt.icon}`} style={{ fontSize: isMobile ? 18 : 20, color: active ? T.primary : T.textLight, display: 'block', marginBottom: 6 }} />
-                              <div style={{ fontWeight: 800, fontSize: isMobile ? 12 : 13, color: active ? T.primary : T.text }}>{opt.label}</div>
-                              <div style={{ fontSize: 9, color: T.textLight, marginTop: 2 }}>{opt.desc}</div>
-                              <div style={{ fontSize: isMobile ? 13 : 15, fontWeight: 800, color: T.primary, marginTop: 8 }}>{opt.price.toLocaleString()} MRU/mois</div>
-                            </div>
-                          );
-                        })}
+                      <div style={{ fontSize: 9, color: '#b45309', fontWeight: 600, marginBottom: 3 }}>Plan demandé</div>
+                      <div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: '#78350f', textTransform: 'capitalize' }}>
+                        {demandeEnCours.type_utilisateur_demande || '—'}
                       </div>
                     </div>
-
                     <div>
-                      <label style={{ fontSize: 10, fontWeight: 600, color: T.textMid, marginBottom: 6, display: 'block' }}>Durée</label>
-                      <div className="plan-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
-                        {[
-                          { val: 'mensuel', label: 'Mensuel', duree: '30j', price: TARIFS[typeUser].mensuel },
-                          { val: 'annuel', label: 'Annuel', duree: '365j', price: TARIFS[typeUser].annuel, saving: '2 mois off' },
-                        ].map(opt => {
-                          const active = typeAbo === opt.val;
-                          return (
-                            <div key={opt.val} onClick={() => setTypeAbo(opt.val)} style={{
-                              border: `2px solid ${active ? T.primary : T.border}`,
-                              borderRadius: 12,
-                              padding: isMobile ? '10px' : '14px',
-                              cursor: 'pointer',
-                              background: active ? T.primarySoft : T.white,
-                            }}>
-                              <div style={{ fontWeight: 800, fontSize: isMobile ? 12 : 13, color: active ? T.primary : T.text }}>{opt.label}</div>
-                              <div style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: T.text, margin: '4px 0' }}>{opt.price.toLocaleString()} MRU</div>
-                              <div style={{ fontSize: 9, color: T.textLight }}>{opt.duree}</div>
-                              {opt.saving && <div style={{ fontSize: 8, color: T.success, marginTop: 3 }}><i className='bx bx-gift' style={{ fontSize: 9 }} /> {opt.saving}</div>}
-                            </div>
-                          );
-                        })}
+                      <div style={{ fontSize: 9, color: '#b45309', fontWeight: 600, marginBottom: 3 }}>Méthode</div>
+                      <div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: '#78350f' }}>
+                        {methodeLabel(demandeEnCours.methode)}
                       </div>
                     </div>
-
                     <div>
-                      <label style={{ fontSize: 10, fontWeight: 600, color: T.textMid, marginBottom: 6, display: 'block' }}>Email</label>
-                      <div style={{ position: 'relative' }}>
-                        <i className='bx bx-envelope' style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: T.textLight }} />
-                        <input type="email" value={emailAbo} onChange={e => setEmailAbo(e.target.value)} required placeholder="votre@email.com" className="prof-input" style={{
-                          width: '100%', padding: isMobile ? '9px 9px 9px 32px' : '10px 12px 10px 36px',
-                          borderRadius: T.radiusSm, border: `1.5px solid ${T.border}`, background: T.bg,
-                          fontSize: isMobile ? 12 : 13,
-                        }} />
+                      <div style={{ fontSize: 9, color: '#b45309', fontWeight: 600, marginBottom: 3 }}>Envoyée le</div>
+                      <div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: '#78350f' }}>
+                        {demandeEnCours.date_paiement ? new Date(demandeEnCours.date_paiement).toLocaleDateString('fr-FR') : '—'}
                       </div>
                     </div>
+                  </div>
+                </div>
 
-                    <button type="submit" disabled={loadingCode || (aboActif && !peutSouscrire())} className="btn-hover" style={{
-                      width: '100%', padding: isMobile ? '10px' : '12px',
-                      background: (loadingCode || (aboActif && !peutSouscrire())) ? T.textLight : `linear-gradient(135deg, ${T.primary}, #8b5cf6)`,
-                      color: T.white, border: 'none', borderRadius: T.radiusSm,
-                      fontWeight: 700, fontSize: isMobile ? 12 : 13,
-                      cursor: (loadingCode || (aboActif && !peutSouscrire())) ? 'not-allowed' : 'pointer',
-                      opacity: (loadingCode || (aboActif && !peutSouscrire())) ? 0.65 : 1,
+                {/* NOUVEAU — pour une demande TrackPay en_attente, propose de
+                    relancer la vérification (au cas où l'utilisateur revient
+                    sur cette page après le webhook sans être passé par
+                    'retour_trackpay', ex: il a fermé l'onglet TrackPay puis
+                    est revenu directement sur le profil). */}
+                {demandeEnCours.methode === 'trackpay' && (
+                  <button
+                    type="button"
+                    onClick={chargerEtatPaiement}
+                    disabled={loadingEtatPaiement}
+                    style={{
+                      width: '100%', marginBottom: 10, padding: isMobile ? '9px' : '10px',
+                      background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.radiusSm,
+                      fontSize: isMobile ? 11 : 12, fontWeight: 700, color: T.primary, cursor: 'pointer',
                       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                     }}>
-                      {loadingCode ? <><Spinner /> Envoi...</> : (aboActif && !peutSouscrire()) ? <><i className='bx bx-lock' /> Non dispo</> : <><i className='bx bx-envelope' /> Recevoir code</>}
-                    </button>
-                  </form>
-                ) : (
-                  <form onSubmit={confirmerAbonnement} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                    <div style={{ background: T.primarySoft, borderRadius: T.radiusSm, padding: '8px 12px', fontSize: 11, color: '#4338ca', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <i className='bx bx-envelope-open' style={{ fontSize: 13 }} />
-                      Code envoyé à <strong>{emailAbo}</strong>
-                    </div>
-
-                    <div>
-                      <label style={{ fontSize: 10, fontWeight: 600, color: T.textMid, marginBottom: 6, display: 'block' }}>Code</label>
-                      <input type="text" value={code} onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} required maxLength={6} placeholder="000000" className="prof-input" style={{
-                        width: '100%', fontSize: isMobile ? 22 : 28, fontWeight: 800, textAlign: 'center',
-                        letterSpacing: isMobile ? 6 : 8, color: T.primary, fontFamily: "'Outfit', monospace",
-                        padding: isMobile ? '12px' : '14px', borderRadius: T.radiusSm, border: `2px solid ${T.border}`, background: T.bg,
-                      }} />
-                    </div>
-
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button type="submit" disabled={loadingAbo || code.length !== 6 || (aboActif && !peutSouscrire())} style={{
-                        flex: 2, padding: isMobile ? '10px' : '12px',
-                        background: (loadingAbo || code.length !== 6 || (aboActif && !peutSouscrire())) ? T.textLight : T.success,
-                        color: T.white, border: 'none', borderRadius: T.radiusSm,
-                        fontWeight: 700, fontSize: isMobile ? 11 : 13,
-                        cursor: (loadingAbo || code.length !== 6 || (aboActif && !peutSouscrire())) ? 'not-allowed' : 'pointer',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                      }}>{loadingAbo ? <><Spinner />...</> : `Confirmer — ${montantCalc} MRU`}</button>
-                      <button type="button" onClick={() => { setCodeEnvoye(false); setCode(''); }} style={{
-                        flex: 1, background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.radiusSm,
-                        padding: isMobile ? '10px' : '12px', cursor: 'pointer', fontSize: isMobile ? 11 : 12,
-                        color: T.textMid, fontWeight: 600,
-                      }}>Retour</button>
-                    </div>
-
-                    <button type="button" onClick={demanderCode} disabled={loadingCode} style={{
-                      background: 'none', border: 'none', cursor: 'pointer', color: T.primary, fontSize: 11,
-                      fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-                    }}><i className='bx bx-refresh' /> Renvoyer</button>
-                  </form>
+                    <i className='bx bx-refresh' /> Vérifier le statut
+                  </button>
                 )}
+
+                <p style={{ margin: 0, fontSize: 10, color: T.textLight, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <i className='bx bx-info-circle' style={{ fontSize: 12 }} />
+                  Une seule demande peut être en attente à la fois.
+                </p>
               </div>
+            )}
+
+            {/* ═══════════════════════════════════════════════════════════════
+                Flux de souscription / renouvellement, affiché si :
+                  - pas de succès legacy en cours
+                  - pas de demande en_attente
+                  - pas sur l'écran retour_trackpay
+            ════════════════════════════════════════════════════════════════ */}
+            {!successAbo && etapePaiement !== 'retour_trackpay' && !demandeEnCours && (
+              <>
+                {/* ── Bannière de refus si applicable ── */}
+                {dernierRefus && (
+                  <div className="prof-fade" style={{
+                    ...cardStyle,
+                    background: T.dangerSoft,
+                    border: '1px solid #fecaca',
+                    padding: isMobile ? '12px 14px' : '16px 20px',
+                    marginBottom: 16,
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                      <div style={{
+                        width: 32, height: 32, borderRadius: 9,
+                        background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <i className='bx bx-x-circle' style={{ fontSize: 16, color: T.danger }} />
+                      </div>
+                      <div style={{ fontWeight: 800, color: '#991b1b', fontSize: isMobile ? 12 : 14 }}>
+                        Demande précédente refusée
+                      </div>
+                    </div>
+                    <p style={{ margin: 0, fontSize: isMobile ? 11 : 12, color: '#991b1b' }}>
+                      {dernierRefus.raison_refus || "Aucune raison n'a été fournie."}
+                    </p>
+                  </div>
+                )}
+
+                {/* ── Indicateur de sous-étapes du flux de paiement — masqué sur
+                     l'écran de confirmation "Renouveler ?", qui n'en fait pas partie ── */}
+                {etapePaiement !== 'renouveler' && (
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                    {etapesPaiement.map((e, idx) => {
+                      const active = etapePaiement === e.id;
+                      const done = idx < etapePaiementIndex;
+                      return (
+                        <div key={e.id} style={{
+                          flex: 1, display: 'flex', alignItems: 'center', gap: 6,
+                          padding: isMobile ? '8px 6px' : '10px 12px',
+                          borderRadius: 30,
+                          background: active ? T.primary : done ? T.primarySoft : T.white,
+                          border: `1px solid ${active ? T.primary : T.border}`,
+                          justifyContent: 'center',
+                        }}>
+                          <i className={`bx ${done ? 'bx-check' : e.icon}`} style={{
+                            fontSize: isMobile ? 13 : 14,
+                            color: active ? T.white : done ? T.primary : T.textLight,
+                          }} />
+                          {!isMobile && (
+                            <span style={{
+                              fontSize: 11, fontWeight: 700,
+                              color: active ? T.white : done ? T.primary : T.textLight,
+                            }}>{e.label}</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* ═══════════════════════════════════════════════════════════
+                    SOUS-ÉTAPE "renouveler" — écran de confirmation
+                    affiché en premier quand l'utilisateur a déjà un abonnement
+                    actif (hors essai).
+                    NOUVEAU — affiche désormais la prévisualisation du
+                    renouvellement (nouvelle date de fin calculée, ou message
+                    de refus si le changement de plan / la limite de
+                    renouvellements bloque la demande), via
+                    previewRenouvellement (voir chargerPreviewRenouvellement).
+                ════════════════════════════════════════════════════════════ */}
+                {etapePaiement === 'renouveler' && (
+                  <div className="prof-fade" style={{ ...cardStyle, padding: cardPadding, textAlign: 'center' }}>
+                    <div style={{
+                      width: isMobile ? 52 : 64,
+                      height: isMobile ? 52 : 64,
+                      borderRadius: '50%',
+                      background: T.primarySoft,
+                      margin: '0 auto 16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      <i className='bx bx-crown' style={{ fontSize: isMobile ? 24 : 28, color: T.primary }} />
+                    </div>
+
+                    <h3 style={{
+                      margin: '0 0 8px',
+                      fontSize: isMobile ? 16 : 19,
+                      fontWeight: 800,
+                      color: T.text,
+                      fontFamily: "'Outfit', sans-serif",
+                    }}>
+                      Vous avez déjà un abonnement
+                    </h3>
+                    <p style={{
+                      margin: '0 auto 18px',
+                      maxWidth: 380,
+                      fontSize: isMobile ? 12 : 13,
+                      color: T.textMid,
+                      lineHeight: 1.5,
+                    }}>
+                      Votre abonnement <strong style={{ textTransform: 'capitalize' }}>{planNom}</strong> est actif et expire le{' '}
+                      <strong>{abonnement?.date_fin ? new Date(abonnement.date_fin).toLocaleDateString('fr-FR') : '—'}</strong>.
+                      Souhaitez-vous le renouveler dès maintenant ?
+                    </p>
+
+                    {/* Récapitulatif du plan actuel */}
+                    <div style={{
+                      background: T.bg,
+                      border: `1px solid ${T.border}`,
+                      borderRadius: 12,
+                      padding: isMobile ? '12px 14px' : '14px 20px',
+                      margin: '0 auto 16px',
+                      maxWidth: 380,
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(3, 1fr)',
+                      gap: 10,
+                      textAlign: 'left',
+                    }}>
+                      <div>
+                        <div style={{ fontSize: 9, color: T.textLight, fontWeight: 600, marginBottom: 3 }}>Plan</div>
+                        <div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: T.text, textTransform: 'capitalize' }}>{planNom}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 9, color: T.textLight, fontWeight: 600, marginBottom: 3 }}>Durée</div>
+                        <div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: T.text, textTransform: 'capitalize' }}>{dureeLabel(abonnement?.type) || '—'}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 9, color: T.textLight, fontWeight: 600, marginBottom: 3 }}>Jours restants</div>
+                        <div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: joursRest <= 7 ? T.danger : T.success }}>{joursRest}j</div>
+                      </div>
+                    </div>
+
+                    {/* NOUVEAU — Sélecteur rapide de durée pour le renouvellement,
+                        afin que la prévisualisation ci-dessous reflète le choix
+                        avant même d'entrer dans le flux complet "choix". */}
+                    <div className="duree-grid" style={{
+                      display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6,
+                      margin: '0 auto 16px', maxWidth: 460,
+                    }}>
+                      {['mensuel', '2_mois', '3_mois', '6_mois', 'annuel'].map(val => {
+                        const active = typeAbo === val;
+                        return (
+                          <div key={val} onClick={() => setTypeAbo(val)} style={{
+                            border: `1.5px solid ${active ? T.primary : T.border}`,
+                            borderRadius: 10,
+                            padding: '8px 4px',
+                            cursor: 'pointer',
+                            background: active ? T.primarySoft : T.white,
+                            textAlign: 'center',
+                          }}>
+                            <div style={{ fontSize: isMobile ? 9 : 10, fontWeight: 700, color: active ? T.primary : T.textMid }}>
+                              {dureeLabel(val)}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* NOUVEAU — Bloc de prévisualisation : nouvelle date de fin
+                        calculée par le backend (mode prolongation/changement/
+                        nouveau), ou message de refus si applicable. */}
+                    {loadingPreview ? (
+                      <div style={{ fontSize: 11, color: T.textMid, marginBottom: 16 }}><Spinner /> Calcul en cours...</div>
+                    ) : previewRenouvellement && (
+                      <div style={{
+                        background: previewRenouvellement.autorise ? T.successSoft : T.dangerSoft,
+                        border: `1px solid ${previewRenouvellement.autorise ? '#bbf7d0' : '#fecaca'}`,
+                        borderRadius: 12,
+                        padding: isMobile ? '12px 14px' : '14px 20px',
+                        margin: '0 auto 20px',
+                        maxWidth: 380,
+                        textAlign: 'left',
+                      }}>
+                        {previewRenouvellement.autorise ? (
+                          <>
+                            <div style={{ fontSize: 9, color: '#047857', fontWeight: 600, marginBottom: 3 }}>Nouvelle date de fin</div>
+                            <div style={{ fontSize: isMobile ? 13 : 15, fontWeight: 800, color: '#065f46', marginBottom: 6 }}>
+                              {previewRenouvellement.nouvelle_date_fin ? new Date(previewRenouvellement.nouvelle_date_fin).toLocaleDateString('fr-FR') : '—'}
+                            </div>
+                            <div style={{ fontSize: 10, color: '#047857' }}>{previewRenouvellement.message}</div>
+                          </>
+                        ) : (
+                          <div style={{ fontSize: 11, color: '#991b1b', display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                            <i className='bx bx-error-circle' style={{ fontSize: 14, marginTop: 1 }} />
+                            <span>{previewRenouvellement.message}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 10, maxWidth: 380, margin: '0 auto' }}>
+                      <button
+                        type="button"
+                        onClick={() => setEtapePaiement('choix')}
+                        disabled={previewRenouvellement && previewRenouvellement.autorise === false}
+                        className="btn-hover"
+                        style={{
+                          flex: 1, padding: isMobile ? '11px' : '12px',
+                          background: (previewRenouvellement && previewRenouvellement.autorise === false)
+                            ? T.textLight
+                            : `linear-gradient(135deg, ${T.primary}, #8b5cf6)`,
+                          color: T.white, border: 'none', borderRadius: T.radiusSm,
+                          fontWeight: 700, fontSize: isMobile ? 12 : 13,
+                          cursor: (previewRenouvellement && previewRenouvellement.autorise === false) ? 'not-allowed' : 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        }}>
+                        <i className='bx bx-refresh' /> Renouveler l'abonnement
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── SOUS-ÉTAPE "choix" — formulaire de choix de plan ──
+                     NOUVEAU — grille de durée étendue à 5 options (mensuel,
+                     2 mois, 3 mois, 6 mois, annuel), badges d'économie sur les
+                     durées longues, et affichage du message de prévisualisation
+                     du renouvellement (autorisé / refusé) directement sous le
+                     récapitulatif du montant. ── */}
+                {etapePaiement === 'choix' && (
+                  <div className="prof-fade" style={{ ...cardStyle, padding: cardPadding }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
+                      <div style={{ width: sectionIconSize, height: sectionIconSize, borderRadius: 8, background: 'linear-gradient(135deg, #ede9fe, #c4b5fd)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <i className='bx bx-crown' style={{ fontSize: isMobile ? 14 : 16, color: '#6366f1' }} />
+                      </div>
+                      <h3 style={{ margin: 0, fontSize: titleSize, fontWeight: 800, color: T.text, fontFamily: "'Outfit', sans-serif" }}>
+                        {aboActif && !estEssai ? 'Renouveler' : 'Souscrire'}
+                      </h3>
+                    </div>
+
+                    <form onSubmit={continuerVersPaiement} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                      <div>
+                        <label style={{ fontSize: 10, fontWeight: 600, color: T.textMid, marginBottom: 6, display: 'block' }}>Type de compte</label>
+                        <div className="plan-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+                          {[
+                            { val: 'standard', icon: 'bx-user', label: 'Standard', desc: 'Usage personnel', price: TARIFS.standard.mensuel },
+                            { val: 'entreprise', icon: 'bx-buildings', label: 'Entreprise', desc: 'Multi-utilisateurs', price: TARIFS.entreprise.mensuel },
+                          ].map(opt => {
+                            const active = typeUser === opt.val;
+                            return (
+                              <div key={opt.val} onClick={() => setTypeUser(opt.val)} style={{
+                                border: `2px solid ${active ? T.primary : T.border}`,
+                                borderRadius: 12,
+                                padding: isMobile ? '10px' : '14px',
+                                cursor: 'pointer',
+                                background: active ? T.primarySoft : T.white,
+                              }}>
+                                <i className={`bx ${opt.icon}`} style={{ fontSize: isMobile ? 18 : 20, color: active ? T.primary : T.textLight, display: 'block', marginBottom: 6 }} />
+                                <div style={{ fontWeight: 800, fontSize: isMobile ? 12 : 13, color: active ? T.primary : T.text }}>{opt.label}</div>
+                                <div style={{ fontSize: 9, color: T.textLight, marginTop: 2 }}>{opt.desc}</div>
+                                <div style={{ fontSize: isMobile ? 13 : 15, fontWeight: 800, color: T.primary, marginTop: 8 }}>{opt.price.toLocaleString()} MRU/mois</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* NOUVEAU — grille à 5 options de durée, avec badge
+                          "Économie" calculé dynamiquement par rapport au prix
+                          mensuel x nombre de mois équivalent. */}
+                      <div>
+                        <label style={{ fontSize: 10, fontWeight: 600, color: T.textMid, marginBottom: 6, display: 'block' }}>Durée</label>
+                        <div className="plan-grid duree-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
+                          {[
+                            { val: 'mensuel', label: 'Mensuel', duree: '30j', moisEquiv: 1 },
+                            { val: '2_mois',  label: '2 Mois',  duree: '60j', moisEquiv: 2 },
+                            { val: '3_mois',  label: '3 Mois',  duree: '90j', moisEquiv: 3 },
+                            { val: '6_mois',  label: '6 Mois',  duree: '180j', moisEquiv: 6 },
+                            { val: 'annuel',  label: 'Annuel',  duree: '365j', moisEquiv: 12 },
+                          ].map(opt => {
+                            const active = typeAbo === opt.val;
+                            const price = TARIFS[typeUser][opt.val];
+                            const prixPlein = TARIFS[typeUser].mensuel * opt.moisEquiv;
+                            const economiePct = opt.moisEquiv > 1 ? Math.round((1 - price / prixPlein) * 100) : 0;
+                            return (
+                              <div key={opt.val} onClick={() => setTypeAbo(opt.val)} style={{
+                                border: `2px solid ${active ? T.primary : T.border}`,
+                                borderRadius: 12,
+                                padding: isMobile ? '8px 6px' : '12px 10px',
+                                cursor: 'pointer',
+                                background: active ? T.primarySoft : T.white,
+                                textAlign: 'center',
+                              }}>
+                                <div style={{ fontWeight: 800, fontSize: isMobile ? 10 : 12, color: active ? T.primary : T.text }}>{opt.label}</div>
+                                <div style={{ fontSize: isMobile ? 12 : 14, fontWeight: 800, color: T.text, margin: '4px 0' }}>{price.toLocaleString()}</div>
+                                <div style={{ fontSize: 8, color: T.textLight }}>MRU · {opt.duree}</div>
+                                {economiePct > 0 && (
+                                  <div style={{ fontSize: 7, color: T.success, marginTop: 3, fontWeight: 700 }}>
+                                    <i className='bx bx-gift' style={{ fontSize: 8 }} /> -{economiePct}%
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Récapitulatif du montant */}
+                      <div style={{
+                        background: T.bg, border: `1px solid ${T.border}`, borderRadius: 12,
+                        padding: isMobile ? '10px 14px' : '12px 18px',
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      }}>
+                        <span style={{ fontSize: isMobile ? 11 : 12, color: T.textMid, fontWeight: 600 }}>Montant à régler</span>
+                        <span style={{ fontSize: isMobile ? 15 : 17, color: T.primary, fontWeight: 800 }}>{montantCalc.toLocaleString()} MRU</span>
+                      </div>
+
+                      {/* NOUVEAU — message de prévisualisation (autorisé /
+                          refusé) sous le récapitulatif, basé sur
+                          previewRenouvellement chargé via l'effet dédié. */}
+                      {previewRenouvellement && (
+                        <div style={{
+                          background: previewRenouvellement.autorise ? T.primarySoft : T.dangerSoft,
+                          border: `1px solid ${previewRenouvellement.autorise ? '#c7d2fe' : '#fecaca'}`,
+                          borderRadius: 12,
+                          padding: isMobile ? '10px 14px' : '12px 18px',
+                          fontSize: 11,
+                          color: previewRenouvellement.autorise ? '#4338ca' : '#991b1b',
+                          display: 'flex', alignItems: 'flex-start', gap: 6,
+                        }}>
+                          <i className={previewRenouvellement.autorise ? 'bx bx-info-circle' : 'bx bx-error-circle'} style={{ fontSize: 14, marginTop: 1 }} />
+                          <span>
+                            {previewRenouvellement.autorise
+                              ? `${previewRenouvellement.message} Nouvelle date de fin : ${previewRenouvellement.nouvelle_date_fin ? new Date(previewRenouvellement.nouvelle_date_fin).toLocaleDateString('fr-FR') : '—'}.`
+                              : previewRenouvellement.message}
+                          </span>
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          type="submit"
+                          disabled={previewRenouvellement && previewRenouvellement.autorise === false}
+                          className="btn-hover"
+                          style={{
+                            flex: 1, padding: isMobile ? '10px' : '12px',
+                            background: (previewRenouvellement && previewRenouvellement.autorise === false)
+                              ? T.textLight
+                              : `linear-gradient(135deg, ${T.primary}, #8b5cf6)`,
+                            color: T.white, border: 'none', borderRadius: T.radiusSm,
+                            fontWeight: 700, fontSize: isMobile ? 12 : 13,
+                            cursor: (previewRenouvellement && previewRenouvellement.autorise === false) ? 'not-allowed' : 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                          }}>
+                          <i className='bx bx-arrow-forward' /> Continuer vers le paiement
+                        </button>
+                        {/* Visible seulement si on vient de l'écran "Renouveler ?" */}
+                        {aboActif && !estEssai && (
+                          <button type="button" onClick={() => setEtapePaiement('renouveler')} style={{
+                            background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.radiusSm,
+                            padding: isMobile ? '10px 14px' : '12px 16px', cursor: 'pointer', fontSize: isMobile ? 11 : 12,
+                            color: T.textMid, fontWeight: 600,
+                          }}>Retour</button>
+                        )}
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {/* ── SOUS-ÉTAPE "email" — vérification par code à 6 chiffres — INTACT ── */}
+                {etapePaiement === 'email' && (
+                  <div className="prof-fade" style={{ ...cardStyle, padding: cardPadding }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
+                      <div style={{
+                        width: sectionIconSize, height: sectionIconSize, borderRadius: 8,
+                        background: 'linear-gradient(135deg, #ede9fe, #c4b5fd)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <i className='bx bx-envelope' style={{ fontSize: isMobile ? 14 : 16, color: T.primary }} />
+                      </div>
+                      <h3 style={{ margin: 0, fontSize: titleSize, fontWeight: 800, color: T.text, fontFamily: "'Outfit', sans-serif" }}>
+                        Vérification de l'email
+                      </h3>
+                    </div>
+
+                    {/* Récap du plan choisi */}
+                    <div style={{
+                      background: T.bg, border: `1px solid ${T.border}`, borderRadius: 12,
+                      padding: isMobile ? '10px 14px' : '12px 18px', marginBottom: 16,
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8,
+                    }}>
+                      <span style={{ fontSize: isMobile ? 11 : 12, color: T.textMid, fontWeight: 700, textTransform: 'capitalize' }}>
+                        {typeUser} — {dureeLabel(typeAbo)}
+                      </span>
+                      <span style={{ fontSize: isMobile ? 13 : 14, color: T.primary, fontWeight: 800 }}>{montantCalc.toLocaleString()} MRU</span>
+                    </div>
+
+                    {!codeEnvoye ? (
+                      <form onSubmit={demanderCode} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        <div>
+                          <label style={{ fontSize: 10, fontWeight: 600, color: T.textMid, marginBottom: 6, display: 'block' }}>Email</label>
+                          <div style={{ position: 'relative' }}>
+                            <i className='bx bx-envelope' style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: T.textLight }} />
+                            <input type="email" value={emailAbo} onChange={e => setEmailAbo(e.target.value)} required placeholder="votre@email.com" className="prof-input" style={{
+                              width: '100%', padding: isMobile ? '9px 9px 9px 32px' : '10px 12px 10px 36px',
+                              borderRadius: T.radiusSm, border: `1.5px solid ${T.border}`, background: T.bg,
+                              fontSize: isMobile ? 12 : 13,
+                            }} />
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button type="submit" disabled={loadingCode} className="btn-hover" style={{
+                            flex: 2, padding: isMobile ? '10px' : '12px',
+                            background: loadingCode ? T.textLight : `linear-gradient(135deg, ${T.primary}, #8b5cf6)`,
+                            color: T.white, border: 'none', borderRadius: T.radiusSm,
+                            fontWeight: 700, fontSize: isMobile ? 12 : 13,
+                            cursor: loadingCode ? 'not-allowed' : 'pointer',
+                            opacity: loadingCode ? 0.65 : 1,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                          }}>
+                            {loadingCode ? <><Spinner /> Envoi...</> : <><i className='bx bx-envelope' /> Recevoir code</>}
+                          </button>
+                          <button type="button" onClick={() => setEtapePaiement('choix')} style={{
+                            flex: 1, background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.radiusSm,
+                            padding: isMobile ? '10px' : '12px', cursor: 'pointer', fontSize: isMobile ? 11 : 12,
+                            color: T.textMid, fontWeight: 600,
+                          }}>Retour</button>
+                        </div>
+                      </form>
+                    ) : (
+                      <form onSubmit={verifierCodeEtContinuer} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                        <div style={{ background: T.primarySoft, borderRadius: T.radiusSm, padding: '8px 12px', fontSize: 11, color: '#4338ca', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <i className='bx bx-envelope-open' style={{ fontSize: 13 }} />
+                          Code envoyé à <strong>{emailAbo}</strong>
+                        </div>
+
+                        <div>
+                          <label style={{ fontSize: 10, fontWeight: 600, color: T.textMid, marginBottom: 6, display: 'block' }}>Code</label>
+                          <input type="text" value={code} onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} required maxLength={6} placeholder="000000" className="prof-input" style={{
+                            width: '100%', fontSize: isMobile ? 22 : 28, fontWeight: 800, textAlign: 'center',
+                            letterSpacing: isMobile ? 6 : 8, color: T.primary, fontFamily: "'Outfit', monospace",
+                            padding: isMobile ? '12px' : '14px', borderRadius: T.radiusSm, border: `2px solid ${T.border}`, background: T.bg,
+                          }} />
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button type="submit" disabled={code.length !== 6} style={{
+                            flex: 2, padding: isMobile ? '10px' : '12px',
+                            background: code.length !== 6 ? T.textLight : T.success,
+                            color: T.white, border: 'none', borderRadius: T.radiusSm,
+                            fontWeight: 700, fontSize: isMobile ? 11 : 13,
+                            cursor: code.length !== 6 ? 'not-allowed' : 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                          }}>Continuer</button>
+                          <button type="button" onClick={() => { setCodeEnvoye(false); setCode(''); }} style={{
+                            flex: 1, background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.radiusSm,
+                            padding: isMobile ? '10px' : '12px', cursor: 'pointer', fontSize: isMobile ? 11 : 12,
+                            color: T.textMid, fontWeight: 600,
+                          }}>Retour</button>
+                        </div>
+
+                        <button type="button" onClick={demanderCode} disabled={loadingCode} style={{
+                          background: 'none', border: 'none', cursor: 'pointer', color: T.primary, fontSize: 11,
+                          fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                        }}><i className='bx bx-refresh' /> Renvoyer</button>
+                      </form>
+                    )}
+                  </div>
+                )}
+
+                {/* ── SOUS-ÉTAPE "methode" — choix parmi 5 méthodes ──
+                     NOUVEAU : grille étendue à RSSBank / Sedad / Bankily / Masrivi
+                     (manuelles) + TrackPay (automatique). Le bouton "Continuer"
+                     se comporte différemment selon le type de méthode choisie :
+                       - manuelle -> avance vers l'étape 'upload'
+                       - trackpay -> appelle directement lancerPaiementTrackPay()
+                         (pas d'étape upload, redirection immédiate). ── */}
+                {etapePaiement === 'methode' && (
+                  <div className="prof-fade" style={{ ...cardStyle, padding: cardPadding }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
+                      <div style={{
+                        width: sectionIconSize, height: sectionIconSize, borderRadius: 8,
+                        background: 'linear-gradient(135deg, #ede9fe, #c4b5fd)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <i className='bx bx-credit-card' style={{ fontSize: isMobile ? 14 : 16, color: T.primary }} />
+                      </div>
+                      <h3 style={{ margin: 0, fontSize: titleSize, fontWeight: 800, color: T.text, fontFamily: "'Outfit', sans-serif" }}>
+                        Choisissez votre méthode de paiement
+                      </h3>
+                    </div>
+
+                    {loadingCompte ? (
+                      <div style={{ textAlign: 'center', padding: '24px 0', color: T.textMid, fontSize: 12 }}>
+                        <Spinner /> Chargement...
+                      </div>
+                    ) : (
+                      <>
+                        {/* NOUVEAU — grille à 5 options : 4 manuelles + TrackPay (automatique) */}
+                        <div className="plan-grid methode-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 18 }}>
+                          {[
+                            { val: 'rssbank', icon: 'bx-bank',        label: 'RSSBank',  badge: null },
+                            { val: 'sedad',   icon: 'bx-mobile-alt',  label: 'Sedad',    badge: null },
+                            { val: 'bankily', icon: 'bx-mobile-alt',  label: 'Bankily',  badge: null },
+                            { val: 'masrivi', icon: 'bx-mobile-alt',  label: 'Masrivi',  badge: null },
+                            { val: 'trackpay', icon: 'bx-wallet-alt', label: 'TrackPay', badge: 'Automatique' },
+                          ].map(opt => {
+                            const active = methodePaiement === opt.val;
+                            return (
+                              <div key={opt.val} onClick={() => choisirMethodePaiement(opt.val)} style={{
+                                border: `2px solid ${active ? T.primary : T.border}`,
+                                borderRadius: 12,
+                                padding: isMobile ? '12px 8px' : '16px 12px',
+                                cursor: 'pointer',
+                                background: active ? T.primarySoft : T.white,
+                                textAlign: 'center',
+                                position: 'relative',
+                              }}>
+                                {opt.badge && (
+                                  <span style={{
+                                    position: 'absolute', top: 4, right: 4,
+                                    fontSize: 7, fontWeight: 800, color: T.success,
+                                    background: T.successSoft, borderRadius: 6, padding: '1px 4px',
+                                  }}>{opt.badge}</span>
+                                )}
+                                <i className={`bx ${opt.icon}`} style={{ fontSize: isMobile ? 18 : 22, color: active ? T.primary : T.textLight, display: 'block', marginBottom: 6 }} />
+                                <div style={{ fontWeight: 800, fontSize: isMobile ? 10 : 12, color: active ? T.primary : T.text, fontFamily: "'Outfit', sans-serif" }}>{opt.label}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* ── Encadré d'instructions — uniquement pour les méthodes
+                             manuelles : affiche le compte d'encaissement saisi par
+                             l'admin (email pour RSSBank, numéro pour Sedad/Bankily/Masrivi) ── */}
+                        {methodePaiement && methodePaiement !== 'trackpay' && (
+                          <div className="prof-fade" style={{
+                            background: T.bg, border: `1px solid ${T.border}`, borderRadius: 12,
+                            padding: isMobile ? '14px' : '18px', marginBottom: 16,
+                          }}>
+                            {(() => {
+                              const compte = getCompteForMethode(methodePaiement);
+                              if (!compte) {
+                                return (
+                                  <div style={{ fontSize: 11, color: T.textMid, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <i className='bx bx-error-circle' style={{ fontSize: 14 }} />
+                                    Informations de paiement indisponibles pour le moment.
+                                  </div>
+                                );
+                              }
+                              return (
+                                <>
+                                  <div style={{ fontSize: 11, color: T.textMid, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <i className='bx bx-info-circle' style={{ fontSize: 14, color: T.primary }} />
+                                    Allez sur <strong>{methodeLabel(methodePaiement)}</strong> pour effectuer le paiement, puis faites une capture d'écran de la confirmation.
+                                  </div>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                    <div>
+                                      <div style={{ fontSize: 9, color: T.textLight, fontWeight: 600, marginBottom: 3 }}>
+                                        {methodePaiement === 'rssbank' ? 'Email' : 'Numéro de téléphone'}
+                                      </div>
+                                      <div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: T.text }}>{compte.numero_compte}</div>
+                                    </div>
+                                    <div>
+                                      <div style={{ fontSize: 9, color: T.textLight, fontWeight: 600, marginBottom: 3 }}>Titulaire</div>
+                                      <div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: T.text }}>{compte.nom_titulaire}</div>
+                                    </div>
+                                  </div>
+                                  {compte.instructions && (
+                                    <div style={{ marginTop: 10, fontSize: 11, color: T.textMid, lineHeight: 1.5 }}>
+                                      {compte.instructions}
+                                    </div>
+                                  )}
+                                </>
+                              );
+                            })()}
+                          </div>
+                        )}
+
+                        {/* ── Encadré d'information — spécifique à TrackPay (automatique) ── */}
+                        {methodePaiement === 'trackpay' && (
+                          <div className="prof-fade" style={{
+                            background: T.successSoft, border: '1px solid #bbf7d0', borderRadius: 12,
+                            padding: isMobile ? '14px' : '18px', marginBottom: 16,
+                            fontSize: 11, color: '#065f46', display: 'flex', alignItems: 'center', gap: 8,
+                          }}>
+                            <i className='bx bx-check-shield' style={{ fontSize: 16 }} />
+                            Vous allez être redirigé vers TrackPay pour effectuer le paiement. Votre abonnement sera activé automatiquement dès la confirmation, sans capture d'écran ni validation manuelle.
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          {/* NOUVEAU — bouton "Continuer" à double comportement selon la méthode */}
+                          {methodePaiement === 'trackpay' ? (
+                            <button
+                              type="button"
+                              disabled={loadingTrackPay}
+                              onClick={lancerPaiementTrackPay}
+                              className="btn-hover"
+                              style={{
+                                flex: 2, padding: isMobile ? '10px' : '12px',
+                                background: loadingTrackPay ? T.textLight : `linear-gradient(135deg, ${T.success}, #059669)`,
+                                color: T.white, border: 'none', borderRadius: T.radiusSm,
+                                fontWeight: 700, fontSize: isMobile ? 12 : 13,
+                                cursor: loadingTrackPay ? 'not-allowed' : 'pointer',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                              }}>
+                              {loadingTrackPay ? <><Spinner /> Redirection...</> : <><i className='bx bx-wallet-alt' /> Payer avec TrackPay</>}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={!methodePaiement || !getCompteForMethode(methodePaiement)}
+                              onClick={() => setEtapePaiement('upload')}
+                              className="btn-hover"
+                              style={{
+                                flex: 2, padding: isMobile ? '10px' : '12px',
+                                background: (!methodePaiement || !getCompteForMethode(methodePaiement)) ? T.textLight : `linear-gradient(135deg, ${T.primary}, #8b5cf6)`,
+                                color: T.white, border: 'none', borderRadius: T.radiusSm,
+                                fontWeight: 700, fontSize: isMobile ? 12 : 13,
+                                cursor: (!methodePaiement || !getCompteForMethode(methodePaiement)) ? 'not-allowed' : 'pointer',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                              }}>
+                              <i className='bx bx-arrow-forward' /> Continuer
+                            </button>
+                          )}
+                          <button type="button" onClick={() => setEtapePaiement('email')} style={{
+                            flex: 1, background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.radiusSm,
+                            padding: isMobile ? '10px' : '12px', cursor: 'pointer', fontSize: isMobile ? 11 : 12,
+                            color: T.textMid, fontWeight: 600,
+                          }}>Retour</button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* ── SOUS-ÉTAPE "upload" — capture d'écran de confirmation
+                     (méthodes manuelles uniquement : rssbank/sedad/bankily/masrivi) — INTACT ── */}
+                {etapePaiement === 'upload' && (
+                  <div className="prof-fade" style={{ ...cardStyle, padding: cardPadding }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
+                      <div style={{
+                        width: sectionIconSize, height: sectionIconSize, borderRadius: 8,
+                        background: 'linear-gradient(135deg, #ede9fe, #c4b5fd)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <i className='bx bx-image' style={{ fontSize: isMobile ? 14 : 16, color: T.primary }} />
+                      </div>
+                      <h3 style={{ margin: 0, fontSize: titleSize, fontWeight: 800, color: T.text, fontFamily: "'Outfit', sans-serif" }}>
+                        Confirmez votre paiement
+                      </h3>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                      <div>
+                        <label style={{ fontSize: 10, fontWeight: 600, color: T.textMid, marginBottom: 6, display: 'block' }}>Capture d'écran de confirmation</label>
+                        <div style={{
+                          border: `2px dashed ${capturePreview ? T.primary : T.border}`,
+                          borderRadius: T.radiusSm,
+                          padding: '20px',
+                          textAlign: 'center',
+                          background: T.bg,
+                          cursor: 'pointer',
+                          position: 'relative',
+                        }} onClick={() => document.getElementById('capture-file-input-abonnement').click()}>
+                          <input
+                            id="capture-file-input-abonnement"
+                            type="file"
+                            accept="image/*"
+                            onChange={handleCaptureChange}
+                            style={{ display: 'none' }}
+                          />
+                          {capturePreview ? (
+                            <div style={{ position: 'relative', display: 'inline-block', maxWidth: '100%' }}>
+                              <img src={capturePreview} alt="Aperçu" style={{ maxHeight: 160, borderRadius: T.radiusSm, maxWidth: '100%' }} />
+                              <div style={{ fontSize: 11, color: T.textMid, marginTop: 8 }}>Cliquez pour modifier l'image</div>
+                            </div>
+                          ) : (
+                            <>
+                              <i className='bx bx-cloud-upload' style={{ fontSize: 32, color: T.textLight, marginBottom: 8 }} />
+                              <div style={{ fontSize: 12, fontWeight: 600, color: T.textMid }}>Glissez ou cliquez pour ajouter l'image</div>
+                              <div style={{ fontSize: 10, color: T.textLight, marginTop: 4 }}>Format JPG, PNG (Max 5 Mo)</div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          type="button"
+                          disabled={loadingEnvoiPaiement || !captureFile}
+                          onClick={envoyerPaiement}
+                          className="btn-hover"
+                          style={{
+                            flex: 2, padding: isMobile ? '10px' : '12px',
+                            background: (loadingEnvoiPaiement || !captureFile) ? T.textLight : T.success,
+                            color: T.white, border: 'none', borderRadius: T.radiusSm,
+                            fontWeight: 700, fontSize: isMobile ? 12 : 13,
+                            cursor: (loadingEnvoiPaiement || !captureFile) ? 'not-allowed' : 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                          }}>
+                          {loadingEnvoiPaiement ? <><Spinner /> Envoi...</> : <><i className='bx bx-check-shield' /> Valider le paiement</>}
+                        </button>
+                        <button type="button" onClick={() => setEtapePaiement('methode')} style={{
+                          flex: 1, background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.radiusSm,
+                          padding: isMobile ? '10px' : '12px', cursor: 'pointer', fontSize: isMobile ? 11 : 12,
+                          color: T.textMid, fontWeight: 600,
+                        }}>Retour</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
 
         {/* ═══════════════════════════════════════════════════════════════════
-            TAB — CONTACT (version compacte)
+            TAB — CONTACT (version compacte) — INTACT
         ════════════════════════════════════════════════════════════════════ */}
         {activeTab === 'contact' && (
           <div className="prof-fade" style={{ ...cardStyle, padding: cardPadding }}>
@@ -1403,12 +2528,13 @@ export default function Profil() {
 
 // ── COMPOSANTS UTILITAIRES ────────────────────────────────────────────────────
 
-function Spinner() {
+function Spinner({ big, color }) {
+  const size = big ? 22 : 12;
   return (
     <span style={{
-      width: 12, height: 12,
-      border: '2px solid rgba(255,255,255,0.3)',
-      borderTopColor: '#fff', borderRadius: '50%',
+      width: size, height: size,
+      border: `2px solid ${color ? `${color}33` : 'rgba(255,255,255,0.3)'}`,
+      borderTopColor: color || '#fff', borderRadius: '50%',
       display: 'inline-block', animation: 'spin 0.7s linear infinite',
     }} />
   );

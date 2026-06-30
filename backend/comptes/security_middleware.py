@@ -36,6 +36,29 @@ SMTP_PORT     = int(os.getenv('RSS_SOC_SMTP_PORT','587'))
 SMTP_USER     = os.getenv('EMAIL_HOST_USER',      '')
 SMTP_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD',  '')
 
+# ══════════════════════════════════════════════════════════════════════════════
+# NOUVEAU — Préfixes de chemin exclus du SCAN de patterns (étape 2 ci-dessous
+# uniquement : SQL_RE / XSS_RE / TRAVERSAL_RE). Tout le reste du middleware
+# continue de s'appliquer normalement sur ces chemins : IP banning,
+# brute-force, logging Loki/local, alertes email. On exclut uniquement la
+# détection de patterns car elle produit des faux positifs sur du contenu
+# métier légitime (ex: champs de formulaire multipart contenant des mots
+# comme "or", des numéros de compte, des noms de méthodes de paiement, etc.)
+#
+# Même principe déjà appliqué côté /admin/ (Django Admin) pour les mêmes
+# raisons (faux positifs sur les sauvegardes de formulaires légitimes) :
+# ici on étend ce même principe à l'API du flux d'abonnement/paiement, qui
+# reçoit elle aussi des requêtes multipart (upload de capture d'écran) et
+# des champs texte (méthode de paiement, montants, etc.) pouvant déclencher
+# des faux positifs SQL_RE/XSS_RE.
+# ══════════════════════════════════════════════════════════════════════════════
+THREAT_BLOCK_EXCLUDED_PREFIXES = tuple(
+    p.strip() for p in os.getenv(
+        'RSS_SOC_THREAT_BLOCK_EXCLUDED_PREFIXES',
+        '/admin/,/api/abonnements/'
+    ).split(',') if p.strip()
+)
+
 # ── Threat detection patterns ─────────────────────────────────────────────────
 SQL_RE = re.compile(
     r"(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION|CAST|CONVERT)\b"
@@ -79,6 +102,11 @@ _table_lock     = threading.Lock()
 
 def _now_iso():
     return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
+# ── NOUVEAU — Helper d'exclusion par préfixe ──────────────────────────────────
+def _is_excluded_from_threat_block(path):
+    return path.startswith(THREAT_BLOCK_EXCLUDED_PREFIXES)
 
 
 # ── HTTP block responses ──────────────────────────────────────────────────────
@@ -306,7 +334,7 @@ class SecurityMiddleware:
         print(
             f"[rss-soc] v5 active | app={APP_NAME} env={ENV_NAME} "
             f"soc={SOC_URL} block={BLOCK_ATTACKS} ban={BAN_DURATION}s "
-            f"email={SEND_EMAIL}"
+            f"email={SEND_EMAIL} excluded_prefixes={THREAT_BLOCK_EXCLUDED_PREFIXES}"
         )
 
     def __call__(self, request):
@@ -314,6 +342,8 @@ class SecurityMiddleware:
         ip    = _get_client_ip(request)
 
         # ── 1. Banned IP check (brute-force ban, no Suricata needed) ──────────
+        # NOUVEAU — s'applique TOUJOURS, même sur les chemins exclus du scan
+        # de patterns ci-dessous : un IP banni reste bloqué partout.
         if BLOCK_ATTACKS and _is_banned(ip):
             _push_event('BANNED_IP', {
                 'ts': _now_iso(), 'event': 'BANNED_IP',
@@ -323,19 +353,23 @@ class SecurityMiddleware:
             return _block_429(ip)
 
         # ── 2. Attack pattern scan — block BEFORE the view runs ───────────────
-        threats = _scan_request(request)
-        if threats:
-            ts = _now_iso()
-            for threat in threats:
-                _push_event(threat, {
-                    'ts': ts, 'event': threat, 'ip': ip,
-                    'method': request.method, 'path': request.path,
-                    'app': APP_NAME, 'blocked': BLOCK_ATTACKS,
-                }, job='django-security', alert=True)
+        # NOUVEAU — chemins dans THREAT_BLOCK_EXCLUDED_PREFIXES (ex: /admin/,
+        # /api/abonnements/) ignorés par ce scan uniquement. Le logging et
+        # l'alerting restent inchangés pour tous les autres chemins.
+        if not _is_excluded_from_threat_block(request.path):
+            threats = _scan_request(request)
+            if threats:
+                ts = _now_iso()
+                for threat in threats:
+                    _push_event(threat, {
+                        'ts': ts, 'event': threat, 'ip': ip,
+                        'method': request.method, 'path': request.path,
+                        'app': APP_NAME, 'blocked': BLOCK_ATTACKS,
+                    }, job='django-security', alert=True)
 
-            if BLOCK_ATTACKS:
-                # Return 403 — view never executes
-                return _block_403(threats[0])
+                if BLOCK_ATTACKS:
+                    # Return 403 — view never executes
+                    return _block_403(threats[0])
 
         # ── 3. Normal request processing ──────────────────────────────────────
         response    = self.get_response(request)
