@@ -1,3 +1,4 @@
+# backend/budgets/views.py
 from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -5,7 +6,7 @@ from rest_framework.views import APIView
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from django.utils import timezone
 from decimal import Decimal
-from abonnements.permissions import EstAbonne, LimiteEssaiQuotidienne
+from abonnements.permissions import EstAbonne, LimiteEssaiQuotidienne, EstVisiteur
 from logs.utils import enregistrer_log
 from .models import Budget, BudgetDepense
 from .serializers import BudgetSerializer, BudgetDepenseSerializer
@@ -16,21 +17,37 @@ from transactions.serializers import TransactionSerializer
 class BudgetListCreateView(generics.ListCreateAPIView):
     """
     Liste et création des budgets.
-    - Lecture : accessible même si abonnement expiré (via EstAbonne)
+    - Lecture : accessible même si abonnement expiré ou en mode visiteur (via EstVisiteur)
     - Création : nécessite un abonnement actif
     """
     serializer_class = BudgetSerializer
-    permission_classes = [IsAuthenticated, EstAbonne, LimiteEssaiQuotidienne]
+    permission_classes = [IsAuthenticated, EstVisiteur, LimiteEssaiQuotidienne]
 
     def get_queryset(self):
+        user = self.request.user
+        
+        # 🆕 Si l'utilisateur est en mode visiteur, retourner des données mock
+        if user.est_visiteur:
+            from abonnements.mock_data import MOCK_BUDGETS
+            return MOCK_BUDGETS
+        
         """Retourne les budgets actifs de l'utilisateur."""
         return Budget.objects.filter(
-            utilisateur=self.request.user, 
+            utilisateur=user, 
             est_actif=True
         ).order_by('-date_creation')
 
     def perform_create(self, serializer):
         user = self.request.user
+        
+        # 🆕 Vérification du mode visiteur AVANT toute création
+        if user.est_visiteur:
+            raise PermissionDenied({
+                'error': 'mode_visiteur',
+                'message': '🔍 Mode Exploration : Créez un compte pour créer des budgets.',
+                'redirect_to': '/inscription',
+                'visitor_mode': True
+            })
         
         # ✅ Vérification explicite de l'abonnement
         try:
@@ -40,6 +57,15 @@ class BudgetListCreateView(generics.ListCreateAPIView):
                     'error': 'abonnement_requis',
                     'message': 'Vous devez avoir un abonnement pour créer des budgets.',
                     'redirect_to': '/abonnement'
+                })
+            
+            # 🆕 Vérifier si c'est un abonnement de démonstration
+            if abo.est_demo_mode():
+                raise PermissionDenied({
+                    'error': 'mode_visiteur',
+                    'message': '🔍 Mode Exploration : Créez un compte pour créer des budgets.',
+                    'redirect_to': '/inscription',
+                    'visitor_mode': True
                 })
             
             if abo.statut != 'actif' or abo.date_fin <= timezone.now():
@@ -121,17 +147,46 @@ class BudgetListCreateView(generics.ListCreateAPIView):
 class BudgetDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
     Détail, modification et suppression d'un budget.
-    - Lecture : accessible même si abonnement expiré (via EstAbonne)
+    - Lecture : accessible même si abonnement expiré ou en mode visiteur (via EstVisiteur)
     - Modification/Suppression : nécessite un abonnement actif
     """
     serializer_class = BudgetSerializer
-    permission_classes = [IsAuthenticated, EstAbonne]
+    permission_classes = [IsAuthenticated, EstVisiteur]
 
     def get_queryset(self):
-        return Budget.objects.filter(utilisateur=self.request.user)
+        user = self.request.user
+        
+        # 🆕 Si l'utilisateur est en mode visiteur, retourner des données mock
+        if user.est_visiteur:
+            from abonnements.mock_data import MOCK_BUDGETS
+            return MOCK_BUDGETS
+        
+        return Budget.objects.filter(utilisateur=user)
 
     def retrieve(self, request, *args, **kwargs):
         """Récupère un budget avec toutes ses informations."""
+        user = request.user
+        
+        # 🆕 Si l'utilisateur est en mode visiteur, retourner des données mock
+        if user.est_visiteur:
+            from abonnements.mock_data import MOCK_BUDGETS, MOCK_TRANSACTIONS
+            budget_data = MOCK_BUDGETS[0] if MOCK_BUDGETS else {}
+            return Response({
+                'id': budget_data.get('id', 1),
+                'nom': budget_data.get('nom', 'Budget démo'),
+                'montant_prevu': budget_data.get('montant', 100000),
+                'montant_depense': budget_data.get('depense', 45000),
+                'categorie': {'nom': 'Alimentation'},
+                'date_debut': timezone.now().date().isoformat(),
+                'date_fin': (timezone.now() + timezone.timedelta(days=30)).date().isoformat(),
+                'est_actif': True,
+                'pourcentage_utilise': 45,
+                'reste': 55000,
+                'jours_restants': 30,
+                'transactions': TransactionSerializer(MOCK_TRANSACTIONS[:3], many=True).data,
+                'depenses': [],
+            })
+        
         budget = self.get_object()
         data = BudgetSerializer(budget).data
         
@@ -158,6 +213,15 @@ class BudgetDetailView(generics.RetrieveUpdateDestroyAPIView):
     def perform_update(self, serializer):
         user = self.request.user
         
+        # 🆕 Vérification du mode visiteur
+        if user.est_visiteur:
+            raise PermissionDenied({
+                'error': 'mode_visiteur',
+                'message': '🔍 Mode Exploration : Créez un compte pour modifier des budgets.',
+                'redirect_to': '/inscription',
+                'visitor_mode': True
+            })
+        
         # ✅ Vérification explicite pour la modification
         try:
             abo = user.abonnement
@@ -166,6 +230,15 @@ class BudgetDetailView(generics.RetrieveUpdateDestroyAPIView):
                     'error': 'abonnement_requis',
                     'message': 'Vous devez avoir un abonnement pour modifier des budgets.',
                     'redirect_to': '/abonnement'
+                })
+            
+            # 🆕 Vérifier si c'est un abonnement de démonstration
+            if abo.est_demo_mode():
+                raise PermissionDenied({
+                    'error': 'mode_visiteur',
+                    'message': '🔍 Mode Exploration : Créez un compte pour modifier des budgets.',
+                    'redirect_to': '/inscription',
+                    'visitor_mode': True
                 })
             
             if abo.statut != 'actif' or abo.date_fin <= timezone.now():
@@ -207,6 +280,15 @@ class BudgetDetailView(generics.RetrieveUpdateDestroyAPIView):
     def destroy(self, request, *args, **kwargs):
         user = request.user
         
+        # 🆕 Vérification du mode visiteur
+        if user.est_visiteur:
+            raise PermissionDenied({
+                'error': 'mode_visiteur',
+                'message': '🔍 Mode Exploration : Créez un compte pour supprimer des budgets.',
+                'redirect_to': '/inscription',
+                'visitor_mode': True
+            })
+        
         # ✅ Vérification explicite pour la suppression
         try:
             abo = user.abonnement
@@ -215,6 +297,15 @@ class BudgetDetailView(generics.RetrieveUpdateDestroyAPIView):
                     'error': 'abonnement_requis',
                     'message': 'Vous devez avoir un abonnement pour supprimer des budgets.',
                     'redirect_to': '/abonnement'
+                })
+            
+            # 🆕 Vérifier si c'est un abonnement de démonstration
+            if abo.est_demo_mode():
+                raise PermissionDenied({
+                    'error': 'mode_visiteur',
+                    'message': '🔍 Mode Exploration : Créez un compte pour supprimer des budgets.',
+                    'redirect_to': '/inscription',
+                    'visitor_mode': True
                 })
             
             if abo.statut != 'actif' or abo.date_fin <= timezone.now():
@@ -243,17 +334,24 @@ class BudgetDetailView(generics.RetrieveUpdateDestroyAPIView):
 class BudgetTransactionsView(generics.ListAPIView):
     """
     Retourne toutes les transactions liées à un budget spécifique.
-    ✅ Accessible même si l'abonnement est expiré (lecture seule)
+    ✅ Accessible même si l'abonnement est expiré ou en mode visiteur (lecture seule)
     """
     serializer_class = TransactionSerializer
-    permission_classes = [IsAuthenticated, EstAbonne]
+    permission_classes = [IsAuthenticated, EstVisiteur]
     pagination_class = None
 
     def get_queryset(self):
+        user = self.request.user
         pk = self.kwargs['pk']
-        budget = Budget.objects.get(id=pk, utilisateur=self.request.user)
+        
+        # 🆕 Si l'utilisateur est en mode visiteur, retourner des données mock
+        if user.est_visiteur:
+            from abonnements.mock_data import MOCK_TRANSACTIONS
+            return MOCK_TRANSACTIONS[:5]
+        
+        budget = Budget.objects.get(id=pk, utilisateur=user)
         return Transaction.objects.filter(
-            utilisateur=self.request.user,
+            utilisateur=user,
             budget=budget,
             type='sortie',
             is_visible=True,
@@ -263,15 +361,22 @@ class BudgetTransactionsView(generics.ListAPIView):
 class BudgetDepensesView(generics.ListAPIView):
     """
     Retourne toutes les dépenses d'un budget spécifique.
-    ✅ Accessible même si l'abonnement est expiré (lecture seule)
+    ✅ Accessible même si l'abonnement est expiré ou en mode visiteur (lecture seule)
     """
     serializer_class = BudgetDepenseSerializer
-    permission_classes = [IsAuthenticated, EstAbonne]
+    permission_classes = [IsAuthenticated, EstVisiteur]
     pagination_class = None
 
     def get_queryset(self):
+        user = self.request.user
         pk = self.kwargs['pk']
-        budget = Budget.objects.get(id=pk, utilisateur=self.request.user)
+        
+        # 🆕 Si l'utilisateur est en mode visiteur, retourner des données mock
+        if user.est_visiteur:
+            from abonnements.mock_data import MOCK_BUDGETS
+            return []
+        
+        budget = Budget.objects.get(id=pk, utilisateur=user)
         return BudgetDepense.objects.filter(budget=budget).order_by('-date_creation')
 
 
@@ -279,12 +384,24 @@ class DepenseBudgetView(APIView):
     """
     Enregistre une dépense liée à un budget.
     Nécessite un abonnement actif.
+    🆕 Bloque le mode visiteur.
     """
     permission_classes = [IsAuthenticated, EstAbonne]
 
     def post(self, request, pk):
+        user = request.user
+        
+        # 🆕 Vérification du mode visiteur
+        if user.est_visiteur:
+            return Response({
+                'error': 'mode_visiteur',
+                'message': '🔍 Mode Exploration : Créez un compte pour enregistrer des dépenses.',
+                'redirect_to': '/inscription',
+                'visitor_mode': True
+            }, status=403)
+
         try:
-            budget = Budget.objects.get(id=pk, utilisateur=request.user)
+            budget = Budget.objects.get(id=pk, utilisateur=user)
         except Budget.DoesNotExist:
             return Response({
                 'error': 'budget_introuvable',
@@ -300,8 +417,24 @@ class DepenseBudgetView(APIView):
 
         # ✅ Vérifier que l'abonnement est actif
         try:
-            abo = request.user.abonnement
-            if not abo or abo.statut != 'actif' or abo.date_fin <= timezone.now():
+            abo = user.abonnement
+            if not abo:
+                return Response({
+                    'error': 'abonnement_requis',
+                    'message': 'Vous devez avoir un abonnement pour enregistrer des dépenses.',
+                    'redirect_to': '/abonnement'
+                }, status=403)
+            
+            # 🆕 Vérifier si c'est un abonnement de démonstration
+            if abo.est_demo_mode():
+                return Response({
+                    'error': 'mode_visiteur',
+                    'message': '🔍 Mode Exploration : Créez un compte pour enregistrer des dépenses.',
+                    'redirect_to': '/inscription',
+                    'visitor_mode': True
+                }, status=403)
+            
+            if abo.statut != 'actif' or abo.date_fin <= timezone.now():
                 return Response({
                     'error': 'abonnement_expire',
                     'message': 'Votre abonnement a expiré. Vous ne pouvez pas enregistrer de dépenses.',
@@ -325,7 +458,7 @@ class DepenseBudgetView(APIView):
             }, status=400)
 
         # ✅ Vérifier le solde
-        solde, _ = Solde.objects.get_or_create(utilisateur=request.user)
+        solde, _ = Solde.objects.get_or_create(utilisateur=user)
         if solde.montant_total < montant:
             return Response({
                 'error': 'solde_insuffisant',
@@ -349,7 +482,7 @@ class DepenseBudgetView(APIView):
 
         # ✅ 2. Créer une transaction (historique global)
         transaction = Transaction.objects.create(
-            utilisateur=request.user,
+            utilisateur=user,
             type='sortie',
             montant=montant,
             categorie=budget.categorie,
@@ -371,7 +504,7 @@ class DepenseBudgetView(APIView):
             budget.est_actif = False
             budget.save(update_fields=['est_actif', 'notif_fin_envoyee'])
 
-        enregistrer_log(request.user, "DEPENSE_BUDGET",
+        enregistrer_log(user, "DEPENSE_BUDGET",
                         f"Dépense {float(montant)} MRU sur budget {budget.categorie.nom}", request)
         
         # ✅ Retourner les deux objets créés
@@ -392,14 +525,23 @@ class DepenseBudgetView(APIView):
 class VerifierBudgetsExpires(APIView):
     """
     Clôture les budgets dont la date de fin est dépassée.
-    ✅ Accessible en lecture même si abonnement expiré
+    ✅ Accessible en lecture même si abonnement expiré ou en mode visiteur
     """
-    permission_classes = [IsAuthenticated, EstAbonne]
+    permission_classes = [IsAuthenticated, EstVisiteur]
 
     def post(self, request):
+        user = request.user
+        
+        # 🆕 Si l'utilisateur est en mode visiteur, rien à faire
+        if user.est_visiteur:
+            return Response({
+                'message': '0 budget(s) clôturé(s) (mode visiteur)',
+                'budgets_clotures': 0
+            })
+        
         today = timezone.now().date()
         budgets_expires = Budget.objects.filter(
-            utilisateur=request.user,
+            utilisateur=user,
             est_actif=True,
             date_fin__lt=today,
         )
@@ -412,7 +554,7 @@ class VerifierBudgetsExpires(APIView):
             budget.save(update_fields=['est_actif', 'notif_fin_envoyee'])
             count += 1
         
-        enregistrer_log(request.user, "BUDGET", f"{count} budgets clôturés automatiquement", request)
+        enregistrer_log(user, "BUDGET", f"{count} budgets clôturés automatiquement", request)
         return Response({
             'message': f'{count} budget(s) clôturé(s)',
             'budgets_clotures': count
@@ -423,12 +565,32 @@ class VerifierBudgetsExpires(APIView):
 class BudgetStatsView(APIView):
     """
     Retourne des statistiques sur les budgets de l'utilisateur.
-    ✅ Accessible même si l'abonnement est expiré (lecture seule)
+    ✅ Accessible même si l'abonnement est expiré ou en mode visiteur (lecture seule)
     """
-    permission_classes = [IsAuthenticated, EstAbonne]
+    permission_classes = [IsAuthenticated, EstVisiteur]
 
     def get(self, request):
         user = request.user
+        
+        # 🆕 Si l'utilisateur est en mode visiteur, retourner des données mock
+        if user.est_visiteur:
+            from abonnements.mock_data import MOCK_BUDGETS, MOCK_STATS
+            return Response({
+                'total_budgets': len(MOCK_BUDGETS),
+                'budgets_actifs': len([b for b in MOCK_BUDGETS if b.get('est_actif', True)]),
+                'total_prevu': sum(b.get('montant', 0) for b in MOCK_BUDGETS),
+                'total_depense': sum(b.get('depense', 0) for b in MOCK_BUDGETS),
+                'pourcentage_global': 45,
+                'budgets_par_categorie': {
+                    'Alimentation': {'total_prevu': 100000, 'total_depense': 45000, 'count': 1},
+                    'Transport': {'total_prevu': 50000, 'total_depense': 20000, 'count': 1},
+                    'Utilités': {'total_prevu': 75000, 'total_depense': 60000, 'count': 1},
+                    'Divertissement': {'total_prevu': 40000, 'total_depense': 28000, 'count': 1},
+                },
+                'budgets_actifs_details': MOCK_BUDGETS,
+                'est_visiteur': True,
+                'est_lecture_seule': True,
+            })
         
         # Budgets actifs
         budgets_actifs = Budget.objects.filter(utilisateur=user, est_actif=True)
@@ -459,5 +621,7 @@ class BudgetStatsView(APIView):
             'total_depense': float(total_depense),
             'pourcentage_global': float((total_depense / total_prevu * 100)) if total_prevu > 0 else 0,
             'budgets_par_categorie': budgets_par_categorie,
-            'budgets_actifs_details': BudgetSerializer(budgets_actifs, many=True).data
+            'budgets_actifs_details': BudgetSerializer(budgets_actifs, many=True).data,
+            'est_visiteur': False,
+            'est_lecture_seule': False,
         })

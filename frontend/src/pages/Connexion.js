@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+// frontend/src/pages/Connexion.js
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
 
 export default function Connexion() {
   const navigate = useNavigate();
-  const { connexion } = useAuth();
+  const { connexion, isVisitor, exitVisitorMode } = useAuth(); // 🆕
   const [form, setForm] = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [showPwd, setShowPwd] = useState(false);
@@ -18,6 +19,17 @@ export default function Connexion() {
   // ── États pour les messages personnalisés ──────────────────────────────────
   const [message, setMessage] = useState({ type: '', text: '' });
   const [showMessage, setShowMessage] = useState(false);
+
+  // 🆕 Détection du mode visiteur
+  useEffect(() => {
+    if (isVisitor) {
+      setMessage({ 
+        type: 'info', 
+        text: '🔍 Vous êtes en mode Exploration. Créez un compte pour accéder à toutes les fonctionnalités.' 
+      });
+      setShowMessage(true);
+    }
+  }, [isVisitor]);
 
   const showCustomMessage = (type, text) => {
     setMessage({ type, text });
@@ -56,7 +68,17 @@ export default function Connexion() {
       console.log('[Connexion] Réponse:', response.data);
       
       // ═══════════════════════════════════════════════════════════════════
-      // CAS 1: KYC requis (compte existe mais KYC non complété)
+      // CAS 1: Mode visiteur détecté
+      // ═══════════════════════════════════════════════════════════════════
+      if (response.data.error === 'visitor_mode' || response.data.est_visiteur) {
+        showCustomMessage('info', '🔍 Mode Exploration : Créez un compte pour accéder à toutes les fonctionnalités.');
+        setLoading(false);
+        setTimeout(() => navigate('/inscription'), 1500);
+        return;
+      }
+      
+      // ═══════════════════════════════════════════════════════════════════
+      // CAS 2: KYC requis (compte existe mais KYC non complété)
       // ═══════════════════════════════════════════════════════════════════
       if (response.data.error === 'kyc_required') {
         showCustomMessage('error', response.data.message || 'Veuillez compléter la vérification d\'identité.');
@@ -75,7 +97,7 @@ export default function Connexion() {
       }
       
       // ═══════════════════════════════════════════════════════════════════
-      // CAS 2: Connexion normale (KYC déjà fait)
+      // CAS 3: Connexion normale (KYC déjà fait)
       // ═══════════════════════════════════════════════════════════════════
       if (response.data.access && response.data.refresh) {
         localStorage.setItem('access_token', response.data.access);
@@ -85,6 +107,11 @@ export default function Connexion() {
         // Nettoyer les données temporaires
         localStorage.removeItem('temp_user_id');
         localStorage.removeItem('temp_session_token');
+        
+        // 🆕 Nettoyer le mode visiteur si présent
+        if (isVisitor) {
+          exitVisitorMode();
+        }
 
         await connexion(form.email, form.password);
         showCustomMessage('success', 'Connexion réussie !');
@@ -97,6 +124,14 @@ export default function Connexion() {
       console.error('[Connexion] Erreur:', errorData);
       
       // ✅ Gestion des différents cas d'erreur
+      
+      // 🆕 Cas 0: Mode visiteur (erreur 403)
+      if (err.response?.status === 403 && errorData?.error === 'visitor_mode') {
+        showCustomMessage('info', '🔍 Mode Exploration : Créez un compte pour accéder à toutes les fonctionnalités.');
+        setTimeout(() => navigate('/inscription'), 1500);
+        setLoading(false);
+        return;
+      }
       
       // Cas 1: KYC requis (erreur 403)
       if (err.response?.status === 403 && errorData?.error === 'kyc_required') {
@@ -112,6 +147,7 @@ export default function Connexion() {
         } else {
           setTimeout(() => navigate('/inscription'), 1500);
         }
+        setLoading(false);
         return;
       }
       
@@ -144,6 +180,14 @@ export default function Connexion() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // 🆕 Redirection vers l'inscription en mode visiteur
+  const redirectToInscription = () => {
+    if (isVisitor) {
+      exitVisitorMode();
+    }
+    navigate('/inscription');
   };
 
   // ── Styles champs (fond blanc, texte sombre) ──────────────────────────────
@@ -212,8 +256,8 @@ export default function Connexion() {
         }
       `}</style>
 
-      {/* ── Message personnalisé (succès uniquement) ──────────────────────────── */}
-      {showMessage && message.type === 'success' && (
+      {/* ── Message personnalisé ──────────────────────────────────────────── */}
+      {showMessage && (
         <div style={{
           position: 'fixed',
           top: 20,
@@ -222,9 +266,12 @@ export default function Connexion() {
           zIndex: 9999,
           padding: '16px 24px',
           borderRadius: 12,
-          backgroundColor: '#d1fae5',
-          color: '#065f46',
-          border: '1px solid #a7f3d0',
+          backgroundColor: message.type === 'success' ? '#d1fae5' : 
+                          message.type === 'info' ? '#dbeafe' : '#fee2e2',
+          color: message.type === 'success' ? '#065f46' : 
+                 message.type === 'info' ? '#1e40af' : '#991b1b',
+          border: `1px solid ${message.type === 'success' ? '#a7f3d0' : 
+                                  message.type === 'info' ? '#bfdbfe' : '#fecaca'}`,
           boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
           maxWidth: '90%',
           width: 'auto',
@@ -233,7 +280,10 @@ export default function Connexion() {
           gap: 12,
           animation: 'slideDown 0.3s ease-out',
         }}>
-          <span style={{ fontSize: 20 }}>✅</span>
+          <span style={{ fontSize: 20 }}>
+            {message.type === 'success' ? '✅' : 
+             message.type === 'info' ? 'ℹ️' : '⚠️'}
+          </span>
           <span style={{ fontSize: 14, fontWeight: 500, fontFamily: "'Sora', sans-serif" }}>
             {message.text}
           </span>
@@ -244,7 +294,8 @@ export default function Connexion() {
               border: 'none',
               cursor: 'pointer',
               fontSize: 18,
-              color: '#065f46',
+              color: message.type === 'success' ? '#065f46' : 
+                     message.type === 'info' ? '#1e40af' : '#991b1b',
               opacity: 0.7,
               padding: '0 4px',
             }}
@@ -292,7 +343,6 @@ export default function Connexion() {
 
         {/* Logo - Moderne et fantastique (agrandi) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 28 }}>
-          {/* Nouveau logo moderne avec effet de brillance - TAILLE AGRANDIE */}
           <div className="logo-icon" style={{ 
             width: 44, 
             height: 44, 
@@ -305,7 +355,6 @@ export default function Connexion() {
             position: 'relative',
             overflow: 'hidden',
           }}>
-            {/* Effet de brillance */}
             <div style={{
               position: 'absolute',
               top: -15,
@@ -326,7 +375,6 @@ export default function Connexion() {
               borderRadius: '50%',
             }} />
             
-            {/* Logo SVG - Graphique financier moderne (agrandi) */}
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M3 13L8 8L13 13L21 5" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
               <path d="M21 12V19H3V5H12" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
@@ -349,8 +397,48 @@ export default function Connexion() {
           Connexion
         </h2>
         <p style={{ margin: '0 0 28px', fontSize: 13, color: '#64748b' }}>
-          Bienvenue ! Connectez-vous pour continuer.
+          {isVisitor ? '🔍 Créez un compte pour accéder à toutes les fonctionnalités' : 'Bienvenue ! Connectez-vous pour continuer.'}
         </p>
+
+        {/* 🆕 Bannière mode visiteur */}
+        {isVisitor && (
+          <div style={{
+            background: 'linear-gradient(135deg, #fef3c7, #fde68a)',
+            border: '1px solid #f59e0b',
+            borderRadius: 12,
+            padding: '14px 16px',
+            marginBottom: 20,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+          }}>
+            <span style={{ fontSize: 24 }}>🔍</span>
+            <div style={{ flex: 1 }}>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#92400e' }}>
+                Mode Exploration actif
+              </p>
+              <p style={{ margin: '4px 0 0', fontSize: 12, color: '#78350f' }}>
+                Vous visualisez l'application en mode démo. Créez un compte pour vos vraies données.
+              </p>
+            </div>
+            <button
+              onClick={redirectToInscription}
+              style={{
+                background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                border: 'none',
+                borderRadius: 8,
+                padding: '8px 16px',
+                color: '#fff',
+                fontWeight: 600,
+                fontSize: 12,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Créer un compte
+            </button>
+          </div>
+        )}
 
         {/* Message d'erreur général */}
         {generalError && (
@@ -387,6 +475,7 @@ export default function Connexion() {
               required
               className={`${emailError ? 'inp-cx-error shake-animation' : 'inp-cx'}`}
               style={emailError ? inpError : inp}
+              disabled={isVisitor}
             />
             {emailError && (
               <div style={errorStyle}>
@@ -404,27 +493,32 @@ export default function Connexion() {
               }}>
                 Mot de passe
               </label>
-              <Link to="/mot-de-passe-oublie" style={{ fontSize: 12, color: '#1e4db7', textDecoration: 'none', fontWeight: 600 }}>
-                Mot de passe oublié ?
-              </Link>
+              {!isVisitor && (
+                <Link to="/mot-de-passe-oublie" style={{ fontSize: 12, color: '#1e4db7', textDecoration: 'none', fontWeight: 600 }}>
+                  Mot de passe oublié ?
+                </Link>
+              )}
             </div>
             <div style={{ position: 'relative' }}>
               <input
                 type={showPwd ? 'text' : 'password'}
                 value={form.password}
                 onChange={handlePasswordChange}
-                placeholder="••••••••"
-                required
+                placeholder={isVisitor ? '•••••••• (non requis en mode démo)' : '••••••••'}
+                required={!isVisitor}
                 className={`${passwordError ? 'inp-cx-error shake-animation' : 'inp-cx'}`}
                 style={passwordError ? { ...inpError, paddingRight: 46 } : { ...inp, paddingRight: 46 }}
+                disabled={isVisitor}
               />
-              <button type="button" onClick={() => setShowPwd(v => !v)} style={{
-                position: 'absolute', right: 13, top: '50%', transform: 'translateY(-50%)',
-                background: 'none', border: 'none', cursor: 'pointer',
-                color: '#94a3b8', fontSize: 16, lineHeight: 1,
-              }}>
-                {showPwd ? '👁️' : '🙈'}
-              </button>
+              {!isVisitor && (
+                <button type="button" onClick={() => setShowPwd(v => !v)} style={{
+                  position: 'absolute', right: 13, top: '50%', transform: 'translateY(-50%)',
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: '#94a3b8', fontSize: 16, lineHeight: 1,
+                }}>
+                  {showPwd ? '👁️' : '🙈'}
+                </button>
+              )}
             </div>
             {passwordError && (
               <div style={errorStyle}>
@@ -434,17 +528,23 @@ export default function Connexion() {
           </div>
 
           {/* Submit */}
-          <button type="submit" disabled={loading} className="btn-cx" style={{
-            marginTop: 6, width: '100%', padding: '14px',
-            fontWeight: 600, fontSize: 15, fontFamily: "'Sora',sans-serif",
-            background: '#0c2e7c',
-            color: '#fff', border: 'none', borderRadius: 12,
-            cursor: loading ? 'not-allowed' : 'pointer',
-            boxShadow: '0 4px 16px rgba(12,46,124,0.3)',
-            transition: 'transform 0.15s, box-shadow 0.15s, background 0.15s',
-            opacity: loading ? 0.75 : 1,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-          }}>
+          <button 
+            type="submit" 
+            disabled={loading || isVisitor} 
+            className="btn-cx" 
+            style={{
+              marginTop: 6, width: '100%', padding: '14px',
+              fontWeight: 600, fontSize: 15, fontFamily: "'Sora',sans-serif",
+              background: isVisitor ? '#e2e8f0' : '#0c2e7c',
+              color: isVisitor ? '#94a3b8' : '#fff', 
+              border: 'none', borderRadius: 12,
+              cursor: (loading || isVisitor) ? 'not-allowed' : 'pointer',
+              boxShadow: isVisitor ? 'none' : '0 4px 16px rgba(12,46,124,0.3)',
+              transition: 'transform 0.15s, box-shadow 0.15s, background 0.15s',
+              opacity: (loading || isVisitor) ? 0.75 : 1,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            }}
+          >
             {loading ? (
               <>
                 <span style={{
@@ -455,16 +555,61 @@ export default function Connexion() {
                 }} />
                 Connexion...
               </>
-            ) : 'Continuer →'}
+            ) : isVisitor ? (
+              '🔍 Mode Exploration actif'
+            ) : (
+              'Continuer →'
+            )}
           </button>
         </form>
 
-        <p style={{ textAlign: 'center', marginTop: 22, fontSize: 13, color: '#64748b' }}>
-          Pas encore de compte ?{' '}
-          <Link to="/inscription" style={{ color: '#0c2e7c', fontWeight: 700, textDecoration: 'none' }}>
-            Créer un compte
-          </Link>
-        </p>
+        {!isVisitor && (
+          <p style={{ textAlign: 'center', marginTop: 22, fontSize: 13, color: '#64748b' }}>
+            Pas encore de compte ?{' '}
+            <Link to="/inscription" style={{ color: '#0c2e7c', fontWeight: 700, textDecoration: 'none' }}>
+              Créer un compte
+            </Link>
+          </p>
+        )}
+
+        {isVisitor && (
+          <div style={{ textAlign: 'center', marginTop: 22 }}>
+            <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>
+              Vous êtes en mode exploration.{' '}
+              <button
+                onClick={redirectToInscription}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#f59e0b',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  fontSize: 13,
+                }}
+              >
+                Créer un compte maintenant
+              </button>
+            </p>
+            <button
+              onClick={() => {
+                exitVisitorMode();
+                navigate('/');
+              }}
+              style={{
+                marginTop: 8,
+                background: 'none',
+                border: 'none',
+                color: '#94a3b8',
+                fontSize: 12,
+                cursor: 'pointer',
+                textDecoration: 'underline',
+              }}
+            >
+              Quitter le mode exploration
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

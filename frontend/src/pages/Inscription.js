@@ -2,6 +2,29 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../api/axios';
+import {
+  ArrowLeft,
+  ArrowRight,
+  User,
+  CreditCard,
+  Phone,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  ShieldCheck,
+  KeyRound,
+  RefreshCw,
+  LogIn,
+  Loader2,
+  AlertCircle,
+  AlertTriangle,
+  Info,
+  CheckCircle2,
+  X,
+  ShieldAlert,
+  LockKeyhole,
+} from 'lucide-react';
 
 export default function Inscription() {
   const navigate = useNavigate();
@@ -50,7 +73,7 @@ export default function Inscription() {
   };
 
   const initiales = `${(form.prenom[0]||'').toUpperCase()}${(form.nom[0]||'').toUpperCase()}` || '?';
-  const bgColors = ['#0c2e7c','#1e4db7','#3b82f6','#1d4ed8','#2563eb','#1e40af'];
+  const bgColors = ['#356267', '#2a4f53', '#4ea674', '#459071', '#10214b', '#1e4db7'];
   const avatarBg = bgColors[(form.prenom.charCodeAt(0)||0) % bgColors.length];
   const emailOk = !form.email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email);
   const [sessionToken, setSessionToken] = useState(null);
@@ -116,7 +139,7 @@ export default function Inscription() {
 
     setForm({...form, [field]: value});
     setTouched({...touched, [field]: true});
-    
+
     let error = '';
     switch(field) {
       case 'nom':
@@ -176,7 +199,7 @@ export default function Inscription() {
       default:
         break;
     }
-    
+
     setErrors({...errors, [field]: error});
   };
 
@@ -189,7 +212,7 @@ export default function Inscription() {
     const emailError = validateEmail(form.email);
     const passwordError = validatePassword(form.password);
     const passwordConfirmError = validatePasswordConfirm(form.password_confirm, form.password);
-    
+
     setErrors({
       nom: nomError,
       prenom: prenomError,
@@ -198,7 +221,7 @@ export default function Inscription() {
       password: passwordError,
       password_confirm: passwordConfirmError,
     });
-    
+
     return !nomError && !prenomError && !telephoneError && !emailError && !passwordError && !passwordConfirmError;
   };
 
@@ -206,7 +229,7 @@ export default function Inscription() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     // Marquer tous les champs comme touchés
     setTouched({
       nom: true,
@@ -216,13 +239,13 @@ export default function Inscription() {
       password: true,
       password_confirm: true,
     });
-    
+
     // Valider tous les champs
     if (!isFormValid()) {
       showCustomMessage('error', 'Veuillez corriger les erreurs dans le formulaire.');
       return;
     }
-    
+
     setLoading(true);
     try {
       const response = await api.post('/comptes/inscription/', {
@@ -235,7 +258,7 @@ export default function Inscription() {
       });
       console.log('Réponse complète:', response.data);
       const { status, message, session_token, user_id } = response.data;
-      
+
       // ✅ CAS 1 : Compte existant et complet
       if (status === 'existing_user') {
         setTouched(prev => ({ ...prev, email: true }));
@@ -247,7 +270,7 @@ export default function Inscription() {
         setLoading(false);
         return;
       }
-      
+
       // ✅ CAS 2 : Compte existant mais KYC incomplet - AFFICHE LE MESSAGE EXACT
       if (status === 'kyc_incomplete') {
         setTouched(prev => ({ ...prev, email: true }));
@@ -259,7 +282,7 @@ export default function Inscription() {
         setLoading(false);
         return;
       }
-      
+
       // ✅ CAS 3 : Nouvel utilisateur
       if (session_token && user_id) {
         setUserId(user_id);
@@ -267,11 +290,11 @@ export default function Inscription() {
         setSessionToken(session_token);
         localStorage.setItem('temp_user_id', user_id);
         localStorage.setItem('temp_session_token', session_token);
-        
+
         showCustomMessage('success', 'Code de confirmation envoyé à votre email !');
         setEtape(2);
       }
-      
+
     } catch (err) {
       const errors = err.response?.data;
       if (errors && typeof errors === 'object') {
@@ -323,267 +346,174 @@ export default function Inscription() {
     navigate('/kyc', { state: { userId: userId } });
   };
 
-  // ─── STYLES PARTAGÉS ──────────────────────────────────────────────────────────
+  // ─── HELPERS DE PRÉSENTATION (pas de logique métier) ───────────────────────
 
-  const pageStyle = {
-    minHeight: '100vh',
-    background: 'linear-gradient(135deg, #0c2e7c, #1e4db7, #3b82f6)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '20px',
-    fontFamily: "'Sora', sans-serif",
-    position: 'relative',
-    overflow: 'hidden',
-  };
+  const inputBase =
+    'w-full box-border py-3.5 rounded-[10px] bg-[#f8fafc] text-[#10214b] text-sm font-medium outline-none transition-colors duration-150 placeholder:text-[#94a3b8]/70 border';
 
-  const glowStyle = {
-    position: 'absolute',
-    inset: 0,
-    pointerEvents: 'none',
-    overflow: 'hidden',
-  };
+  const inputBorder = (hasError) =>
+    hasError
+      ? 'border-[#d55053] focus:border-[#d55053] focus:ring-4 focus:ring-[#d55053]/10 focus:bg-white'
+      : 'border-[rgba(16,33,75,0.08)] focus:border-[#356267] focus:ring-4 focus:ring-[#356267]/10 focus:bg-white';
+
+  const fieldLabel =
+    'flex items-center gap-1.5 text-[11px] text-[#356267]/75 font-semibold uppercase tracking-wide mb-2';
+
+  const fieldError = (msg) => msg && (
+    <p className="mt-1.5 flex items-center gap-1.5 text-[12px] font-medium text-[#d55053]">
+      <AlertCircle size={13} className="flex-shrink-0" />
+      {msg}
+    </p>
+  );
 
   // ─── Indicateur d'étapes (1/3, 2/3, 3/3) réutilisable ──────────────────────
   const renderSteps = (current) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+    <div className="flex items-center gap-1.5 mt-3">
       {[1, 2, 3].map(s => (
-        <div key={s} className="step-dot" style={{
-          width: s === current ? 22 : 8, height: 8, borderRadius: 99,
-          background: s <= current
-            ? 'linear-gradient(90deg, #0c2e7c, #3b82f6)'
-            : '#e2e8f0',
-        }} />
+        <div
+          key={s}
+          className={`h-[6px] rounded-full transition-all duration-300 ${
+            s === current ? 'w-6 bg-[#356267]' : s < current ? 'w-[6px] bg-[#4ea674]' : 'w-[6px] bg-[#e2e8f0]'
+          }`}
+        />
       ))}
-      <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 4, fontWeight: 500 }}>
-        Étape {current} / 3
+      <span className="ml-2 text-[11px] font-semibold text-[#356267]/45">
+        Étape {current}/3
       </span>
     </div>
   );
 
   const sharedHead = (
     <>
-      <link rel="stylesheet" href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" />
       <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
       <style>{`
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(24px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes slideDown {
-          from { opacity: 0; transform: translateX(-50%) translateY(-20px); }
-          to   { opacity: 1; transform: translateX(-50%) translateY(0); }
-        }
-        @keyframes pulse-ring {
-          0%   { box-shadow: 0 0 0 0 rgba(255,255,255,0.25); }
-          70%  { box-shadow: 0 0 0 14px rgba(255,255,255,0); }
-          100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); }
-        }
-        .card-main, .card-verify, .card-kyc {
-          animation: fadeUp 0.45s cubic-bezier(.16,1,.3,1) both;
-        }
-        .field-input {
-          width: 100%; box-sizing: border-box;
-          padding: 14px 14px 14px 42px;
-          border-radius: 12px;
-          border: 1px solid #e2e8f0;
-          background: #f8fafc;
-          color: #0f172a; font-size: 14px;
-          font-family: 'Sora', sans-serif;
-          transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
-          outline: none;
-        }
-        .field-input:focus {
-          border-color: #0c2e7c !important;
-          background: #fff !important;
-          box-shadow: 0 0 0 4px rgba(12,46,124,0.10) !important;
-        }
-        .field-input::placeholder { color: #cbd5e1; }
-        .field-input.error { border-color: #ef4444 !important; }
-        .field-input-noicon {
-          width: 100%; box-sizing: border-box;
-          padding: 14px 44px 14px 14px;
-          border-radius: 12px;
-          border: 1px solid #e2e8f0;
-          background: #f8fafc;
-          color: #0f172a; font-size: 14px;
-          font-family: 'Sora', sans-serif;
-          transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
-          outline: none;
-        }
-        .field-input-noicon:focus {
-          border-color: #0c2e7c !important;
-          background: #fff !important;
-          box-shadow: 0 0 0 4px rgba(12,46,124,0.10) !important;
-        }
-        .field-input-noicon::placeholder { color: #cbd5e1; }
-        .field-input-noicon.error { border-color: #ef4444 !important; }
-        .btn-submit, .btn-primary, .btn-kyc {
-          transition: all 0.2s;
-        }
-        .btn-submit:hover:not(:disabled),
-        .btn-primary:hover:not(:disabled),
-        .btn-kyc:hover:not(:disabled) {
-          transform: translateY(-2px);
-          background: #163e96 !important;
-        }
-        .back-link { transition: color 0.2s; }
-        .back-link:hover { color: #0c2e7c !important; }
-        .toggle-eye { transition: color 0.15s; }
-        .toggle-eye:hover { color: #0c2e7c !important; }
-        .btn-ghost:hover { color: #163e96 !important; text-decoration: underline; }
-        .icon-ring { animation: pulse-ring 2.6s ease infinite; }
-        .code-inp {
-          transition: border-color 0.2s, box-shadow 0.2s;
-          caret-color: #0c2e7c;
-        }
-        .code-inp:focus {
-          border-color: #0c2e7c !important;
-          box-shadow: 0 0 0 4px rgba(12,46,124,0.10) !important;
-          outline: none;
-        }
-        @media (max-width: 500px) {
-          .card-main, .card-verify, .card-kyc { padding: 28px 18px !important; border-radius: 16px !important; }
-          .name-grid { grid-template-columns: 1fr !important; }
-        }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideDown { from { opacity: 0; transform: translate(-50%, -16px); } to { opacity: 1; transform: translate(-50%, 0); } }
+        .card-anim { animation: fadeUp 0.4s cubic-bezier(.16,1,.3,1) both; font-family: 'Sora', sans-serif; }
+        .toast-anim { animation: slideDown 0.25s ease-out; }
       `}</style>
     </>
   );
 
-  const renderToast = () => showMessage && (
-    <div style={{
-      position: 'fixed',
-      top: 20,
-      left: '50%',
-      transform: 'translateX(-50%)',
-      zIndex: 9999,
-      padding: '16px 24px',
-      borderRadius: 12,
-      backgroundColor: message.type === 'error' ? '#fee2e2' : message.type === 'success' ? '#d1fae5' : message.type === 'warning' ? '#fef3c7' : '#dbeafe',
-      color: message.type === 'error' ? '#991b1b' : message.type === 'success' ? '#065f46' : message.type === 'warning' ? '#92400e' : '#1e3a8a',
-      border: `1px solid ${message.type === 'error' ? '#fecaca' : message.type === 'success' ? '#a7f3d0' : message.type === 'warning' ? '#fde68a' : '#bfdbfe'}`,
-      boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
-      maxWidth: '90%',
-      width: 'auto',
-      display: 'flex',
-      alignItems: 'center',
-      gap: 12,
-      animation: 'slideDown 0.3s ease-out',
-    }}>
-      <i className={`bx ${
-        message.type === 'error' ? 'bx-error-circle' :
-        message.type === 'success' ? 'bx-check-circle' :
-        message.type === 'warning' ? 'bx-error' : 'bx-info-circle'
-      }`} style={{ fontSize: 20 }} />
-      <span style={{ fontSize: 14, fontWeight: 500, fontFamily: "'Sora', sans-serif" }}>
-        {message.text}
-      </span>
-      <button
-        onClick={() => setShowMessage(false)}
+  const toastTheme = {
+    error: { bg: '#ffffff', border: '#d55053', text: '#10214b', icon: AlertCircle, iconColor: '#d55053' },
+    success: { bg: '#ffffff', border: '#4ea674', text: '#10214b', icon: CheckCircle2, iconColor: '#4ea674' },
+    warning: { bg: '#ffffff', border: '#c2872e', text: '#10214b', icon: AlertTriangle, iconColor: '#c2872e' },
+    info: { bg: '#ffffff', border: '#356267', text: '#10214b', icon: Info, iconColor: '#356267' },
+  };
+
+  const renderToast = () => {
+    if (!showMessage) return null;
+    const theme = toastTheme[message.type] || toastTheme.info;
+    const Icon = theme.icon;
+    return (
+      <div
+        className="toast-anim fixed top-5 left-1/2 z-[9999] flex w-[calc(100%-32px)] max-w-md items-center gap-3 rounded-xl border bg-white px-4 py-3.5 shadow-[0_16px_40px_rgba(16,33,75,0.18)]"
+        style={{ borderColor: theme.border }}
+      >
+        <Icon size={19} style={{ color: theme.iconColor }} className="flex-shrink-0" />
+        <span className="flex-1 text-[13px] font-semibold leading-snug text-[#10214b]">
+          {message.text}
+        </span>
+        <button
+          onClick={() => setShowMessage(false)}
+          className="flex-shrink-0 rounded-md p-1 text-[#94a3b8] transition-colors hover:bg-[#f8fafc] hover:text-[#10214b]"
+        >
+          <X size={16} />
+        </button>
+      </div>
+    );
+  };
+
+  // Logo réutilisé sur les 3 écrans (inchangé : même icône, même nom "FinanceApp")
+  const renderLogo = () => (
+    <div className="flex items-center gap-3">
+      <div
+        className="relative flex h-[38px] w-[38px] flex-shrink-0 items-center justify-center overflow-hidden rounded-xl"
         style={{
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          fontSize: 18,
-          color: message.type === 'error' ? '#991b1b' : message.type === 'success' ? '#065f46' : message.type === 'warning' ? '#92400e' : '#1e3a8a',
-          opacity: 0.7,
-          padding: '0 4px',
-          display: 'flex', alignItems: 'center',
+          background: 'linear-gradient(135deg, #0c2e7c, #1e4db7, #3b82f6)',
+          boxShadow: '0 4px 15px rgba(59,130,246,0.4)',
         }}
       >
-        <i className='bx bx-x' />
-      </button>
+        <div
+          className="pointer-events-none absolute h-[30px] w-[30px] rounded-full"
+          style={{ top: -15, left: -15, background: 'rgba(255,255,255,0.2)', transform: 'rotate(45deg)' }}
+        />
+        <div
+          className="pointer-events-none absolute h-[25px] w-[25px] rounded-full"
+          style={{ bottom: -10, right: -10, background: 'rgba(255,255,255,0.15)' }}
+        />
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3 13L8 8L13 13L21 5" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M21 12V19H3V5H12" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+          <circle cx="18" cy="8" r="2" stroke="#fff" strokeWidth="1.5"/>
+          <path d="M8 11L8 16" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeDasharray="2 2"/>
+        </svg>
+      </div>
+      <div className="flex flex-col leading-tight">
+        <span className="text-[18px] font-extrabold tracking-tight text-[#0c2e7c]">
+          Finance<span className="text-[#3b82f6]">App</span>
+        </span>
+        <span className="text-[8px] font-medium uppercase tracking-[0.3px] text-[#94a3b8]">
+          Smart Finance
+        </span>
+      </div>
     </div>
   );
 
-  const renderGlow = (size = 560, top = -180, blur = 44) => (
-    <div style={glowStyle}>
-      <div style={{
-        position: 'absolute', width: size, height: size,
-        borderRadius: '50%', top, left: '50%', transform: 'translateX(-50%)',
-        background: 'radial-gradient(circle, rgba(255,255,255,0.09) 0%, transparent 70%)',
-        filter: `blur(${blur}px)`,
-      }} />
-      <div style={{
-        position: 'absolute', inset: 0,
-        backgroundImage: `radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px)`,
-        backgroundSize: '28px 28px',
-      }} />
+  const pageWrap = 'min-h-screen flex items-center justify-center px-4 py-10 sm:py-16 relative overflow-hidden bg-[linear-gradient(135deg,#0c2e7c,#1e4db7,#3b82f6)]';
+
+  const renderGlow = () => (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+      <div className="absolute -top-40 left-1/2 h-[560px] w-[560px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.10)_0%,transparent_70%)] blur-3xl" />
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[length:44px_44px]" />
     </div>
   );
 
   // ─── ÉTAPE 3 : INVITATION À LA VÉRIFICATION KYC ──────────────────────────────
   if (etape === 3) {
     return (
-      <div style={pageStyle}>
+      <div className={pageWrap}>
         {sharedHead}
         {renderToast()}
         {renderGlow()}
 
-        <div className="card-kyc" style={{
-          width: '100%', maxWidth: 440,
-          position: 'relative', zIndex: 1,
-          background: '#ffffff',
-          borderRadius: 20,
-          padding: '40px 36px',
-          boxShadow: '0 32px 80px rgba(0,0,0,0.22), 0 2px 8px rgba(0,0,0,0.08)',
-          textAlign: 'center',
-        }}>
-          {renderSteps(3)}
+        <div className="card-anim relative z-10 w-full max-w-[440px] rounded-3xl bg-white px-6 py-10 text-center shadow-[0_24px_80px_rgba(0,0,0,0.25)] sm:px-9">
+          <div className="flex justify-center">{renderSteps(3)}</div>
 
-          <div className="icon-ring" style={{
-            width: 76, height: 76, borderRadius: '50%',
-            background: 'linear-gradient(135deg, #0c2e7c, #1e4db7)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            margin: '24px auto 22px',
-            boxShadow: '0 10px 26px rgba(12,46,124,0.32)',
-          }}>
-            <i className='bx bxs-shield-alt-2' style={{ fontSize: 34, color: '#fff' }} />
+          <div className="mx-auto my-6 flex h-[76px] w-[76px] items-center justify-center rounded-full bg-[#356267] shadow-[0_10px_26px_rgba(53,98,103,0.32)]">
+            <ShieldAlert size={34} className="text-white" strokeWidth={2} />
           </div>
 
-          <h2 style={{
-            margin: 0, fontSize: 22, fontWeight: 800, color: '#0f172a',
-            fontFamily: "'Sora', sans-serif", letterSpacing: '-0.3px',
-          }}>
+          <h2 className="text-[22px] font-extrabold tracking-tight text-[#10214b]">
             Validez votre compte via la vérification KYC
           </h2>
 
-          <p style={{ margin: '14px 0 0', fontSize: 13.5, color: '#64748b', lineHeight: 1.75 }}>
+          <p className="mt-3.5 text-[13.5px] leading-relaxed text-[#356267]/75">
             Pour protéger votre compte et garantir la sécurité de vos transactions financières,
-            cette étape rapide consiste à scanner une pièce d'identité ou un passeport 
+            cette étape rapide consiste à scanner une pièce d'identité ou un passeport
             et confirmer votre visage — elle nous permet de prévenir
             la fraude et de respecter les normes bancaires en vigueur.
           </p>
 
-          <div style={{
-            display: 'flex', alignItems: 'flex-start', gap: 10,
-            background: '#eff6ff', border: '1px solid #dbeafe',
-            borderRadius: 12, padding: '14px 16px', margin: '20px 0',
-            textAlign: 'left',
-          }}>
-            <i className='bx bx-lock-alt' style={{ fontSize: 18, color: '#0c2e7c', marginTop: 1, flexShrink: 0 }} />
-            <span style={{ fontSize: 12.5, color: '#1e3a8a', lineHeight: 1.6 }}>
+          <div className="my-5 flex items-start gap-2.5 rounded-xl border border-[#c2f2f2] bg-[#e9f8e7]/40 px-4 py-3.5 text-left">
+            <LockKeyhole size={18} className="mt-0.5 flex-shrink-0 text-[#356267]" />
+            <span className="text-[12.5px] leading-relaxed text-[#356267]">
               Vos données sont chiffrées et utilisées uniquement à des fins de vérification.
               Cette étape ne prend que quelques minutes.
             </span>
           </div>
 
-          <button onClick={handleAccederKYC} className="btn-primary" style={{
-            width: '100%', padding: '15px',
-            fontWeight: 700, fontSize: 14.5,
-            background: '#0c2e7c',
-            color: '#fff', border: 'none', borderRadius: 12,
-            cursor: 'pointer',
-            boxShadow: '0 4px 18px rgba(12,46,124,0.3)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-          }}>
-            <i className='bx bxs-shield-alt-2' style={{ fontSize: 17 }} />
+          <button
+            onClick={handleAccederKYC}
+            className="flex w-full min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-[#356267] px-4 text-[15px] font-bold text-white shadow-[0_4px_15px_rgba(53,98,103,0.3)] transition-all hover:-translate-y-0.5 hover:bg-[#2a4f53]"
+          >
+            <ShieldCheck size={18} />
             Accéder à la vérification KYC
           </button>
 
-          <p style={{ margin: '16px 0 0', fontSize: 11.5, color: '#94a3b8' }}>
-            Connecté avec <strong style={{ color: '#0c2e7c' }}>{userEmail}</strong>
+          <p className="mt-4 text-[11.5px] text-[#356267]/45">
+            Connecté avec <strong className="font-bold text-[#356267]">{userEmail}</strong>
           </p>
         </div>
       </div>
@@ -593,132 +523,87 @@ export default function Inscription() {
   // ─── ÉTAPE 2 : VÉRIFICATION EMAIL ────────────────────────────────────────────
   if (etape === 2) {
     return (
-      <div style={pageStyle}>
+      <div className={pageWrap}>
         {sharedHead}
         {renderToast()}
         {renderGlow()}
 
-        <div className="card-verify" style={{
-          width: '100%', maxWidth: 420,
-          position: 'relative', zIndex: 1,
-          background: '#ffffff',
-          borderRadius: 20,
-          padding: '40px 36px',
-          boxShadow: '0 32px 80px rgba(0,0,0,0.22), 0 2px 8px rgba(0,0,0,0.08)',
-        }}>
-          {/* Back */}
-          <Link to="/" className="back-link" style={{
-            display: 'inline-flex', alignItems: 'center', gap: 5,
-            color: '#94a3b8', textDecoration: 'none', fontSize: 12.5,
-            fontWeight: 500, marginBottom: 18,
-          }}>
-            <i className='bx bx-arrow-back' style={{ fontSize: 15 }} />
+        <div className="card-anim relative z-10 w-full max-w-[420px] rounded-3xl bg-white px-6 py-10 shadow-[0_24px_80px_rgba(0,0,0,0.25)] sm:px-9">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#94a3b8] transition-colors hover:text-[#356267]"
+          >
+            <ArrowLeft size={15} />
             Retour
           </Link>
 
-          {renderSteps(2)}
-
-          {/* Icône */}
-          <div style={{ textAlign: 'center', margin: '22px 0 28px' }}>
-            <div className="icon-ring" style={{
-              width: 68, height: 68, borderRadius: '50%',
-              background: 'linear-gradient(135deg, #0c2e7c, #1e4db7)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              margin: '0 auto 18px',
-              boxShadow: '0 8px 22px rgba(12,46,124,0.3)',
-            }}>
-              <i className='bx bx-envelope' style={{ fontSize: 30, color: '#fff' }} />
+          <div className="mb-2 mt-5 text-center">
+            <div className="mx-auto mb-4 flex h-[68px] w-[68px] items-center justify-center rounded-full bg-[#356267] shadow-[0_8px_22px_rgba(53,98,103,0.3)]">
+              <Mail size={28} className="text-white" />
             </div>
-            <h2 style={{
-              margin: 0, fontSize: 22, fontWeight: 800, color: '#0f172a',
-              fontFamily: "'Sora', sans-serif", letterSpacing: '-0.3px',
-            }}>
+            <h2 className="text-[22px] font-extrabold tracking-tight text-[#10214b]">
               Vérifiez votre email
             </h2>
-            <p style={{ margin: '8px 0 0', fontSize: 13, color: '#64748b', lineHeight: 1.6 }}>
+            <p className="mt-2 text-[13px] leading-relaxed text-[#356267]/75">
               Un code de confirmation a été envoyé à<br />
-              <strong style={{ color: '#0c2e7c' }}>{userEmail}</strong>
+              <strong className="font-bold text-[#356267]">{userEmail}</strong>
             </p>
+            <div className="mt-4 flex justify-center">{renderSteps(2)}</div>
           </div>
 
-          {/* Divider */}
-          <div style={{ height: 1, background: '#f1f5f9', margin: '0 0 24px' }} />
+          <div className="my-6 h-px bg-[#f1f5f9]" />
 
-          <form onSubmit={handleVerifierCode} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+          <form onSubmit={handleVerifierCode} className="flex flex-col gap-5">
             <div>
-              <label style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                fontSize: 11, color: '#64748b', fontWeight: 600,
-                textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8,
-              }}>
-                <i className='bx bx-key' style={{ fontSize: 13 }} />
+              <label className={fieldLabel}>
+                <KeyRound size={12} />
                 Code de confirmation (6 chiffres)
               </label>
-              <div style={{ position: 'relative' }}>
+              <div className="relative">
                 <input
-                  className="code-inp"
                   type={showCode ? 'text' : 'password'}
                   value={code}
                   onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   placeholder="• • • • • •"
                   required
-                  style={{
-                    width: '100%', boxSizing: 'border-box',
-                    padding: '16px 48px 16px 18px',
-                    borderRadius: 12, border: '1px solid #e2e8f0',
-                    background: '#f8fafc',
-                    textAlign: 'center', fontSize: 26, fontWeight: 800,
-                    letterSpacing: 9, color: '#0c2e7c',
-                    fontFamily: "'Sora', monospace",
-                  }}
+                  className="w-full box-border rounded-[10px] border border-[rgba(16,33,75,0.08)] bg-[#f8fafc] py-4 pl-5 pr-12 text-center font-mono text-2xl font-extrabold tracking-[9px] text-[#356267] outline-none transition-colors duration-150 placeholder:tracking-[6px] placeholder:text-[#cbd5e1] focus:border-[#356267] focus:bg-white focus:ring-4 focus:ring-[#356267]/10"
                 />
-                <button type="button" onClick={() => setShowCode(v => !v)} style={{
-                  position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)',
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  color: '#94a3b8', display: 'flex', alignItems: 'center',
-                }}>
-                  <i className={showCode ? 'bx bx-hide' : 'bx bx-show'} style={{ fontSize: 19 }} />
+                <button
+                  type="button"
+                  onClick={() => setShowCode(v => !v)}
+                  className="absolute right-4 top-1/2 flex -translate-y-1/2 items-center text-[#94a3b8] transition-colors hover:text-[#356267]"
+                >
+                  {showCode ? <EyeOff size={19} /> : <Eye size={19} />}
                 </button>
               </div>
             </div>
 
-            <button type="submit" disabled={loading} className="btn-primary" style={{
-              width: '100%', padding: '15px',
-              fontWeight: 700, fontSize: 14.5,
-              background: '#0c2e7c',
-              color: '#fff', border: 'none', borderRadius: 12,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              boxShadow: '0 4px 18px rgba(12,46,124,0.3)',
-              opacity: loading ? 0.75 : 1,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              letterSpacing: '0.2px',
-            }}>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex w-full min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-[#356267] px-4 text-[15px] font-bold text-white shadow-[0_4px_15px_rgba(53,98,103,0.3)] transition-all hover:enabled:-translate-y-0.5 hover:enabled:bg-[#2a4f53] disabled:cursor-not-allowed disabled:opacity-70"
+            >
               {loading ? (
                 <>
-                  <span style={{
-                    width: 16, height: 16,
-                    border: '2px solid rgba(255,255,255,0.3)',
-                    borderTopColor: '#fff', borderRadius: '50%',
-                    display: 'inline-block', animation: 'spin 0.7s linear infinite',
-                  }} />
+                  <Loader2 size={18} className="animate-spin" />
                   Vérification...
                 </>
               ) : (
                 <>
-                  <i className='bx bx-check-shield' style={{ fontSize: 17 }} />
+                  <ShieldCheck size={17} />
                   Vérifier le code
                 </>
               )}
             </button>
 
-            <div style={{ textAlign: 'center' }}>
-              <button type="button" onClick={handleRenvoyerCode} disabled={loading}
-                className="btn-ghost" style={{
-                  background: 'none', border: 'none', color: '#64748b',
-                  cursor: 'pointer', fontSize: 13, fontWeight: 500,
-                  display: 'inline-flex', alignItems: 'center', gap: 5,
-                }}>
-                <i className='bx bx-refresh' style={{ fontSize: 15 }} />
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={handleRenvoyerCode}
+                disabled={loading}
+                className="inline-flex items-center gap-1.5 border-none bg-transparent text-[13px] font-semibold text-[#356267] transition-colors hover:text-[#2a4f53] hover:underline disabled:opacity-60"
+              >
+                <RefreshCw size={15} />
                 Renvoyer le code
               </button>
             </div>
@@ -730,181 +615,92 @@ export default function Inscription() {
 
   // ─── ÉTAPE 1 : FORMULAIRE D'INSCRIPTION ──────────────────────────────────────
   return (
-    <div style={pageStyle}>
+    <div className={pageWrap}>
       {sharedHead}
       {renderToast()}
-      {renderGlow(620, -220, 50)}
+      {renderGlow()}
 
-      <div className="card-main" style={{
-        width: '100%', maxWidth: 480,
-        position: 'relative', zIndex: 1,
-        background: '#ffffff',
-        borderRadius: 20,
-        padding: '36px 34px',
-        boxShadow: '0 32px 80px rgba(0,0,0,0.22), 0 2px 8px rgba(0,0,0,0.07)',
-      }}>
+      <div className="card-anim relative z-10 w-full max-w-[480px] rounded-3xl bg-white px-6 py-9 shadow-[0_24px_80px_rgba(0,0,0,0.25)] sm:px-8">
 
-        {/* Back */}
-        <Link to="/" className="back-link" style={{
-          display: 'inline-flex', alignItems: 'center', gap: 5,
-          color: '#94a3b8', textDecoration: 'none', fontSize: 12.5,
-          fontWeight: 500, marginBottom: 24,
-        }}>
-          <i className='bx bx-arrow-back' style={{ fontSize: 15 }} />
+        <Link
+          to="/"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#94a3b8] transition-colors hover:text-[#356267]"
+        >
+          <ArrowLeft size={15} />
           Retour
         </Link>
 
-        {/* Header avec le nouveau logo */}
-        <div style={{
-          display: 'flex', justifyContent: 'space-between',
-          alignItems: 'flex-start', marginBottom: 24, gap: 12,
-        }}>
+        <div className="mt-5 flex items-start justify-between gap-3">
           <div>
-            {/* Logo - Moderne et fantastique */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-              {/* Nouveau logo moderne avec effet de brillance */}
-              <div className="logo-icon" style={{ 
-                width: 38, 
-                height: 38, 
-                borderRadius: 12, 
-                background: 'linear-gradient(135deg, #0c2e7c, #1e4db7, #3b82f6)', 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center',
-                boxShadow: '0 4px 15px rgba(59,130,246,0.4)',
-                position: 'relative',
-                overflow: 'hidden',
-              }}>
-                {/* Effet de brillance */}
-                <div style={{
-                  position: 'absolute',
-                  top: -15,
-                  left: -15,
-                  width: 30,
-                  height: 30,
-                  background: 'rgba(255,255,255,0.2)',
-                  borderRadius: '50%',
-                  transform: 'rotate(45deg)',
-                }} />
-                <div style={{
-                  position: 'absolute',
-                  bottom: -10,
-                  right: -10,
-                  width: 25,
-                  height: 25,
-                  background: 'rgba(255,255,255,0.15)',
-                  borderRadius: '50%',
-                }} />
-                
-                {/* Logo SVG - Graphique financier moderne */}
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M3 13L8 8L13 13L21 5" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M21 12V19H3V5H12" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                  <circle cx="18" cy="8" r="2" stroke="#fff" strokeWidth="1.5"/>
-                  <path d="M8 11L8 16" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeDasharray="2 2"/>
-                </svg>
-              </div>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
-                <span style={{ fontWeight: 800, fontSize: 18, color: '#0c2e7c', letterSpacing: '-0.3px' }}>
-                  Finance<span style={{ color: '#3b82f6' }}>App</span>
-                </span>
-                <span style={{ fontSize: 8, color: '#94a3b8', letterSpacing: '0.3px', fontWeight: 500 }}>
-                  Smart Finance
-                </span>
-              </div>
-            </div>
-
-            <h2 style={{
-              margin: 0, fontSize: 21, fontWeight: 800, color: '#0f172a',
-              fontFamily: "'Sora', sans-serif", letterSpacing: '-0.3px',
-            }}>
+            {renderLogo()}
+            <h2 className="mt-4 text-[21px] font-extrabold tracking-tight text-[#10214b]">
               Créer un compte
             </h2>
-
             {renderSteps(1)}
           </div>
 
-          {/* Avatar */}
-          <div style={{
-            width: 54, height: 54, borderRadius: '50%', flexShrink: 0,
-            background: initiales === '?'
-              ? '#f1f5f9'
-              : `linear-gradient(135deg, ${avatarBg}, ${avatarBg}dd)`,
-            border: `2.5px solid ${initiales === '?' ? '#e2e8f0' : avatarBg + '55'}`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 17, fontWeight: 800, color: '#fff',
-            boxShadow: initiales === '?' ? 'none' : `0 4px 14px ${avatarBg}44`,
-            fontFamily: "'Sora', sans-serif",
-          }}>
-            {initiales === '?' ? (
-              <i className='bx bx-user' style={{ fontSize: 22, color: '#cbd5e1' }} />
-            ) : initiales}
+          <div
+            className="flex h-[54px] w-[54px] flex-shrink-0 items-center justify-center rounded-full border-2 text-[17px] font-extrabold text-white"
+            style={{
+              background: initiales === '?' ? '#f8fafc' : avatarBg,
+              borderColor: initiales === '?' ? '#e2e8f0' : `${avatarBg}55`,
+              boxShadow: initiales === '?' ? 'none' : `0 4px 14px ${avatarBg}44`,
+            }}
+          >
+            {initiales === '?' ? <User size={22} className="text-[#cbd5e1]" /> : initiales}
           </div>
         </div>
 
-        {/* Divider */}
-        <div style={{ height: 1, background: '#f1f5f9', marginBottom: 22 }} />
+        <div className="my-6 h-px bg-[#f1f5f9]" />
 
-        {/* Formulaire */}
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
 
           {/* Prénom / Nom */}
-          <div className="name-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label style={lblStyle}>
-                <i className='bx bx-user' style={{ fontSize: 12 }} /> Prénom 
+              <label className={fieldLabel}>
+                <User size={12} /> Prénom
               </label>
-              <div style={{ position: 'relative' }}>
-                <i className='bx bx-user' style={iconLeft} />
+              <div className="relative">
+                <User size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
                 <input
                   value={form.prenom}
                   onChange={e => handleFieldChange('prenom', e.target.value)}
                   onBlur={() => setTouched({...touched, prenom: true})}
                   placeholder="Votre prénom"
                   required
-                  className={`field-input ${touched.prenom && errors.prenom ? 'error' : ''}`}
+                  className={`${inputBase} ${inputBorder(touched.prenom && errors.prenom)} pl-11 pr-3.5`}
                 />
               </div>
-              {touched.prenom && errors.prenom && (
-                <p style={errStyle}>
-                  <i className='bx bx-error-circle' style={{ fontSize: 12 }} />
-                  {errors.prenom}
-                </p>
-              )}
+              {fieldError(touched.prenom && errors.prenom)}
             </div>
             <div>
-              <label style={lblStyle}>
-                <i className='bx bx-id-card' style={{ fontSize: 12 }} /> Nom 
+              <label className={fieldLabel}>
+                <CreditCard size={12} /> Nom
               </label>
-              <div style={{ position: 'relative' }}>
-                <i className='bx bx-id-card' style={iconLeft} />
+              <div className="relative">
+                <CreditCard size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
                 <input
                   value={form.nom}
                   onChange={e => handleFieldChange('nom', e.target.value)}
                   onBlur={() => setTouched({...touched, nom: true})}
                   placeholder="Votre nom"
                   required
-                  className={`field-input ${touched.nom && errors.nom ? 'error' : ''}`}
+                  className={`${inputBase} ${inputBorder(touched.nom && errors.nom)} pl-11 pr-3.5`}
                 />
               </div>
-              {touched.nom && errors.nom && (
-                <p style={errStyle}>
-                  <i className='bx bx-error-circle' style={{ fontSize: 12 }} />
-                  {errors.nom}
-                </p>
-              )}
+              {fieldError(touched.nom && errors.nom)}
             </div>
           </div>
 
           {/* Téléphone */}
           <div>
-            <label style={lblStyle}>
-              <i className='bx bx-phone' style={{ fontSize: 12 }} />
+            <label className={fieldLabel}>
+              <Phone size={12} />
               Téléphone
             </label>
-            <div style={{ position: 'relative' }}>
-              <i className='bx bx-phone' style={iconLeft} />
+            <div className="relative">
+              <Phone size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
               <input
                 value={form.telephone}
                 onChange={e => handleFieldChange('telephone', e.target.value)}
@@ -912,25 +708,20 @@ export default function Inscription() {
                 placeholder="+222XXXXXXXX"
                 required
                 maxLength={12}
-                className={`field-input ${touched.telephone && errors.telephone ? 'error' : ''}`}
+                className={`${inputBase} ${inputBorder(touched.telephone && errors.telephone)} pl-11 pr-3.5`}
               />
             </div>
-            {touched.telephone && errors.telephone && (
-              <p style={errStyle}>
-                <i className='bx bx-error-circle' style={{ fontSize: 12 }} />
-                {errors.telephone}
-              </p>
-            )}
+            {fieldError(touched.telephone && errors.telephone)}
           </div>
 
           {/* Email */}
           <div>
-            <label style={lblStyle}>
-              <i className='bx bx-envelope' style={{ fontSize: 12 }} />
+            <label className={fieldLabel}>
+              <Mail size={12} />
               Email
             </label>
-            <div style={{ position: 'relative' }}>
-              <i className='bx bx-envelope' style={iconLeft} />
+            <div className="relative">
+              <Mail size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
               <input
                 type="email"
                 value={form.email}
@@ -938,24 +729,19 @@ export default function Inscription() {
                 onBlur={() => setTouched({...touched, email: true})}
                 placeholder="vous@gmail.com"
                 required
-                className={`field-input ${touched.email && errors.email ? 'error' : ''}`}
+                className={`${inputBase} ${inputBorder(touched.email && errors.email)} pl-11 pr-3.5`}
               />
             </div>
-            {touched.email && errors.email && (
-              <p style={errStyle}>
-                <i className='bx bx-error-circle' style={{ fontSize: 12 }} />
-                {errors.email}
-              </p>
-            )}
+            {fieldError(touched.email && errors.email)}
           </div>
 
           {/* Mot de passe */}
           <div>
-            <label style={lblStyle}>
-              <i className='bx bx-lock-alt' style={{ fontSize: 12 }} />
+            <label className={fieldLabel}>
+              <Lock size={12} />
               Mot de passe
             </label>
-            <div style={{ position: 'relative' }}>
+            <div className="relative">
               <input
                 type={showPwd ? 'text' : 'password'}
                 value={form.password}
@@ -964,28 +750,26 @@ export default function Inscription() {
                 placeholder="••••••••"
                 required
                 minLength={6}
-                className={`field-input-noicon ${touched.password && errors.password ? 'error' : ''}`}
+                className={`${inputBase} ${inputBorder(touched.password && errors.password)} pl-4 pr-11`}
               />
-              <button type="button" onClick={() => setShowPwd(v => !v)}
-                className="toggle-eye" style={eyeBtn}>
-                <i className={showPwd ? 'bx bx-hide' : 'bx bx-show'} style={{ fontSize: 18 }} />
+              <button
+                type="button"
+                onClick={() => setShowPwd(v => !v)}
+                className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center text-[#94a3b8] transition-colors hover:text-[#356267]"
+              >
+                {showPwd ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
-            {touched.password && errors.password && (
-              <p style={errStyle}>
-                <i className='bx bx-error-circle' style={{ fontSize: 12 }} />
-                {errors.password}
-              </p>
-            )}
+            {fieldError(touched.password && errors.password)}
           </div>
 
           {/* Confirmer mot de passe */}
           <div>
-            <label style={lblStyle}>
-              <i className='bx bx-lock' style={{ fontSize: 12 }} />
-              Confirmer le mot de passe 
+            <label className={fieldLabel}>
+              <Lock size={12} />
+              Confirmer le mot de passe
             </label>
-            <div style={{ position: 'relative' }}>
+            <div className="relative">
               <input
                 type={showConfirm ? 'text' : 'password'}
                 value={form.password_confirm}
@@ -993,64 +777,46 @@ export default function Inscription() {
                 onBlur={() => setTouched({...touched, password_confirm: true})}
                 placeholder="••••••••"
                 required
-                className={`field-input-noicon ${touched.password_confirm && errors.password_confirm ? 'error' : ''}`}
+                className={`${inputBase} ${inputBorder(touched.password_confirm && errors.password_confirm)} pl-4 pr-11`}
               />
-              <button type="button" onClick={() => setShowConfirm(v => !v)}
-                className="toggle-eye" style={eyeBtn}>
-                <i className={showConfirm ? 'bx bx-hide' : 'bx bx-show'} style={{ fontSize: 18 }} />
+              <button
+                type="button"
+                onClick={() => setShowConfirm(v => !v)}
+                className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center text-[#94a3b8] transition-colors hover:text-[#356267]"
+              >
+                {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
-            {touched.password_confirm && errors.password_confirm && (
-              <p style={errStyle}>
-                <i className='bx bx-error-circle' style={{ fontSize: 12 }} />
-                {errors.password_confirm}
-              </p>
-            )}
+            {fieldError(touched.password_confirm && errors.password_confirm)}
           </div>
 
-          {/* Bouton submit */}
-          <button type="submit" disabled={loading} className="btn-submit" style={{
-            marginTop: 6, width: '100%', padding: '15px',
-            fontWeight: 700, fontSize: 14.5,
-            background: '#0c2e7c',
-            color: '#fff', border: 'none', borderRadius: 12,
-            cursor: loading ? 'not-allowed' : 'pointer',
-            boxShadow: '0 4px 18px rgba(12,46,124,0.3)',
-            opacity: loading ? 0.75 : 1,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            fontFamily: "'Sora', sans-serif", letterSpacing: '0.2px',
-          }}>
+          <button
+            type="submit"
+            disabled={loading}
+            className="mt-2 flex w-full min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-[#356267] px-4 text-[15px] font-bold text-white shadow-[0_4px_15px_rgba(53,98,103,0.3)] transition-all hover:enabled:-translate-y-0.5 hover:enabled:bg-[#2a4f53] disabled:cursor-not-allowed disabled:opacity-70"
+          >
             {loading ? (
               <>
-                <span style={{
-                  width: 16, height: 16,
-                  border: '2px solid rgba(255,255,255,0.3)',
-                  borderTopColor: '#fff', borderRadius: '50%',
-                  display: 'inline-block', animation: 'spin 0.7s linear infinite',
-                }} />
+                <Loader2 size={18} className="animate-spin" />
                 Création en cours...
               </>
             ) : (
               <>
                 Continuer
-                <i className='bx bx-right-arrow-alt' style={{ fontSize: 19 }} />
+                <ArrowRight size={18} />
               </>
             )}
           </button>
         </form>
 
-        {/* Footer */}
-        <div style={{
-          textAlign: 'center', marginTop: 20,
-          paddingTop: 16, borderTop: '1px solid #f1f5f9',
-        }}>
-          <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>
+        <div className="mt-6 border-t border-[#f1f5f9] pt-4 text-center">
+          <p className="text-[13px] text-[#356267]/75">
             Déjà un compte ?{' '}
-            <Link to="/connexion" style={{
-              color: '#0c2e7c', fontWeight: 700, textDecoration: 'none',
-              display: 'inline-flex', alignItems: 'center', gap: 3,
-            }}>
-              <i className='bx bx-log-in' style={{ fontSize: 14 }} />
+            <Link
+              to="/connexion"
+              className="inline-flex items-center gap-1 font-bold text-[#356267] transition-colors hover:text-[#2a4f53]"
+            >
+              <LogIn size={14} />
               Se connecter
             </Link>
           </p>
@@ -1059,27 +825,3 @@ export default function Inscription() {
     </div>
   );
 }
-
-// ─── MINI STYLES CONSTANTS ───────────────────────────────────────────────────
-
-const lblStyle = {
-  display: 'flex', alignItems: 'center', gap: 4,
-  fontSize: 10.5, color: '#475569', fontWeight: 600,
-  textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6,
-};
-
-const iconLeft = {
-  position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)',
-  fontSize: 16, color: '#94a3b8', pointerEvents: 'none',
-};
-
-const eyeBtn = {
-  position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
-  background: 'none', border: 'none', cursor: 'pointer',
-  color: '#94a3b8', display: 'flex', alignItems: 'center',
-};
-
-const errStyle = {
-  margin: '4px 0 0', fontSize: 11, color: '#ef4444',
-  display: 'flex', alignItems: 'center', gap: 4,
-};

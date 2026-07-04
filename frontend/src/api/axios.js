@@ -13,14 +13,26 @@ const api = axios.create({
 
 console.log(`[API] Configurée avec: ${API_URL}`);
 
-// ── Intercepteur requête : injecte le token JWT ──────────────────────────────
+// ── Intercepteur requête : injecte le token JWT ou token visiteur ──────────
 api.interceptors.request.use(
   (config) => {
+    // 🆕 Priorité au token visiteur si présent
+    const visitorToken = localStorage.getItem('visitor_token');
     const token = localStorage.getItem('access_token');
-    if (token) {
+    
+    // 🆕 Vérifier si l'utilisateur est en mode visiteur
+    const isVisitor = !!localStorage.getItem('visitor_data');
+    
+    if (visitorToken && isVisitor) {
+      config.headers.Authorization = `Bearer ${visitorToken}`;
+      console.log('[API Request - Visitor Mode]', config.method?.toUpperCase(), config.baseURL + config.url);
+    } else if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      console.log('[API Request]', config.method?.toUpperCase(), config.baseURL + config.url);
+    } else {
+      console.log('[API Request - No Auth]', config.method?.toUpperCase(), config.baseURL + config.url);
     }
-    console.log('[API Request]', config.method?.toUpperCase(), config.baseURL + config.url);
+    
     return config;
   },
   (error) => {
@@ -42,9 +54,37 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
+    // 🆕 EXCEPTION: Routes du mode visiteur
+    if (original?.url?.includes('/initier-visiteur/') || 
+        original?.url?.includes('/convertir-visiteur/') ||
+        original?.url?.includes('/statut-visiteur/') ||
+        original?.url?.includes('/visiteur-')) {
+      console.log('[API Interceptor] ⚠️ Erreur sur route visiteur - Transmission au composant');
+      return Promise.reject(error);
+    }
+
+    // 🆕 Vérifier si l'erreur est liée au mode visiteur
+    if (error.response?.status === 403 && error.response?.data?.visitor_mode) {
+      console.log('[API Interceptor] 🔍 Mode visiteur détecté - Action bloquée');
+      // Propager l'erreur pour que le composant affiche le modal
+      return Promise.reject(error);
+    }
+
     // Éviter la boucle infinie sur la route de refresh elle-même
     if (error.response?.status === 401 && !original._retry) {
       original._retry = true;
+      
+      // 🆕 Vérifier si on est en mode visiteur
+      const isVisitor = !!localStorage.getItem('visitor_data');
+      if (isVisitor) {
+        console.log('[API Interceptor] ⚠️ Token visiteur expiré - Nettoyage');
+        localStorage.removeItem('visitor_token');
+        localStorage.removeItem('visitor_data');
+        // Rediriger vers la page d'accueil
+        window.location.href = '/';
+        return Promise.reject(new Error('Session visiteur expirée'));
+      }
+      
       const refresh = localStorage.getItem('refresh_token');
 
       if (refresh) {
@@ -74,5 +114,26 @@ api.interceptors.response.use(
     return Promise.reject(error);
   },
 );
+
+// 🆕 Fonction utilitaire pour vérifier si l'utilisateur est en mode visiteur
+export const isVisitorMode = () => {
+  return !!localStorage.getItem('visitor_data') && !!localStorage.getItem('visitor_token');
+};
+
+// 🆕 Fonction utilitaire pour obtenir le token actif
+export const getActiveToken = () => {
+  const visitorToken = localStorage.getItem('visitor_token');
+  const token = localStorage.getItem('access_token');
+  return visitorToken || token || null;
+};
+
+// 🆕 Fonction utilitaire pour nettoyer les tokens
+export const clearAllTokens = () => {
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('visitor_token');
+  localStorage.removeItem('visitor_data');
+  localStorage.removeItem('user');
+};
 
 export default api;

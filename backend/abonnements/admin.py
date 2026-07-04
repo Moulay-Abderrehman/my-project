@@ -1,4 +1,4 @@
-#backend/abonnements/admin.pya
+# backend/abonnements/admin.py
 from django.contrib import admin
 from django.contrib import messages
 from django.utils.html import format_html
@@ -10,21 +10,67 @@ from .views import TARIFS, activer_abonnement, METHODES_MANUELLES
 
 @admin.register(Plan)
 class PlanAdmin(admin.ModelAdmin):
-    list_display = ['nom', 'prix_mensuel', 'prix_annuel', 'nb_categories_max']
+    list_display = ['nom', 'prix_mensuel', 'prix_annuel', 'nb_categories_max', 'est_demo', 'ordre_affichage']
+    list_filter = ['est_demo']
+    search_fields = ['nom', 'description']
+    ordering = ['ordre_affichage']
+    
+    fieldsets = (
+        (None, {
+            'fields': ('nom', 'description')
+        }),
+        ('Tarifs', {
+            'fields': ('prix_mensuel', 'prix_annuel')
+        }),
+        ('Limites', {
+            'fields': ('nb_categories_max',)
+        }),
+        ('Mode Démo', {
+            'fields': ('est_demo', 'ordre_affichage'),
+            'classes': ('collapse',),
+            'description': 'Configuration du mode exploration/visiteur'
+        }),
+    )
+
 
 @admin.register(Feature)
 class FeatureAdmin(admin.ModelAdmin):
     list_display = ['code', 'label']
 
+
 @admin.register(PlanFeature)
 class PlanFeatureAdmin(admin.ModelAdmin):
     list_display = ['plan', 'feature']
 
+
 @admin.register(Abonnement)
 class AbonnementAdmin(admin.ModelAdmin):
-    list_display = ['utilisateur', 'plan', 'type', 'statut', 'date_debut', 'date_fin', 'nb_renouvellements']
-    list_filter = ['statut', 'type', 'plan']
-    search_fields = ['utilisateur__telephone', 'utilisateur__nom']
+    list_display = ['utilisateur', 'plan', 'type', 'statut', 'date_debut', 'date_fin', 'est_demo', 'nb_renouvellements']
+    list_filter = ['statut', 'type', 'plan', 'est_demo']
+    search_fields = ['utilisateur__telephone', 'utilisateur__nom', 'utilisateur__email']
+    
+    readonly_fields = ['est_demo_mode_display']
+    
+    fieldsets = (
+        (None, {
+            'fields': ('utilisateur', 'plan', 'type', 'statut')
+        }),
+        ('Dates', {
+            'fields': ('date_debut', 'date_fin')
+        }),
+        ('Finances', {
+            'fields': ('montant', 'nb_renouvellements')
+        }),
+        ('Mode Démo', {
+            'fields': ('est_demo', 'date_expiration_demo', 'est_demo_mode_display'),
+            'classes': ('collapse',),
+            'description': 'Informations sur le mode exploration'
+        }),
+    )
+    
+    def est_demo_mode_display(self, obj):
+        return "✅ Oui" if obj.est_demo_mode() else "❌ Non"
+    est_demo_mode_display.short_description = "Mode Exploration actif"
 
 
 @admin.register(Paiement)
@@ -42,7 +88,7 @@ class PaiementAdmin(admin.ModelAdmin):
         'type_utilisateur_demande', 'type_abonnement_demande', 'mode_renouvellement',
         'capture_ecran', 'apercu_capture_ecran',
         'raison_refus', 'valide_par', 'date_validation',
-        'reference_trackpay',  # visible/éditable pour debug si besoin
+        'reference_trackpay',
     ]
 
     # ── Aperçu visuel de la capture d'écran directement dans la fiche ───────
@@ -169,7 +215,7 @@ class PaiementAdmin(admin.ModelAdmin):
 
         if traites:
             self.message_user(request, f"{traites} paiement(s) refusé(s).", level=messages.SUCCESS)
-    refuser_paiements.short_description = " Refuser les paiements sélectionnés (raison_refus requise)"
+    refuser_paiements.short_description = "❌ Refuser les paiements sélectionnés (raison_refus requise)"
 
 
 @admin.register(CompteEncaissement)

@@ -1,5 +1,7 @@
+# backend/abonnements/urls.py
 from django.urls import path
 from .views import (
+    # ── Vues existantes ──────────────────────────────────────────────────────
     PlanListView,
     DemanderCodeSouscriptionView,
     SouscriptionView,
@@ -11,25 +13,54 @@ from .views import (
     StatutPaiementEnCoursView,
     InitierPaiementTrackPayView,    
     TrackPayWebhookView,            
-    PrevisualiserRenouvellementView,  
+    PrevisualiserRenouvellementView,
+    
+    # 🆕 Nouvelles vues pour le mode visiteur
+    PlanPublicListView,
+    InitierModeVisiteurView,
+    VisitorDemoDataView,
+    VisitorStatsView,
+    ConvertVisitorToUserView,
+    VisitorInvitationMessagesView,
+    VisitorSessionExpirationView,
 )
 
 urlpatterns = [
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 📌 Vues existantes (conservées)
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    # ── Plans et abonnements ──────────────────────────────────────────────────
     path('plans/',             PlanListView.as_view(),                  name='plans'),
     path('demander-code/',     DemanderCodeSouscriptionView.as_view(),  name='demander-code-abo'),
     path('souscrire/',         SouscriptionView.as_view(),              name='souscrire'),
     path('detail/',            AbonnementDetailView.as_view(),          name='abonnement-detail'),
     path('paiements/',         PaiementListView.as_view(),              name='paiements'),
-
-    path('statut/', AbonnementStatutView.as_view(), name='abonnement-statut'),
+    path('statut/',            AbonnementStatutView.as_view(),          name='abonnement-statut'),
 
     # ── Flux de paiement avec validation manuelle admin ──────────────────────
     path('comptes-encaissement/',       ComptesEncaissementView.as_view(),    name='comptes-encaissement'),
     path('initier-paiement/',           InitierPaiementView.as_view(),        name='initier-paiement'),
     path('statut-paiement-en-cours/',   StatutPaiementEnCoursView.as_view(),  name='statut-paiement-en-cours'),
 
-    # ── NOUVEAU — Flux de paiement automatique TrackPay ──────────────────────
+    # ── Flux de paiement automatique TrackPay ─────────────────────────────────
     path('initier-paiement-trackpay/',  InitierPaiementTrackPayView.as_view(), name='initier-paiement-trackpay'),
     path('webhook-trackpay/',           TrackPayWebhookView.as_view(),         name='webhook-trackpay'),
     path('previsualiser-renouvellement/', PrevisualiserRenouvellementView.as_view(), name='previsualiser-renouvellement'),
+
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 🆕 NOUVELLES ROUTES POUR LE MODE VISITEUR
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    # ── Plans publics (accessible sans authentification) ─────────────────────
+    path('plans-publics/',              PlanPublicListView.as_view(),          name='plans-publics'),
+    
+    # ── Gestion du mode visiteur ─────────────────────────────────────────────
+    path('initier-visiteur/',           InitierModeVisiteurView.as_view(),     name='initier-visiteur'),
+    path('visiteur-demo-data/',         VisitorDemoDataView.as_view(),         name='visiteur-demo-data'),
+    path('visiteur-stats/',             VisitorStatsView.as_view(),            name='visiteur-stats'),
+    path('convertir-visiteur/',         ConvertVisitorToUserView.as_view(),    name='convertir-visiteur'),
+    path('visiteur-invitations/',       VisitorInvitationMessagesView.as_view(), name='visiteur-invitations'),
+    path('visiteur-session/',           VisitorSessionExpirationView.as_view(), name='visiteur-session'),
 ]

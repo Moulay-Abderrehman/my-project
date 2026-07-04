@@ -1,24 +1,43 @@
+// frontend/src/pages/Transactions.js
 import React, { useEffect, useState, useCallback } from 'react';
 import api from '../api/axios';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import ActionBlockedModal from '../components/ActionBlockedModal';
 
 // ── SHARED STYLE CONSTANTS ────────────────────────────────────────────────────
+// Palette FinanceApp : navy #003152 · teal #003333 · mint #02F5A1 · near-black #07191E · gold #FDBF20
+// Le rouge (danger) est réservé exclusivement aux actions destructrices / erreurs système,
+// distinct de la sémantique "sortie" (gold) pour ne pas mélanger alerte système et logique métier.
 
 const COLORS = {
-  entree: '#10b981',
-  sortie: '#ef4444',
-  primary: '#6366f1',
-  primaryDark: '#4f46e5',
-  text: '#0f172a',
-  textMuted: '#64748b',
-  textLight: '#94a3b8',
-  border: '#e2e8f0',
-  bg: '#f8fafc',
+  entree: '#02734F',      // texte/accent "entrée" (lisible sur fond clair)
+  entreeBg: '#E8FBF3',    // fond clair "entrée"
+  entreeAccent: '#02F5A1',// mint pur (accents graphiques, points, barres)
+  sortie: '#8A6200',      // texte/accent "sortie" (lisible sur fond clair)
+  sortieBg: '#FFF6E0',    // fond clair "sortie"
+  sortieAccent: '#FDBF20',// gold pur (accents graphiques, points, barres)
+  primary: '#003152',     // navy
+  primaryDark: '#003333', // teal
+  primaryBg: '#EAF1F5',   // fond clair navy
+  primaryBgStrong: '#B9CBD6',
+  text: '#07191E',
+  textMuted: '#5B6E76',
+  textLight: '#93A3A9',
+  border: '#E4E9EC',
+  bg: '#F5F7F8',
   white: '#ffffff',
-  success: '#10b981',
-  warning: '#f59e0b',
-  error: '#ef4444',
-  info: '#3b82f6',
+  success: '#02734F',
+  successBg: '#E8FBF3',
+  warning: '#8A6200',
+  warningBg: '#FFF6E0',
+  error: '#E5484D',
+  errorBg: '#FDECEC',
+  errorBorder: '#E5484D55',
+  info: '#003152',
+  infoBg: '#EAF1F5',
+  disabledBg: '#EDF1F2',
+  disabledText: '#93A3A9',
 };
 
 const sharedInput = {
@@ -52,27 +71,27 @@ function MessageBanner({ type, message, onClose }) {
 
   const styles = {
     success: {
-      background: '#ecfdf5',
-      border: '1px solid #6ee7b7',
-      color: '#065f46',
+      background: COLORS.successBg,
+      border: `1px solid ${COLORS.entreeAccent}55`,
+      color: COLORS.success,
       icon: 'bx-check-circle',
     },
     error: {
-      background: '#fef2f2',
-      border: '1px solid #fca5a5',
-      color: '#991b1b',
+      background: COLORS.errorBg,
+      border: `1px solid ${COLORS.errorBorder}`,
+      color: '#A82A2E',
       icon: 'bx-error-circle',
     },
     warning: {
-      background: '#fffbeb',
-      border: '1px solid #fcd34d',
-      color: '#92400e',
+      background: COLORS.warningBg,
+      border: `1px solid ${COLORS.sortieAccent}66`,
+      color: COLORS.warning,
       icon: 'bx-error',
     },
     info: {
-      background: '#eff6ff',
-      border: '1px solid #93c5fd',
-      color: '#1e40af',
+      background: COLORS.infoBg,
+      border: `1px solid ${COLORS.primary}33`,
+      color: COLORS.info,
       icon: 'bx-info-circle',
     },
   };
@@ -88,7 +107,7 @@ function MessageBanner({ type, message, onClose }) {
       padding: '12px 16px',
       borderRadius: 12,
       background: style.background,
-      border: `1px solid ${style.border}`,
+      border: style.border,
       marginBottom: 16,
       animation: 'fadeUp 0.3s cubic-bezier(.16,1,.3,1) both',
     }}>
@@ -107,9 +126,14 @@ function MessageBanner({ type, message, onClose }) {
             cursor: 'pointer',
             color: style.color,
             fontSize: 18,
-            padding: '0 4px',
+            padding: '6px',
             opacity: 0.6,
             transition: 'opacity 0.2s',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minWidth: 32,
+            minHeight: 32,
           }}
           onMouseEnter={e => e.currentTarget.style.opacity = '1'}
           onMouseLeave={e => e.currentTarget.style.opacity = '0.6'}
@@ -136,7 +160,7 @@ function TypeBadge({ type }) {
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 5,
       padding: '4px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
-      background: isEntree ? '#ecfdf5' : '#fef2f2',
+      background: isEntree ? COLORS.entreeBg : COLORS.sortieBg,
       color: isEntree ? COLORS.entree : COLORS.sortie,
       fontFamily: "'DM Sans', sans-serif",
     }}>
@@ -152,7 +176,8 @@ function TransactionModal({
   onClose, 
   onSuccess, 
   categories,
-  onMessage 
+  onMessage,
+  isVisitorMode, // 🆕
 }) {
   const [form, setForm] = useState({
     type: transaction?.type || 'entree',
@@ -181,6 +206,17 @@ function TransactionModal({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // 🆕 Vérification du mode visiteur
+    if (isVisitorMode) {
+      setMessage({ 
+        type: 'error', 
+        text: '🔍 Mode Exploration : Créez un compte pour ajouter ou modifier des transactions.' 
+      });
+      if (onMessage) onMessage('visitor_mode');
+      return;
+    }
+    
     if (!form.montant || parseFloat(form.montant) <= 0) {
       setMessage({ type: 'error', text: 'Le montant doit être supérieur à 0.' });
       return;
@@ -210,6 +246,16 @@ function TransactionModal({
     } catch (err) {
       const errorData = err.response?.data;
       const status = err.response?.status;
+      
+      // 🆕 Gestion du mode visiteur
+      if (status === 403 && errorData?.visitor_mode) {
+        setMessage({ 
+          type: 'error', 
+          text: '🔍 Mode Exploration : Créez un compte pour effectuer cette action.' 
+        });
+        if (onMessage) onMessage('visitor_mode');
+        return;
+      }
       
       if (status === 403) {
         if (errorData?.error === 'abonnement_expire') {
@@ -263,7 +309,7 @@ function TransactionModal({
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 9999,
-      background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(6px)',
+      background: 'rgba(7,25,30,0.6)', backdropFilter: 'blur(6px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: 16,
     }} onClick={onClose}>
@@ -273,7 +319,7 @@ function TransactionModal({
         width: '100%', maxWidth: 460,
         maxHeight: '90vh',
         overflowY: 'auto',
-        boxShadow: '0 32px 80px rgba(0,0,0,0.22)',
+        boxShadow: '0 32px 80px rgba(7,25,30,0.24)',
         animation: 'modalIn 0.3s cubic-bezier(.16,1,.3,1)',
       }} onClick={e => e.stopPropagation()}>
 
@@ -281,12 +327,12 @@ function TransactionModal({
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{
               width: 36, height: 36, borderRadius: 10,
-              background: isEdit ? '#fef9c3' : '#ede9fe',
+              background: isEdit ? COLORS.sortieBg : COLORS.primaryBg,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
               <i className={isEdit ? 'bx bx-edit' : 'bx bx-plus'} style={{
                 fontSize: 18,
-                color: isEdit ? '#ca8a04' : COLORS.primary,
+                color: isEdit ? COLORS.sortie : COLORS.primary,
               }} />
             </div>
             <h3 style={{ margin: 0, color: COLORS.text, fontWeight: 800, fontSize: 18, fontFamily: "'Outfit', sans-serif" }}>
@@ -336,6 +382,7 @@ function TransactionModal({
                     transition: 'all 0.18s',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                     fontFamily: "'DM Sans', sans-serif",
+                    minHeight: 44,
                   }}>
                   <i className={`bx ${opt.icon}`} style={{ fontSize: 16 }} />
                   {opt.label}
@@ -356,6 +403,7 @@ function TransactionModal({
                 className="tx-input"
                 style={{ ...sharedInput }}
                 required
+                disabled={isVisitorMode}
               />
             </div>
           </div>
@@ -369,13 +417,13 @@ function TransactionModal({
             {categoriesFiltrees.length === 0 ? (
               <div style={{
                 padding: '12px 14px', borderRadius: 10,
-                background: '#fff7ed', border: '1.5px solid #fed7aa',
-                color: '#c2410c', fontSize: 13,
+                background: COLORS.sortieBg, border: `1.5px solid ${COLORS.sortieAccent}66`,
+                color: COLORS.sortie, fontSize: 13,
                 display: 'flex', alignItems: 'center', gap: 8,
               }}>
-                <i className='bx bx-error' style={{ fontSize: 16, color: '#f97316' }} />
+                <i className='bx bx-error' style={{ fontSize: 16, color: COLORS.sortieAccent }} />
                 {categories.length === 0 ? 'Aucune catégorie disponible.' : `Aucune catégorie pour le type "${form.type === 'entree' ? 'Entrée' : 'Sortie'}"`}
-                {categories.length === 0 && (
+                {categories.length === 0 && !isVisitorMode && (
                   <a href="/categories" style={{ color: COLORS.primary, fontWeight: 600 }}>
                     Créer
                   </a>
@@ -386,7 +434,8 @@ function TransactionModal({
                 <i className='bx bx-category-alt' style={iconLeft} />
                 <select name="categorie" value={form.categorie || ''} onChange={handleChange}
                   className="tx-input"
-                  style={{ ...sharedInput, background: COLORS.white, cursor: 'pointer', appearance: 'none' }}>
+                  style={{ ...sharedInput, background: COLORS.white, cursor: 'pointer', appearance: 'none' }}
+                  disabled={isVisitorMode}>
                   <option value="">— Sans catégorie —</option>
                   {categoriesFiltrees.map(c => (
                     <option key={c.id} value={c.id}>{c.nom}</option>
@@ -412,25 +461,31 @@ function TransactionModal({
                 ...sharedInput, paddingLeft: 14, resize: 'vertical',
                 fontFamily: "'DM Sans', sans-serif", lineHeight: 1.5,
               }}
+              disabled={isVisitorMode}
             />
           </div>
 
           <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
-            <button type="submit" disabled={loading} style={{
+            <button type="submit" disabled={loading || isVisitorMode} style={{
               flex: 2,
-              background: `linear-gradient(135deg, ${typeColor}, ${typeColor}cc)`,
-              color: COLORS.white, border: 'none', borderRadius: 11, padding: '12px',
-              cursor: loading ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: 14,
-              opacity: loading ? 0.75 : 1,
+              background: isVisitorMode ? COLORS.disabledBg : `linear-gradient(135deg, ${typeColor}, ${typeColor}dd)`,
+              color: isVisitorMode ? COLORS.disabledText : COLORS.white,
+              border: 'none', borderRadius: 11, padding: '12px',
+              cursor: (loading || isVisitorMode) ? 'not-allowed' : 'pointer', 
+              fontWeight: 700, fontSize: 14,
+              opacity: (loading || isVisitorMode) ? 0.75 : 1,
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
               fontFamily: "'DM Sans', sans-serif",
-              boxShadow: `0 4px 14px ${typeColor}33`,
+              boxShadow: isVisitorMode ? 'none' : `0 4px 14px ${typeColor}33`,
               transition: 'all 0.2s',
+              minHeight: 44,
             }}>
               {loading
                 ? <><span style={spinnerStyle} /> En cours...</>
-                : <><i className={isEdit ? 'bx bx-save' : 'bx bx-check'} style={{ fontSize: 16 }} />
-                    {isEdit ? 'Modifier' : 'Créer'}</>
+                : isVisitorMode
+                  ? <><i className='bx bx-lock' style={{ fontSize: 16 }} /> Mode Exploration</>
+                  : <><i className={isEdit ? 'bx bx-save' : 'bx bx-check'} style={{ fontSize: 16 }} />
+                      {isEdit ? 'Modifier' : 'Créer'}</>
               }
             </button>
             <button type="button" onClick={onClose} style={{
@@ -440,6 +495,7 @@ function TransactionModal({
               fontSize: 14, color: COLORS.textMuted, fontWeight: 600,
               fontFamily: "'DM Sans', sans-serif",
               transition: 'all 0.15s',
+              minHeight: 44,
             }}>
               Annuler
             </button>
@@ -453,6 +509,7 @@ function TransactionModal({
 // ── PAGE PRINCIPALE ───────────────────────────────────────────────────────────
 export default function Transactions() {
   const navigate = useNavigate();
+  const { isVisitor, exitVisitorMode } = useAuth(); // 🆕
   const [allTransactions, setAllTransactions] = useState([]);
   const [transactionsFiltrees, setTransactionsFiltrees] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -463,6 +520,9 @@ export default function Transactions() {
   const [filtres, setFiltres] = useState({ type: '', date_debut: '', date_fin: '' });
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   
+  // 🆕 État pour le modal d'action bloquée
+  const [actionBlockedModal, setActionBlockedModal] = useState({ isOpen: false, message: null, actionType: 'signup' });
+  
   // ✅ États pour les messages
   const [pageMessage, setPageMessage] = useState(null);
   const [modalMessage, setModalMessage] = useState(null);
@@ -470,6 +530,8 @@ export default function Transactions() {
   // ✅ État pour l'abonnement expiré
   const [abonnementExpire, setAbonnementExpire] = useState(false);
   const [abonnementCharge, setAbonnementCharge] = useState(true);
+
+  const isVisitorMode = isVisitor; // 🆕
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
@@ -479,6 +541,10 @@ export default function Transactions() {
 
   // ✅ Vérifier le statut de l'abonnement
   const verifierAbonnement = useCallback(async () => {
+    if (isVisitorMode) {
+      setAbonnementCharge(false);
+      return;
+    }
     try {
       const response = await api.get('/abonnements/statut/');
       setAbonnementExpire(!response.data.est_actif);
@@ -488,7 +554,7 @@ export default function Transactions() {
     } finally {
       setAbonnementCharge(false);
     }
-  }, []);
+  }, [isVisitorMode]);
 
   const filtrerTransactionsParPeriode = useCallback((transactions, dateDebut, dateFin) => {
     if (!dateDebut && !dateFin) return transactions;
@@ -513,7 +579,45 @@ export default function Transactions() {
     });
   }, []);
 
+  // 🆕 Charger les données mock en mode visiteur
+  const chargerDonneesMock = useCallback(() => {
+    const mockTransactions = [
+      { id: 1, type: 'sortie', montant: 25000, date: new Date(2026, 5, 28).toISOString(), description: 'Achat alimentation', categorie_detail: { nom: 'Alimentation', couleur: '#ef4444' } },
+      { id: 2, type: 'sortie', montant: 5000, date: new Date(2026, 5, 27).toISOString(), description: 'Transport en commun', categorie_detail: { nom: 'Transport', couleur: '#3b82f6' } },
+      { id: 3, type: 'sortie', montant: 15000, date: new Date(2026, 5, 26).toISOString(), description: 'Facture électricité', categorie_detail: { nom: 'Utilités', couleur: '#f59e0b' } },
+      { id: 4, type: 'entree', montant: 250000, date: new Date(2026, 5, 25).toISOString(), description: 'Salaire mensuel', categorie_detail: { nom: 'Salaire', couleur: '#10b981' } },
+      { id: 5, type: 'sortie', montant: 8000, date: new Date(2026, 5, 24).toISOString(), description: 'Abonnement streaming', categorie_detail: { nom: 'Divertissement', couleur: '#8b5cf6' } },
+      { id: 6, type: 'sortie', montant: 35000, date: new Date(2026, 5, 23).toISOString(), description: 'Restaurant', categorie_detail: { nom: 'Restaurant', couleur: '#f97316' } },
+      { id: 7, type: 'sortie', montant: 12000, date: new Date(2026, 5, 22).toISOString(), description: 'Achat vêtements', categorie_detail: { nom: 'Habillement', couleur: '#ec4899' } },
+    ];
+    
+    const mockCategories = [
+      { id: 1, nom: 'Alimentation', type: 'sortie', couleur: '#ef4444' },
+      { id: 2, nom: 'Transport', type: 'sortie', couleur: '#3b82f6' },
+      { id: 3, nom: 'Utilités', type: 'sortie', couleur: '#f59e0b' },
+      { id: 4, nom: 'Divertissement', type: 'sortie', couleur: '#8b5cf6' },
+      { id: 5, nom: 'Salaire', type: 'entree', couleur: '#10b981' },
+      { id: 6, nom: 'Restaurant', type: 'sortie', couleur: '#f97316' },
+      { id: 7, nom: 'Habillement', type: 'sortie', couleur: '#ec4899' },
+    ];
+    
+    setAllTransactions(mockTransactions);
+    setTransactionsFiltrees(mockTransactions);
+    setCategories(mockCategories);
+    setLoading(false);
+    setPageMessage({
+      type: 'info',
+      text: '🔍 Mode Exploration - Visualisation des données de démonstration. Créez un compte pour vos vraies transactions.'
+    });
+  }, []);
+
   const chargerDonnees = useCallback(async () => {
+    // 🆕 Si mode visiteur, charger les données mock
+    if (isVisitorMode) {
+      chargerDonneesMock();
+      return;
+    }
+    
     setLoading(true);
     setPageMessage(null);
     try {
@@ -582,10 +686,10 @@ export default function Transactions() {
     } finally {
       setLoading(false);
     }
-  }, [filtres.type, filtrerTransactionsParPeriode, filtres.date_debut, filtres.date_fin]);
+  }, [filtres.type, filtrerTransactionsParPeriode, filtres.date_debut, filtres.date_fin, isVisitorMode, chargerDonneesMock]);
 
   useEffect(() => {
-    if (allTransactions.length > 0) {
+    if (allTransactions.length > 0 && !isVisitorMode) {
       const transactionsFiltreesParPeriode = filtrerTransactionsParPeriode(
         allTransactions,
         filtres.date_debut,
@@ -593,7 +697,7 @@ export default function Transactions() {
       );
       setTransactionsFiltrees(transactionsFiltreesParPeriode);
     }
-  }, [filtres.date_debut, filtres.date_fin, allTransactions, filtrerTransactionsParPeriode]);
+  }, [filtres.date_debut, filtres.date_fin, allTransactions, filtrerTransactionsParPeriode, isVisitorMode]);
 
   useEffect(() => {
     verifierAbonnement();
@@ -601,12 +705,40 @@ export default function Transactions() {
   }, [verifierAbonnement, chargerDonnees]);
 
   useEffect(() => {
-    if (allTransactions.length > 0) {
+    if (allTransactions.length > 0 && !isVisitorMode) {
       chargerDonnees();
     }
-  }, [filtres.type, chargerDonnees, allTransactions.length]);
+  }, [filtres.type, chargerDonnees, allTransactions.length, isVisitorMode]);
+
+  // 🆕 Fonction pour ouvrir le modal d'action bloquée
+  const ouvrirActionBloquee = (actionType = 'signup') => {
+    const messages = {
+      signup: {
+        title: '🔒 Créez un compte',
+        message: 'Pour ajouter ou modifier des transactions, créez un compte en 30 secondes.',
+        action: 'Créer un compte',
+        actionType: 'signup'
+      },
+      login: {
+        title: '🔐 Connectez-vous',
+        message: 'Pour accéder à vos transactions, connectez-vous à votre compte.',
+        action: 'Se connecter',
+        actionType: 'login'
+      }
+    };
+    setActionBlockedModal({
+      isOpen: true,
+      message: messages[actionType] || messages.signup,
+      actionType: actionType
+    });
+  };
 
   const ouvrirCreation = () => {
+    // 🆕 Si mode visiteur, afficher le modal d'action bloquée
+    if (isVisitorMode) {
+      ouvrirActionBloquee('signup');
+      return;
+    }
     if (abonnementExpire) {
       setPageMessage({ 
         type: 'error', 
@@ -619,11 +751,23 @@ export default function Transactions() {
   };
   
   const ouvrirModification = (t) => {
+    // 🆕 Si mode visiteur, afficher le modal d'action bloquée
+    if (isVisitorMode) {
+      ouvrirActionBloquee('signup');
+      return;
+    }
     setTransactionEdit(t);
     setModalOuvert(true);
   };
   
-  const confirmerSuppression = (id) => setConfirmSupprId(id);
+  const confirmerSuppression = (id) => {
+    // 🆕 Si mode visiteur, afficher le modal d'action bloquée
+    if (isVisitorMode) {
+      ouvrirActionBloquee('signup');
+      return;
+    }
+    setConfirmSupprId(id);
+  };
 
   const handleSupprimer = async () => {
     try {
@@ -675,6 +819,9 @@ export default function Transactions() {
         text: 'Votre abonnement a expiré. Veuillez le renouveler pour effectuer cette action.' 
       });
     }
+    if (type === 'visitor_mode') {
+      ouvrirActionBloquee('signup');
+    }
   };
 
   const transactions = transactionsFiltrees;
@@ -684,7 +831,7 @@ export default function Transactions() {
   const solde = totalEntrees - totalSorties;
 
   // ✅ Afficher un loader pendant le chargement
-  if (abonnementCharge) {
+  if (abonnementCharge && !isVisitorMode) {
     return (
       <div style={{ 
         display: 'flex', 
@@ -696,13 +843,38 @@ export default function Transactions() {
         <div style={{ textAlign: 'center' }}>
           <div style={{
             width: 48, height: 48,
-            border: '3px solid #ede9fe',
+            border: `3px solid ${COLORS.primaryBg}`,
             borderTopColor: COLORS.primary,
             borderRadius: '50%',
             animation: 'spin 0.8s linear infinite',
             margin: '0 auto 16px',
           }} />
           <p style={{ color: COLORS.textMuted }}>Chargement...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 🆕 Si mode visiteur et que les données ne sont pas encore chargées
+  if (isVisitorMode && loading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        background: COLORS.bg,
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            width: 48, height: 48,
+            border: `3px solid ${COLORS.primaryBg}`,
+            borderTopColor: COLORS.primary,
+            borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite',
+            margin: '0 auto 16px',
+          }} />
+          <p style={{ color: COLORS.textMuted }}>Chargement des données de démonstration...</p>
         </div>
       </div>
     );
@@ -732,9 +904,9 @@ export default function Transactions() {
           to   { opacity: 1; transform: scale(1) translateY(0); }
         }
         .tx-input:focus {
-          border-color: #6366f1 !important;
+          border-color: ${COLORS.primary} !important;
           background: #fff !important;
-          box-shadow: 0 0 0 4px rgba(99,102,241,0.1) !important;
+          box-shadow: 0 0 0 4px rgba(0,49,82,0.10) !important;
         }
         .tx-input::placeholder { color: #cbd5e1; }
         .btn-icon { transition: all 0.15s; }
@@ -742,7 +914,7 @@ export default function Transactions() {
         .stat-card { animation: fadeUp 0.4s cubic-bezier(.16,1,.3,1) both; }
         .stat-card:nth-child(2) { animation-delay: 0.07s; }
         .stat-card:nth-child(3) { animation-delay: 0.14s; }
-        .btn-new-tx:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(99,102,241,0.4) !important; }
+        .btn-new-tx:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(0,49,82,0.32) !important; }
         .btn-new-tx { transition: all 0.2s cubic-bezier(.16,1,.3,1); }
         .transaction-card {
           transition: all 0.2s ease;
@@ -757,6 +929,13 @@ export default function Transactions() {
         type={pageMessage?.type} 
         message={pageMessage?.text} 
         onClose={() => setPageMessage(null)}
+      />
+
+      {/* 🆕 MODAL ACTION BLOQUÉE */}
+      <ActionBlockedModal
+        isOpen={actionBlockedModal.isOpen}
+        onClose={() => setActionBlockedModal({ isOpen: false, message: null, actionType: 'signup' })}
+        message={actionBlockedModal.message}
       />
 
       {/* ── EN-TÊTE ── */}
@@ -774,12 +953,12 @@ export default function Transactions() {
               width: isMobile ? 44 : 48,
               height: isMobile ? 44 : 48,
               borderRadius: 14,
-              background: 'linear-gradient(135deg, #ede9fe, #c4b5fd)',
+              background: isVisitorMode ? `linear-gradient(135deg, ${COLORS.sortieBg}, ${COLORS.sortieAccent})` : `linear-gradient(135deg, ${COLORS.primaryBg}, ${COLORS.primaryBgStrong})`,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}>
-              <i className='bx bx-transfer-alt' style={{ fontSize: isMobile ? 22 : 24, color: COLORS.primary }} />
+              <i className='bx bx-transfer-alt' style={{ fontSize: isMobile ? 22 : 24, color: isVisitorMode ? COLORS.sortie : COLORS.primary }} />
             </div>
             <div>
               <h1 style={{
@@ -790,10 +969,10 @@ export default function Transactions() {
                 fontFamily: "'Outfit', sans-serif",
                 letterSpacing: '-0.5px',
               }}>
-                Transactions
+                Transactions {isVisitorMode && <span style={{ fontSize: isMobile ? 12 : 14, background: COLORS.sortieBg, color: COLORS.sortie, padding: '2px 10px', borderRadius: 12, fontWeight: 600 }}>🔍 Démo</span>}
               </h1>
               <p style={{ margin: '4px 0 0', color: COLORS.textMuted, fontSize: isMobile ? 12 : 13 }}>
-                Gérez vos entrées et sorties d'argent
+                {isVisitorMode ? 'Visualisation des données de démonstration' : 'Gérez vos entrées et sorties d\'argent'}
               </p>
             </div>
           </div>
@@ -802,26 +981,27 @@ export default function Transactions() {
           onClick={ouvrirCreation} 
           className="btn-new-tx" 
           style={{
-            background: abonnementExpire 
-              ? '#e2e8f0' 
-              : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-            color: abonnementExpire ? '#94a3b8' : COLORS.white,
+            background: (isVisitorMode || abonnementExpire) 
+              ? COLORS.disabledBg
+              : `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.primaryDark})`,
+            color: (isVisitorMode || abonnementExpire) ? COLORS.disabledText : COLORS.white,
             border: 'none',
             borderRadius: 40,
             padding: isMobile ? '10px 20px' : '12px 24px',
-            cursor: abonnementExpire ? 'not-allowed' : 'pointer',
+            cursor: (isVisitorMode || abonnementExpire) ? 'not-allowed' : 'pointer',
             fontWeight: 700,
             fontSize: isMobile ? 13 : 14,
-            boxShadow: abonnementExpire ? 'none' : '0 4px 14px rgba(99,102,241,0.3)',
+            boxShadow: (isVisitorMode || abonnementExpire) ? 'none' : '0 4px 14px rgba(0,49,82,0.28)',
             display: 'flex',
             alignItems: 'center',
             gap: 8,
             whiteSpace: 'nowrap',
             fontFamily: "'DM Sans', sans-serif",
-            opacity: abonnementExpire ? 0.6 : 1,
+            opacity: (isVisitorMode || abonnementExpire) ? 0.6 : 1,
+            minHeight: 44,
           }}
-          disabled={abonnementExpire}
-          title={abonnementExpire ? 'Votre abonnement a expiré' : ''}
+          disabled={isVisitorMode || abonnementExpire}
+          title={isVisitorMode ? 'Mode exploration - Créez un compte' : abonnementExpire ? 'Votre abonnement a expiré' : ''}
         >
           <i className='bx bx-plus' style={{ fontSize: isMobile ? 16 : 18 }} />
           {!isMobile && 'Nouvelle '}Transaction
@@ -836,19 +1016,20 @@ export default function Transactions() {
         marginBottom: isMobile ? 20 : 24,
       }}>
         {[
-          { label: 'Total Entrées', val: totalEntrees, color: COLORS.entree, bg: '#ecfdf5', icon: 'bx-trending-up', prefix: '+' },
-          { label: 'Total Sorties', val: totalSorties, color: COLORS.sortie, bg: '#fef2f2', icon: 'bx-trending-down', prefix: '-' },
-          { label: 'Solde', val: solde, color: solde >= 0 ? COLORS.primary : COLORS.sortie, bg: '#ede9fe', icon: 'bx-equalizer', prefix: solde >= 0 ? '+' : '' },
+          { label: 'Total Entrées', val: totalEntrees, color: COLORS.entree, bg: COLORS.entreeBg, icon: 'bx-trending-up', prefix: '+' },
+          { label: 'Total Sorties', val: totalSorties, color: COLORS.sortie, bg: COLORS.sortieBg, icon: 'bx-trending-down', prefix: '-' },
+          { label: 'Solde', val: solde, color: solde >= 0 ? COLORS.primary : COLORS.sortie, bg: COLORS.primaryBg, icon: 'bx-equalizer', prefix: solde >= 0 ? '+' : '' },
         ].map(s => (
           <div key={s.label} className="stat-card" style={{
             background: COLORS.white,
             borderRadius: 16,
             padding: isMobile ? '14px 16px' : '16px 20px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+            boxShadow: '0 2px 8px rgba(7,25,30,0.04)',
             border: `1px solid ${s.color}20`,
             display: 'flex',
             alignItems: 'center',
             gap: isMobile ? 12 : 14,
+            opacity: isVisitorMode ? 0.85 : 1,
           }}>
             <div style={{
               width: isMobile ? 44 : 48,
@@ -869,6 +1050,11 @@ export default function Transactions() {
               <p style={{ margin: '4px 0 0', fontWeight: 800, fontSize: isMobile ? 18 : 20, color: s.color, fontFamily: "'Outfit', sans-serif" }}>
                 {s.prefix}{s.val.toLocaleString('fr-FR')} MRU
               </p>
+              {isVisitorMode && (
+                <p style={{ margin: '2px 0 0', fontSize: isMobile ? 8 : 10, color: COLORS.sortie, fontWeight: 500 }}>
+                  🔍 Données de démonstration
+                </p>
+              )}
             </div>
           </div>
         ))}
@@ -884,7 +1070,7 @@ export default function Transactions() {
         background: COLORS.white,
         padding: isMobile ? '14px' : '16px 20px',
         borderRadius: 16,
-        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+        boxShadow: '0 2px 8px rgba(7,25,30,0.04)',
         border: `1px solid ${COLORS.border}`,
       }}>
         <div style={{ flex: 2, minWidth: isMobile ? '100%' : 140 }}>
@@ -948,6 +1134,7 @@ export default function Transactions() {
           transition: 'all 0.15s',
           whiteSpace: 'nowrap',
           marginTop: isMobile ? 0 : 22,
+          minHeight: 44,
         }}>
           <i className='bx bx-reset' style={{ fontSize: 15 }} />
           Réinitialiser
@@ -958,7 +1145,7 @@ export default function Transactions() {
       {loading ? (
         <div style={{ textAlign: 'center', padding: '60px 20px', color: COLORS.textLight }}>
           <div style={{
-            width: 48, height: 48, border: '3px solid #ede9fe',
+            width: 48, height: 48, border: `3px solid ${COLORS.primaryBg}`,
             borderTopColor: COLORS.primary, borderRadius: '50%',
             animation: 'spin 0.8s linear infinite', margin: '0 auto 16px',
           }} />
@@ -974,42 +1161,49 @@ export default function Transactions() {
         }}>
           <div style={{
             width: 72, height: 72, borderRadius: '50%',
-            background: '#ede9fe', display: 'flex',
+            background: isVisitorMode ? COLORS.sortieBg : COLORS.primaryBg, 
+            display: 'flex',
             alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px',
           }}>
-            <i className='bx bx-transfer-alt' style={{ fontSize: 32, color: COLORS.primary }} />
+            <i className='bx bx-transfer-alt' style={{ fontSize: 32, color: isVisitorMode ? COLORS.sortie : COLORS.primary }} />
           </div>
           <h3 style={{ fontSize: isMobile ? 16 : 18, fontWeight: 700, color: COLORS.text, margin: '0 0 8px' }}>
             {filtres.date_debut || filtres.date_fin ? 'Aucune transaction dans cette période' : 'Aucune transaction'}
           </h3>
           <p style={{ fontSize: isMobile ? 13 : 14, color: COLORS.textMuted, margin: '0 0 24px' }}>
-            {filtres.date_debut || filtres.date_fin ? 'Ajustez les dates de filtrage' : 'Commencez par enregistrer votre première transaction'}
+            {isVisitorMode 
+              ? '🔍 Mode Exploration - Les données de démonstration seront bientôt disponibles'
+              : 'Commencez par enregistrer votre première transaction'
+            }
           </p>
-          <button 
-            onClick={ouvrirCreation} 
-            style={{
-              background: abonnementExpire 
-                ? '#e2e8f0' 
-                : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-              color: abonnementExpire ? '#94a3b8' : COLORS.white,
-              border: 'none',
-              borderRadius: 40,
-              padding: '12px 28px',
-              cursor: abonnementExpire ? 'not-allowed' : 'pointer',
-              fontWeight: 600,
-              fontSize: 14,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 8,
-              fontFamily: "'DM Sans', sans-serif",
-              opacity: abonnementExpire ? 0.6 : 1,
-            }}
-            disabled={abonnementExpire}
-            title={abonnementExpire ? 'Votre abonnement a expiré' : ''}
-          >
-            <i className='bx bx-plus' style={{ fontSize: 16 }} />
-            Nouvelle transaction
-          </button>
+          {!isVisitorMode && (
+            <button 
+              onClick={ouvrirCreation} 
+              style={{
+                background: abonnementExpire 
+                  ? COLORS.disabledBg
+                  : `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.primaryDark})`,
+                color: abonnementExpire ? COLORS.disabledText : COLORS.white,
+                border: 'none',
+                borderRadius: 40,
+                padding: '12px 28px',
+                cursor: abonnementExpire ? 'not-allowed' : 'pointer',
+                fontWeight: 600,
+                fontSize: 14,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                fontFamily: "'DM Sans', sans-serif",
+                opacity: abonnementExpire ? 0.6 : 1,
+                minHeight: 44,
+              }}
+              disabled={abonnementExpire}
+              title={abonnementExpire ? 'Votre abonnement a expiré' : ''}
+            >
+              <i className='bx bx-plus' style={{ fontSize: 16 }} />
+              Nouvelle transaction
+            </button>
+          )}
         </div>
       ) : (
         <>
@@ -1019,12 +1213,13 @@ export default function Transactions() {
               background: COLORS.white,
               borderRadius: 20,
               overflow: 'hidden',
-              boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+              boxShadow: '0 2px 12px rgba(7,25,30,0.06)',
               border: `1px solid ${COLORS.border}`,
+              opacity: isVisitorMode ? 0.9 : 1,
             }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
-                  <tr style={{ background: 'linear-gradient(135deg, #f8fafc, #f1f5f9)' }}>
+                  <tr style={{ background: isVisitorMode ? `linear-gradient(135deg, ${COLORS.sortieBg}, #FFF0BF)` : `linear-gradient(135deg, ${COLORS.bg}, #EEF2F3)` }}>
                     <th style={{ padding: '14px 18px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: `2px solid ${COLORS.border}` }}>Type</th>
                     <th style={{ padding: '14px 18px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: `2px solid ${COLORS.border}` }}>Montant</th>
                     <th style={{ padding: '14px 18px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: `2px solid ${COLORS.border}` }}>Catégorie</th>
@@ -1037,11 +1232,11 @@ export default function Transactions() {
                   {transactions.map((t, i) => (
                     <tr key={t.id} style={{
                       borderTop: `1px solid ${COLORS.border}`,
-                      background: i % 2 === 0 ? COLORS.white : '#fbfaff',
+                      background: i % 2 === 0 ? COLORS.white : '#F9FAFB',
                       transition: 'background 0.12s',
                     }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#f5f3ff'}
-                    onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? COLORS.white : '#fbfaff'}>
+                    onMouseEnter={e => e.currentTarget.style.background = isVisitorMode ? COLORS.sortieBg : COLORS.primaryBg}
+                    onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? COLORS.white : '#F9FAFB'}>
                       <td style={{ padding: '14px 18px' }}>
                         <TypeBadge type={t.type} />
                       </td>
@@ -1065,35 +1260,43 @@ export default function Transactions() {
                       <td style={{ padding: '14px 18px' }}>
                         <div style={{ display: 'flex', gap: 8 }}>
                           <button onClick={() => ouvrirModification(t)} className="btn-icon" style={{
-                            background: '#ede9fe',
-                            color: COLORS.primary,
+                            background: isVisitorMode ? COLORS.sortieBg : COLORS.primaryBg,
+                            color: isVisitorMode ? COLORS.sortie : COLORS.primary,
                             border: 'none',
                             borderRadius: 8,
-                            padding: '6px 12px',
-                            cursor: 'pointer',
+                            padding: '8px 12px',
+                            cursor: isVisitorMode ? 'not-allowed' : 'pointer',
                             fontSize: 12,
                             fontWeight: 600,
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: 5,
                             fontFamily: "'DM Sans', sans-serif",
-                          }}>
+                            opacity: isVisitorMode ? 0.6 : 1,
+                            minHeight: 32,
+                          }}
+                          disabled={isVisitorMode}
+                          title={isVisitorMode ? 'Mode exploration - Créez un compte' : ''}>
                             <i className='bx bx-edit' style={{ fontSize: 13 }} /> Modifier
                           </button>
                           <button onClick={() => confirmerSuppression(t.id)} className="btn-icon" style={{
-                            background: '#fef2f2',
-                            color: COLORS.sortie,
+                            background: isVisitorMode ? COLORS.sortieBg : COLORS.errorBg,
+                            color: isVisitorMode ? COLORS.sortie : COLORS.error,
                             border: 'none',
                             borderRadius: 8,
-                            padding: '6px 12px',
-                            cursor: 'pointer',
+                            padding: '8px 12px',
+                            cursor: isVisitorMode ? 'not-allowed' : 'pointer',
                             fontSize: 12,
                             fontWeight: 600,
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: 5,
                             fontFamily: "'DM Sans', sans-serif",
-                          }}>
+                            opacity: isVisitorMode ? 0.6 : 1,
+                            minHeight: 32,
+                          }}
+                          disabled={isVisitorMode}
+                          title={isVisitorMode ? 'Mode exploration - Créez un compte' : ''}>
                             <i className='bx bx-trash' style={{ fontSize: 13 }} /> Supprimer
                           </button>
                         </div>
@@ -1102,6 +1305,19 @@ export default function Transactions() {
                   ))}
                 </tbody>
               </table>
+              {isVisitorMode && (
+                <div style={{
+                  padding: '12px 20px',
+                  textAlign: 'center',
+                  background: COLORS.sortieBg,
+                  borderTop: `1px solid ${COLORS.sortieAccent}66`,
+                  fontSize: isMobile ? 11 : 13,
+                  color: COLORS.sortie,
+                  fontWeight: 500,
+                }}>
+                  🔍 Données de démonstration - Créez un compte pour gérer vos vraies transactions
+                </div>
+              )}
             </div>
           )}
 
@@ -1113,8 +1329,9 @@ export default function Transactions() {
                   background: COLORS.white,
                   borderRadius: 16,
                   padding: 16,
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                  boxShadow: '0 2px 8px rgba(7,25,30,0.06)',
                   border: `1px solid ${COLORS.border}`,
+                  opacity: isVisitorMode ? 0.9 : 1,
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <TypeBadge type={t.type} />
@@ -1157,12 +1374,12 @@ export default function Transactions() {
                   <div style={{ display: 'flex', gap: 10, borderTop: `1px solid ${COLORS.border}`, paddingTop: 12, marginTop: 4 }}>
                     <button onClick={() => ouvrirModification(t)} style={{
                       flex: 1,
-                      background: '#ede9fe',
-                      color: COLORS.primary,
+                      background: isVisitorMode ? COLORS.sortieBg : COLORS.primaryBg,
+                      color: isVisitorMode ? COLORS.sortie : COLORS.primary,
                       border: 'none',
                       borderRadius: 10,
-                      padding: '10px',
-                      cursor: 'pointer',
+                      padding: '11px',
+                      cursor: isVisitorMode ? 'not-allowed' : 'pointer',
                       fontWeight: 600,
                       fontSize: 13,
                       display: 'flex',
@@ -1170,17 +1387,21 @@ export default function Transactions() {
                       justifyContent: 'center',
                       gap: 6,
                       fontFamily: "'DM Sans', sans-serif",
-                    }}>
+                      opacity: isVisitorMode ? 0.6 : 1,
+                      minHeight: 44,
+                    }}
+                    disabled={isVisitorMode}
+                    title={isVisitorMode ? 'Mode exploration - Créez un compte' : ''}>
                       <i className='bx bx-edit' style={{ fontSize: 14 }} /> Modifier
                     </button>
                     <button onClick={() => confirmerSuppression(t.id)} style={{
                       flex: 1,
-                      background: '#fef2f2',
-                      color: COLORS.sortie,
+                      background: isVisitorMode ? COLORS.sortieBg : COLORS.errorBg,
+                      color: isVisitorMode ? COLORS.sortie : COLORS.error,
                       border: 'none',
                       borderRadius: 10,
-                      padding: '10px',
-                      cursor: 'pointer',
+                      padding: '11px',
+                      cursor: isVisitorMode ? 'not-allowed' : 'pointer',
                       fontWeight: 600,
                       fontSize: 13,
                       display: 'flex',
@@ -1188,12 +1409,30 @@ export default function Transactions() {
                       justifyContent: 'center',
                       gap: 6,
                       fontFamily: "'DM Sans', sans-serif",
-                    }}>
+                      opacity: isVisitorMode ? 0.6 : 1,
+                      minHeight: 44,
+                    }}
+                    disabled={isVisitorMode}
+                    title={isVisitorMode ? 'Mode exploration - Créez un compte' : ''}>
                       <i className='bx bx-trash' style={{ fontSize: 14 }} /> Supprimer
                     </button>
                   </div>
                 </div>
               ))}
+              {isVisitorMode && (
+                <div style={{
+                  padding: '12px 16px',
+                  textAlign: 'center',
+                  background: COLORS.sortieBg,
+                  borderRadius: 12,
+                  fontSize: 12,
+                  color: COLORS.sortie,
+                  fontWeight: 500,
+                  border: `1px solid ${COLORS.sortieAccent}66`,
+                }}>
+                  🔍 Données de démonstration - Créez un compte pour vos vraies transactions
+                </div>
+              )}
             </div>
           )}
 
@@ -1208,6 +1447,7 @@ export default function Transactions() {
           }}>
             <p style={{ margin: 0, fontSize: 13, color: COLORS.textMuted }}>
               {transactions.length} transaction(s) affichée(s)
+              {isVisitorMode && ' (données de démonstration)'}
               {(filtres.date_debut || filtres.date_fin) && (
                 <span style={{ display: 'block', marginTop: 4, fontSize: 12, color: COLORS.primary }}>
                   {filtres.date_debut && `Du ${new Date(filtres.date_debut).toLocaleDateString('fr-FR')}`}
@@ -1224,7 +1464,7 @@ export default function Transactions() {
                 color: COLORS.primary,
                 border: `1.5px solid ${COLORS.primary}`,
                 borderRadius: 40,
-                padding: '8px 20px',
+                padding: '10px 20px',
                 cursor: 'pointer',
                 fontWeight: 600,
                 fontSize: 13,
@@ -1233,6 +1473,7 @@ export default function Transactions() {
                 gap: 8,
                 fontFamily: "'DM Sans', sans-serif",
                 transition: 'all 0.2s',
+                minHeight: 44,
               }}
               onMouseEnter={e => {
                 e.currentTarget.style.background = COLORS.primary;
@@ -1255,6 +1496,7 @@ export default function Transactions() {
         <TransactionModal
           transaction={transactionEdit}
           categories={categories}
+          isVisitorMode={isVisitorMode}
           onClose={() => { setModalOuvert(false); setTransactionEdit(null); }}
           onSuccess={() => { setModalOuvert(false); setTransactionEdit(null); chargerDonnees(); }}
           onMessage={handleModalMessage}
@@ -1267,7 +1509,7 @@ export default function Transactions() {
           position: 'fixed',
           inset: 0,
           zIndex: 9999,
-          background: 'rgba(15,23,42,0.6)',
+          background: 'rgba(7,25,30,0.62)',
           backdropFilter: 'blur(8px)',
           display: 'flex',
           alignItems: 'center',
@@ -1281,20 +1523,20 @@ export default function Transactions() {
             width: '100%',
             maxWidth: 360,
             textAlign: 'center',
-            boxShadow: '0 32px 64px rgba(0,0,0,0.25)',
+            boxShadow: '0 32px 64px rgba(7,25,30,0.26)',
             animation: 'modalIn 0.3s cubic-bezier(.16,1,.3,1)',
           }}>
             <div style={{
               width: 64,
               height: 64,
               borderRadius: '50%',
-              background: '#fef2f2',
+              background: COLORS.errorBg,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               margin: '0 auto 16px',
             }}>
-              <i className='bx bx-trash' style={{ fontSize: 28, color: COLORS.sortie }} />
+              <i className='bx bx-trash' style={{ fontSize: 28, color: COLORS.error }} />
             </div>
             <h3 style={{ margin: '0 0 8px', color: COLORS.text, fontWeight: 800, fontFamily: "'Outfit', sans-serif", fontSize: 18 }}>
               Supprimer cette transaction ?
@@ -1305,7 +1547,7 @@ export default function Transactions() {
             <div style={{ display: 'flex', gap: 12 }}>
               <button onClick={handleSupprimer} style={{
                 flex: 1,
-                background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+                background: `linear-gradient(135deg, ${COLORS.error}, #C53030)`,
                 color: COLORS.white,
                 border: 'none',
                 borderRadius: 12,
@@ -1318,7 +1560,8 @@ export default function Transactions() {
                 justifyContent: 'center',
                 gap: 6,
                 fontFamily: "'DM Sans', sans-serif",
-                boxShadow: '0 4px 12px rgba(239,68,68,0.3)',
+                boxShadow: `0 4px 12px ${COLORS.error}4D`,
+                minHeight: 44,
               }}>
                 <i className='bx bx-trash' style={{ fontSize: 15 }} /> Oui, supprimer
               </button>
@@ -1333,6 +1576,7 @@ export default function Transactions() {
                 fontWeight: 600,
                 fontSize: 14,
                 fontFamily: "'DM Sans', sans-serif",
+                minHeight: 44,
               }}>
                 Annuler
               </button>

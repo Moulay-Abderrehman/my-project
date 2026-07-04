@@ -1,3 +1,4 @@
+# backend/abonnements/views.py
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -8,10 +9,13 @@ from datetime import timedelta
 from .models import Abonnement, Paiement, Plan, CompteEncaissement
 from .serializers import (
     AbonnementSerializer, SouscriptionSerializer, PaiementSerializer, PlanSerializer,
-    CompteEncaissementSerializer,
+    CompteEncaissementSerializer, VisitorDemoDataSerializer, VisitorStatsSerializer,
+    VisitorToUserSerializer, VisitorInvitationSerializer
 )
 from logs.utils import enregistrer_log
+from django.contrib.auth import get_user_model
 
+User = get_user_model()
 
 
 TARIFS = {
@@ -36,6 +40,8 @@ TARIFS = {
 PLANS_DEFAULTS = {
     'standard':   {'prix_mensuel': 500,  'prix_annuel': 5000,  'nb_categories_max': 50,  'description': 'Plan Standard'},
     'entreprise': {'prix_mensuel': 2000, 'prix_annuel': 20000, 'nb_categories_max': 200, 'description': 'Plan Entreprise'},
+    # 🆕 Plan de démonstration
+    'demo':       {'prix_mensuel': 0,    'prix_annuel': 0,     'nb_categories_max': 0,   'description': 'Mode Exploration - Visualisation uniquement'},
 }
 
 # Méthodes de paiement manuelles (capture d'écran + validation admin)
@@ -124,6 +130,10 @@ def verifier_regles_renouvellement(user, nouveau_type_utilisateur: str, nouvelle
     except Abonnement.DoesNotExist:
         abo = None
 
+    # 🆕 Si l'utilisateur est en mode visiteur, on autorise la souscription normale
+    if abo and abo.est_demo_mode():
+        return 'nouveau'
+
     if not abo or not abo.est_actif() or abo.get_plan_nom() == 'essai':
         return 'nouveau'
 
@@ -166,6 +176,10 @@ def activer_abonnement(user, type_utilisateur: str, type_abonnement: str, montan
     except Abonnement.DoesNotExist:
         abo_existant = None
 
+    # 🆕 Si l'utilisateur est en mode visiteur, on crée un nouvel abonnement normal
+    if abo_existant and abo_existant.est_demo_mode():
+        abo_existant = None
+
     if mode == 'prolongation' and abo_existant is not None:
         date_debut = abo_existant.date_debut
         base_date_fin = abo_existant.date_fin if abo_existant.date_fin > maintenant else maintenant
@@ -193,6 +207,9 @@ def activer_abonnement(user, type_utilisateur: str, type_abonnement: str, montan
             'statut':              'actif',
             'montant':             montant,
             'nb_renouvellements':  nouveau_compteur,
+            # 🆕 S'assurer que le mode démo est désactivé
+            'est_demo':            False,
+            'date_expiration_demo': None,
         }
     )
 
@@ -227,12 +244,61 @@ def activer_abonnement(user, type_utilisateur: str, type_abonnement: str, montan
     return abo
 
 
+# 🆕 NOUVELLE FONCTION : Créer un abonnement de démonstration
+def creer_abonnement_demo(user) -> Abonnement:
+    """
+    Crée un abonnement de démonstration pour un utilisateur visiteur
+    """
+    maintenant = timezone.now()
+    
+    # Récupérer ou créer le plan demo
+    plan_demo = _get_or_create_plan('demo', PLANS_DEFAULTS['demo'])
+    
+    # Créer l'abonnement demo
+    abo, created = Abonnement.objects.update_or_create(
+        utilisateur=user,
+        defaults={
+            'plan': plan_demo,
+            'type': 'demo',
+            'statut': 'demo',
+            'date_debut': maintenant,
+            'date_fin': None,  # Pas de date de fin pour la démo
+            'montant': 0,
+            'nb_renouvellements': 0,
+            'est_demo': True,
+            'date_expiration_demo': None,
+        }
+    )
+    
+    # Mettre à jour le rôle utilisateur
+    user.role = 'visiteur'
+    user.save(update_fields=['role'])
+    
+    return abo
+
+
 # ─── LISTE DES PLANS ─────────────────────────────────────────────────────────
 class PlanListView(generics.ListAPIView):
     serializer_class   = PlanSerializer
     permission_classes = [IsAuthenticated]
     queryset           = Plan.objects.all()
     pagination_class   = None
+
+
+# 🆕 NOUVELLE VUE : Liste des plans pour les visiteurs
+class PlanPublicListView(generics.ListAPIView):
+    """
+    Liste publique des plans (pour le mode visiteur)
+    """
+    serializer_class   = PlanSerializer
+    permission_classes = [AllowAny]
+    pagination_class   = None
+    
+    def get_queryset(self):
+        # Exclure les plans internes si nécessaire
+        return Plan.objects.filter(
+            nom__in=['standard', 'entreprise']
+        ).order_by('ordre_affichage')
 
 
 # ─── DEMANDE DE CODE DE CONFIRMATION avant souscription ─────────────────────
@@ -259,13 +325,20 @@ class DemanderCodeSouscriptionView(APIView):
             return Response({'error': "Type d'utilisateur invalide (standard ou entreprise)."}, status=400)
 
         user = request.user
-        # Vérifier que l'email correspond au compte
-        user_email = (user.email or '').lower()
-        if user_email != email:
-            return Response({
-                'error': "L'email ne correspond pas à celui de votre compte. "
-                         "Utilisez l'email enregistré lors de l'inscription."
-            }, status=400)
+        
+        # 🆕 Vérifier si l'utilisateur est en mode visiteur
+        if hasattr(user, 'est_visiteur') and user.est_visiteur:
+            # Pour le mode visiteur, l'email n'est pas encore associé à un compte
+            # On va quand même envoyer le code à l'email fourni
+            pass
+        else:
+            # Vérifier que l'email correspond au compte
+            user_email = (user.email or '').lower()
+            if user_email != email:
+                return Response({
+                    'error': "L'email ne correspond pas à celui de votre compte. "
+                             "Utilisez l'email enregistré lors de l'inscription."
+                }, status=400)
 
         # Générer le code
         from comptes.utils import generer_code_reset, sauvegarder_code_reset
@@ -317,6 +390,17 @@ class SouscriptionView(APIView):
             return Response({'error': 'Code invalide ou expiré. Demandez un nouveau code.'}, status=400)
 
         user = request.user
+
+        # 🆕 Si l'utilisateur est en mode visiteur, on le convertit en utilisateur réel
+        if hasattr(user, 'est_visiteur') and user.est_visiteur:
+            # Mettre à jour l'email de l'utilisateur
+            user.email = email
+            user.save(update_fields=['email'])
+            
+            # Supprimer le flag visiteur
+            if hasattr(user, 'est_visiteur'):
+                user.est_visiteur = False
+                user.save(update_fields=['est_visiteur'])
 
         # NOUVEAU — vérification des règles de renouvellement / changement de
         # plan avant toute activation.
@@ -382,6 +466,7 @@ class PaiementListView(generics.ListAPIView):
         except Abonnement.DoesNotExist:
             return Paiement.objects.none()
         
+
 # abonnements/views.py - Ajouter cette classe
 
 class AbonnementStatutView(APIView):
@@ -393,6 +478,22 @@ class AbonnementStatutView(APIView):
 
     def get(self, request):
         user = request.user
+        
+        # 🆕 Vérifier si l'utilisateur est en mode visiteur
+        if hasattr(user, 'est_visiteur') and user.est_visiteur:
+            return Response({
+                'statut': 'visiteur',
+                'message': '🔍 Mode Exploration - Visualisation uniquement',
+                'plan': 'demo',
+                'est_actif': False,
+                'jours_restants': 0,
+                'est_visiteur': True,
+                'est_lecture_seule': True,
+                'peut_creer': False,
+                'peut_modifier': False,
+                'redirect_to': '/inscription'
+            })
+        
         try:
             abonnement = user.abonnement
             if not abonnement:
@@ -403,6 +504,21 @@ class AbonnementStatutView(APIView):
                     'est_actif': False,
                     'jours_restants': 0,
                     'redirect_to': '/abonnement'
+                })
+            
+            # 🆕 Vérifier si c'est un abonnement de démonstration
+            if abonnement.est_demo_mode():
+                return Response({
+                    'statut': 'visiteur',
+                    'message': '🔍 Mode Exploration - Visualisation uniquement',
+                    'plan': 'demo',
+                    'est_actif': True,
+                    'jours_restants': 0,
+                    'est_visiteur': True,
+                    'est_lecture_seule': True,
+                    'peut_creer': False,
+                    'peut_modifier': False,
+                    'redirect_to': '/inscription'
                 })
 
             est_actif = abonnement.statut == 'actif' and abonnement.date_fin > timezone.now()
@@ -422,11 +538,13 @@ class AbonnementStatutView(APIView):
                 'jours_restants': jours_restants,
                 'peut_creer': est_actif,
                 'peut_modifier': est_actif,
+                'est_visiteur': False,
+                'est_lecture_seule': not est_actif,
             }
 
             if not est_actif:
                 response_data['message'] = 'Votre abonnement a expiré. Veuillez le renouveler pour continuer à créer/modifier des données.'
-                response_data['redirect_to'] = '/abonnement'
+                response_data['redirect_to'] = '/profil'
             else:
                 response_data['message'] = f'Votre abonnement est actif. {jours_restants} jours restants.'
 
@@ -851,3 +969,373 @@ class TrackPayWebhookView(APIView):
         # Toujours répondre 200 rapidement, comme attendu par la doc TrackPay,
         # pour éviter des réessais inutiles côté TrackPay.
         return Response({'detail': 'ok'}, status=200)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 🆕 NOUVELLES VUES POUR LE MODE VISITEUR
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ─── INITIER LE MODE VISITEUR ──────────────────────────────────────────────
+class InitierModeVisiteurView(APIView):
+    """
+    Crée un utilisateur temporaire en mode visiteur
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        # Vérifier si un utilisateur existe déjà avec cet email
+        email = request.data.get('email', '').strip().lower()
+        
+        # Générer un identifiant unique pour le visiteur
+        import uuid
+        visitor_id = str(uuid.uuid4())[:8]
+        
+        # Créer un utilisateur temporaire
+        user, created = User.objects.get_or_create(
+            username=f"visitor_{visitor_id}",
+            defaults={
+                'email': email or f"visitor_{visitor_id}@demo.com",
+                'prenom': 'Explorateur',
+                'nom': 'Démo',
+                'role': 'visiteur',
+                'est_visiteur': True,
+                'is_active': True,
+            }
+        )
+        
+        if created:
+            # Créer l'abonnement de démonstration
+            creer_abonnement_demo(user)
+            
+            # Générer un token d'accès pour le visiteur
+            from rest_framework_simplejwt.tokens import AccessToken
+            token = AccessToken.for_user(user)
+            
+            return Response({
+                'success': True,
+                'message': '🔍 Mode Exploration activé',
+                'access_token': str(token),
+                'user': {
+                    'id': user.id,
+                    'prenom': user.prenom,
+                    'nom': user.nom,
+                    'email': user.email,
+                    'role': user.role,
+                    'est_visiteur': True,
+                },
+                'abonnement': {
+                    'est_demo_mode': True,
+                    'est_lecture_seule': True,
+                    'peut_creer_transaction': False,
+                    'peut_creer_budget': False,
+                }
+            }, status=status.HTTP_201_CREATED)
+        else:
+            return Response({
+                'error': 'Une session visiteur existe déjà. Veuillez vous connecter ou utiliser un autre email.',
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+# ─── DONNÉES DE DÉMONSTRATION ──────────────────────────────────────────────
+class VisitorDemoDataView(APIView):
+    """
+    Retourne les données de démonstration pour le mode visiteur
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        
+        # Vérifier que l'utilisateur est bien en mode visiteur
+        if not (hasattr(user, 'est_visiteur') and user.est_visiteur):
+            try:
+                abo = user.abonnement
+                if not abo or not abo.est_demo_mode():
+                    return Response({
+                        'error': 'Cette endpoint est réservée au mode visiteur.'
+                    }, status=status.HTTP_403_FORBIDDEN)
+            except:
+                return Response({
+                    'error': 'Cette endpoint est réservée au mode visiteur.'
+                }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Données de démonstration
+        from .mock_data import (
+            MOCK_TRANSACTIONS, MOCK_BUDGETS, MOCK_CATEGORIES,
+            MOCK_STATS, MOCK_NOTIFICATIONS, MOCK_INVITATION_MESSAGES
+        )
+        
+        data = {
+            'user': {
+                'prenom': user.prenom or 'Explorateur',
+                'nom': user.nom or 'Démo',
+                'email': user.email or 'demo@exploration.com',
+                'role': 'visiteur',
+            },
+            'abonnement': {
+                'est_actif': True,
+                'est_demo_mode': True,
+                'est_lecture_seule': True,
+                'peut_creer_transaction': False,
+                'peut_creer_budget': False,
+                'peut_modifier_profil': False,
+            },
+            'stats': MOCK_STATS,
+            'transactions': MOCK_TRANSACTIONS,
+            'budgets': MOCK_BUDGETS,
+            'categories': MOCK_CATEGORIES,
+            'notifications': MOCK_NOTIFICATIONS,
+            'messages': MOCK_INVITATION_MESSAGES,
+        }
+        
+        return Response(data)
+
+
+# ─── STATISTIQUES DE DÉMONSTRATION ──────────────────────────────────────────
+class VisitorStatsView(APIView):
+    """
+    Retourne les statistiques de démonstration pour le mode visiteur
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        
+        # Vérifier que l'utilisateur est bien en mode visiteur
+        if not (hasattr(user, 'est_visiteur') and user.est_visiteur):
+            try:
+                abo = user.abonnement
+                if not abo or not abo.est_demo_mode():
+                    return Response({
+                        'error': 'Cette endpoint est réservée au mode visiteur.'
+                    }, status=status.HTTP_403_FORBIDDEN)
+            except:
+                return Response({
+                    'error': 'Cette endpoint est réservée au mode visiteur.'
+                }, status=status.HTTP_403_FORBIDDEN)
+        
+        from .mock_data import MOCK_STATS
+        
+        return Response({
+            'stats': MOCK_STATS,
+            'mode': 'visiteur',
+            'est_lecture_seule': True,
+        })
+
+
+# ─── CONVERSION VISITEUR → UTILISATEUR ────────────────────────────────────
+class ConvertVisitorToUserView(APIView):
+    """
+    Convertit un utilisateur visiteur en utilisateur réel
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        
+        # Vérifier que l'utilisateur est bien en mode visiteur
+        if not (hasattr(user, 'est_visiteur') and user.est_visiteur):
+            try:
+                abo = user.abonnement
+                if not abo or not abo.est_demo_mode():
+                    return Response({
+                        'error': 'Vous n\'êtes pas en mode visiteur.'
+                    }, status=status.HTTP_403_FORBIDDEN)
+            except:
+                return Response({
+                    'error': 'Vous n\'êtes pas en mode visiteur.'
+                }, status=status.HTTP_403_FORBIDDEN)
+        
+        serializer = VisitorToUserSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Mettre à jour l'utilisateur
+        user.email = serializer.validated_data['email']
+        user.prenom = serializer.validated_data['prenom']
+        user.nom = serializer.validated_data['nom']
+        user.telephone = serializer.validated_data['telephone']
+        user.est_visiteur = False
+        user.is_active = True
+        
+        # Définir le mot de passe
+        user.set_password(serializer.validated_data['password'])
+        user.save()
+        
+        # Supprimer l'abonnement de démonstration
+        try:
+            abo = user.abonnement
+            if abo and abo.est_demo_mode():
+                abo.delete()
+        except:
+            pass
+        
+        # Créer un abonnement essai
+        plan_essai, _ = Plan.objects.get_or_create(
+            nom='essai',
+            defaults={
+                'prix_mensuel': 0,
+                'prix_annuel': 0,
+                'nb_categories_max': 5,
+                'description': "Période d'essai"
+            }
+        )
+        
+        maintenant = timezone.now()
+        abo = Abonnement.objects.create(
+            utilisateur=user,
+            plan=plan_essai,
+            statut='actif',
+            date_debut=maintenant,
+            date_fin=maintenant + timedelta(days=30),
+            montant=0,
+            type='mensuel',
+            nb_renouvellements=0
+        )
+        
+        user.abonnement = abo
+        user.role = 'standard'
+        user.save(update_fields=['abonnement', 'role'])
+        
+        # Créer une notification
+        from notifications.models import Notification
+        Notification.objects.create(
+            utilisateur=user,
+            type='bienvenue',
+            message=f"BIENVENUE|Bienvenue {user.prenom} ! Votre essai gratuit de 30 jours commence maintenant."
+        )
+        
+        return Response({
+            'success': True,
+            'message': 'Votre compte a été créé avec succès ! Profitez de votre essai gratuit de 30 jours.',
+            'user': {
+                'id': user.id,
+                'prenom': user.prenom,
+                'nom': user.nom,
+                'email': user.email,
+                'telephone': user.telephone,
+                'role': user.role,
+            },
+            'abonnement': AbonnementSerializer(abo).data,
+        }, status=status.HTTP_201_CREATED)
+
+
+# ─── MESSAGES D'INCITATION ──────────────────────────────────────────────────
+class VisitorInvitationMessagesView(APIView):
+    """
+    Retourne les messages d'incitation à s'inscrire pour le mode visiteur
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        messages = {
+            'dashboard': {
+                'titre': '📊 Visualisez vos finances',
+                'message': 'Créez un compte pour suivre vos vraies dépenses et recevoir des analyses personnalisées.',
+                'action': 'Créer un compte',
+                'action_type': 'signup',
+                'icone': '📊'
+            },
+            'transactions': {
+                'titre': '💳 Gérez vos transactions',
+                'message': 'Ajoutez, modifiez et suivez vos transactions en temps réel avec un compte gratuit.',
+                'action': 'Commencer maintenant',
+                'action_type': 'signup',
+                'icone': '💳'
+            },
+            'budgets': {
+                'titre': '📈 Budgets personnalisés',
+                'message': 'Créez des budgets sur mesure et recevez des alertes pour ne jamais dépasser vos limites.',
+                'action': 'Démarrer',
+                'action_type': 'signup',
+                'icone': '📈'
+            },
+            'categories': {
+                'titre': '🏷️ Catégories personnalisées',
+                'message': 'Organisez vos finances avec des catégories personnalisées pour une meilleure analyse.',
+                'action': 'Créer un compte',
+                'action_type': 'signup',
+                'icone': '🏷️'
+            },
+            'profil': {
+                'titre': '👤 Profil personnalisé',
+                'message': 'Personnalisez votre profil et gérez toutes vos préférences en un clic.',
+                'action': 'S\'inscrire',
+                'action_type': 'signup',
+                'icone': '👤'
+            },
+            'subscribe': {
+                'titre': '🚀 Passez à la vitesse supérieure',
+                'message': 'Débloquez toutes les fonctionnalités premium avec un abonnement adapté à vos besoins.',
+                'action': 'Voir les offres',
+                'action_type': 'subscribe',
+                'icone': '🚀'
+            }
+        }
+        
+        return Response(messages)
+
+
+# ─── EXPIRATION DE LA SESSION VISITEUR ─────────────────────────────────────
+class VisitorSessionExpirationView(APIView):
+    """
+    Vérifie si la session visiteur est toujours valide
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        
+        # Vérifier que l'utilisateur est bien en mode visiteur
+        if not (hasattr(user, 'est_visiteur') and user.est_visiteur):
+            try:
+                abo = user.abonnement
+                if not abo or not abo.est_demo_mode():
+                    return Response({
+                        'est_expire': False,
+                        'message': 'Vous n\'êtes pas en mode visiteur.'
+                    })
+            except:
+                return Response({
+                    'est_expire': False,
+                    'message': 'Vous n\'êtes pas en mode visiteur.'
+                })
+        
+        # Vérifier si l'abonnement de démonstration existe toujours
+        try:
+            abo = user.abonnement
+            if not abo or not abo.est_demo_mode():
+                return Response({
+                    'est_expire': True,
+                    'message': 'Votre session visiteur a expiré.',
+                    'redirect_to': '/'
+                })
+            
+            # Vérifier si la date d'expiration de la démo est dépassée
+            if abo.date_expiration_demo and abo.date_expiration_demo < timezone.now():
+                return Response({
+                    'est_expire': True,
+                    'message': 'Votre session visiteur a expiré.',
+                    'redirect_to': '/'
+                })
+            
+            # Vérifier si l'utilisateur est toujours marqué comme visiteur
+            if not user.est_visiteur:
+                return Response({
+                    'est_expire': True,
+                    'message': 'Votre session visiteur a expiré.',
+                    'redirect_to': '/'
+                })
+            
+            return Response({
+                'est_expire': False,
+                'message': 'Session visiteur valide.',
+                'temps_restant': 'Illimité',
+            })
+            
+        except:
+            return Response({
+                'est_expire': True,
+                'message': 'Votre session visiteur a expiré.',
+                'redirect_to': '/'
+            })

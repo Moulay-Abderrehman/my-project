@@ -10,185 +10,75 @@ import Webcam from 'react-webcam';
 import kycService from '../api/kycService';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
+import {
+  ArrowRight,
+  ChevronLeft,
+  Camera,
+  ImagePlus,
+  Aperture,
+  RefreshCw,
+  Loader2,
+  Lightbulb,
+  User,
+  Search,
+  PartyPopper,
+  LogIn,
+  Check,
+  CheckCircle2,
+  AlertCircle,
+  AlertTriangle,
+  Info,
+  X,
+  CreditCard,
+  Globe,
+  Home,
+  ShieldCheck,
+  Fingerprint,
+  Clock,
+  ScanLine,
+  Lock,
+  UserCheck,
+} from 'lucide-react';
 
-// ─── Boxicons CDN (inject once) ───────────────────────────────────────────────
-const injectBoxicons = () => {
-  if (!document.getElementById('boxicons-css')) {
-    const link = document.createElement('link');
-    link.id   = 'boxicons-css';
-    link.rel  = 'stylesheet';
-    link.href = 'https://cdn.jsdelivr.net/npm/boxicons@2.1.4/css/boxicons.min.css';
-    document.head.appendChild(link);
-  }
+// ─── Police + animations (injection unique) ──────────────────────────────────
+const injectAssets = () => {
   if (!document.getElementById('kyc-fonts')) {
     const link = document.createElement('link');
-    link.id   = 'kyc-fonts';
-    link.rel  = 'stylesheet';
-    link.href = 'https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap';
+    link.id = 'kyc-fonts';
+    link.rel = 'stylesheet';
+    link.href = 'https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap';
     document.head.appendChild(link);
   }
   if (!document.getElementById('kyc-anim')) {
     const style = document.createElement('style');
     style.id = 'kyc-anim';
     style.textContent = `
-      @keyframes kycSpin { to { transform: rotate(360deg); } }
       @keyframes kycFadeUp { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:translateY(0); } }
-      @keyframes kycPulse { 0%,100%{box-shadow:0 0 0 0 rgba(255,255,255,.2)} 50%{box-shadow:0 0 0 14px rgba(255,255,255,0)} }
-      @keyframes kycBannerSlide { from { opacity:0; transform:translateY(-20px); } to { opacity:1; transform:translateY(0); } }
-      @keyframes kycBannerFade { 0%,80%{opacity:1;transform:translateY(0);} 100%{opacity:0;transform:translateY(-20px);} }
-      .bx-spin-kyc { animation: kycSpin .8s linear infinite; display:inline-block; }
-      .kyc-banner-slide { animation: kycBannerSlide .4s ease; }
-      .kyc-banner-auto { animation: kycBannerSlide .4s ease, kycBannerFade 4s ease forwards; }
+      @keyframes kycPulse { 0%,100%{box-shadow:0 0 0 0 rgba(53,98,103,.18)} 50%{box-shadow:0 0 0 14px rgba(53,98,103,0)} }
+      @keyframes kycBannerSlide { from { opacity:0; transform:translateY(-16px); } to { opacity:1; transform:translateY(0); } }
+      @keyframes kycBannerFade { 0%,80%{opacity:1;transform:translateY(0);} 100%{opacity:0;transform:translateY(-16px);} }
+      .kyc-card { animation: kycFadeUp .35s cubic-bezier(.16,1,.3,1) both; font-family: 'Sora', sans-serif; }
+      .kyc-pulse { animation: kycPulse 2.5s ease infinite; }
+      .kyc-banner-slide { animation: kycBannerSlide .35s ease; }
+      .kyc-banner-auto { animation: kycBannerSlide .35s ease, kycBannerFade 4s ease forwards; }
     `;
     document.head.appendChild(style);
   }
 };
 
-// ─── Design tokens — thème bleu FinanceApp ───────────────────────────────────
-const T = {
-  bg:          '#1a3a8f',
-  bgGradient:  'linear-gradient(135deg, #1a3a8f 0%, #1e4db7 40%, #2563eb 100%)',
-  surface:     '#ffffff',
-  surfaceAlt:  '#f1f5ff',
-  border:      '#dce8ff',
-  accent:      '#1e4db7',
-  accentHover: '#1a3a8f',
-  accentBg:    'rgba(30,77,183,.08)',
-  accentBdr:   'rgba(30,77,183,.25)',
-  accentGlow:  '0 4px 20px rgba(30,77,183,.35)',
-  blue:        '#2563eb',
-  blueBg:      'rgba(37,99,235,.08)',
-  blueBdr:     'rgba(37,99,235,.25)',
-  text:        '#0f1e3d',
-  textMuted:   '#6b7a9e',
-  textSub:     '#4a5880',
-  danger:      '#dc2626',
-  dangerBg:    'rgba(220,38,38,.06)',
-  dangerBdr:   'rgba(220,38,38,.2)',
-  warn:        '#d97706',
-  warnBg:      'rgba(217,119,6,.06)',
-  warnBdr:     'rgba(217,119,6,.2)',
-  success:     '#059669',
-  successBg:   'rgba(5,150,105,.08)',
-  successBdr:  'rgba(5,150,105,.2)',
-  font:        "'DM Sans', sans-serif",
-  fontDisplay: "'Syne', sans-serif",
-  radius:      '20px',
-  radiusSm:    '12px',
-  radiusXs:    '8px',
-};
+// ─── Classes Tailwind partagées (thème FinanceApp) ───────────────────────────
+const pageWrap = 'min-h-screen flex items-center justify-center px-4 py-8 relative overflow-hidden bg-[linear-gradient(135deg,#0c2e7c,#1e4db7,#3b82f6)]';
+const cardBase = 'kyc-card relative w-full bg-white border border-[rgba(16,33,75,0.08)] rounded-2xl p-6 sm:p-8 shadow-[0_24px_70px_rgba(10,20,60,0.28)] overflow-hidden';
+const cardLine = 'absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-[#356267] to-[#4ea674]';
+const btnPrimary = 'w-full min-h-[48px] px-5 py-3.5 bg-[#356267] text-white rounded-[10px] font-bold text-[15px] flex items-center justify-center gap-2 shadow-[0_4px_16px_rgba(53,98,103,0.3)] transition-all hover:enabled:-translate-y-0.5 hover:enabled:bg-[#2a4f53] disabled:opacity-60 disabled:cursor-not-allowed';
+const btnSecondary = 'w-full min-h-[46px] px-5 py-3 bg-transparent text-[#356267]/75 border border-[rgba(16,33,75,0.08)] rounded-[10px] font-semibold text-sm flex items-center justify-center gap-2 transition-colors hover:bg-[#f8fafc]';
+const backBtn = 'flex items-center gap-1 bg-[#f8fafc] border border-[rgba(16,33,75,0.08)] rounded-lg px-3 py-2 text-sm font-semibold text-[#356267]/75 transition-colors hover:bg-[#c2f2f2]/40';
+const sectionLabel = 'text-[10px] font-bold text-[#356267]/45 uppercase tracking-wider mb-2.5';
+const infoBox = 'bg-[#f8fafc] rounded-[10px] border border-[rgba(16,33,75,0.08)] overflow-hidden';
+const infoRow = 'flex justify-between items-center gap-3 px-4 py-3';
+const progressTrack = 'bg-[rgba(16,33,75,0.08)] rounded h-1.5 overflow-hidden mt-1.5';
 
-// ─── Reusable style objects ───────────────────────────────────────────────────
-const S = {
-  page: {
-    minHeight: '100vh',
-    background: T.bgGradient,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '20px 16px',
-    fontFamily: T.font,
-  },
-  card: {
-    background: T.surface,
-    border: `1px solid ${T.border}`,
-    borderRadius: T.radius,
-    padding: '36px 32px',
-    maxWidth: 500,
-    margin: '0 auto',
-    width: '100%',
-    animation: 'kycFadeUp .35s ease',
-    position: 'relative',
-    overflow: 'hidden',
-    boxShadow: '0 20px 60px rgba(10,30,100,.25)',
-  },
-  cardLine: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0,
-    height: 3,
-    background: `linear-gradient(90deg, ${T.accent}, ${T.blue})`,
-    borderRadius: '20px 20px 0 0',
-  },
-  btnPrimary: {
-    width: '100%',
-    padding: '14px 20px',
-    background: T.accent,
-    color: '#ffffff',
-    border: 'none',
-    borderRadius: T.radiusSm,
-    fontWeight: 700,
-    fontSize: 15,
-    fontFamily: T.font,
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    letterSpacing: '.2px',
-    boxShadow: T.accentGlow,
-    transition: 'transform .15s, box-shadow .15s',
-  },
-  btnSecondary: {
-    width: '100%',
-    padding: '13px 20px',
-    background: 'transparent',
-    color: T.textSub,
-    border: `1px solid ${T.border}`,
-    borderRadius: T.radiusSm,
-    fontWeight: 500,
-    fontSize: 14,
-    fontFamily: T.font,
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  backBtn: {
-    background: T.surfaceAlt,
-    border: `1px solid ${T.border}`,
-    borderRadius: T.radiusXs,
-    padding: '7px 13px',
-    cursor: 'pointer',
-    color: T.textSub,
-    fontFamily: T.font,
-    fontWeight: 500,
-    fontSize: 14,
-    display: 'flex',
-    alignItems: 'center',
-    gap: 4,
-  },
-  sectionLabel: {
-    fontSize: 10,
-    fontWeight: 700,
-    color: T.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: '1.1px',
-    margin: '0 0 10px',
-    fontFamily: T.font,
-  },
-  infoBox: {
-    background: T.surfaceAlt,
-    borderRadius: T.radiusSm,
-    border: `1px solid ${T.border}`,
-    overflow: 'hidden',
-  },
-  infoRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '12px 16px',
-  },
-  progressBar: {
-    background: T.border,
-    borderRadius: 4,
-    height: 6,
-    overflow: 'hidden',
-    marginTop: 6,
-  },
-};
-
-// ─── Banner component ─────────────────────────────────────────────────────────
+// ─── Banner ────────────────────────────────────────────────────────────────
 function Banner({ type = 'info', message, onDismiss, autoDismiss = false }) {
   const [visible, setVisible] = useState(true);
 
@@ -204,98 +94,70 @@ function Banner({ type = 'info', message, onDismiss, autoDismiss = false }) {
 
   if (!visible || !message) return null;
 
-  const styles = {
-    success: { bg: T.successBg, border: T.successBdr, icon: 'bx-check-circle', color: T.success },
-    error:   { bg: T.dangerBg,  border: T.dangerBdr,  icon: 'bx-error-circle', color: T.danger },
-    warning: { bg: T.warnBg,    border: T.warnBdr,    icon: 'bx-error',       color: T.warn },
-    info:    { bg: T.accentBg,  border: T.accentBdr,  icon: 'bx-info-circle', color: T.accent },
+  const themes = {
+    success: { bg: '#e9f8e7', border: 'rgba(78,166,116,0.3)', color: '#459071', Icon: CheckCircle2 },
+    error:   { bg: 'rgba(213,80,83,0.08)', border: 'rgba(213,80,83,0.25)', color: '#d55053', Icon: AlertCircle },
+    warning: { bg: '#fdf3e3', border: 'rgba(194,135,46,0.3)', color: '#b4791f', Icon: AlertTriangle },
+    info:    { bg: '#c2f2f2', border: 'rgba(53,98,103,0.25)', color: '#356267', Icon: Info },
   };
-
-  const style = styles[type] || styles.info;
+  const theme = themes[type] || themes.info;
+  const { Icon } = theme;
 
   return (
-    <div className="kyc-banner-slide" style={{
-      background: style.bg,
-      border: `1px solid ${style.border}`,
-      borderRadius: T.radiusXs,
-      padding: '12px 16px',
-      marginBottom: 16,
-      display: 'flex',
-      alignItems: 'flex-start',
-      gap: 10,
-      position: 'relative',
-    }}>
-      <i className={`bx ${style.icon}`} style={{ fontSize: 20, color: style.color, flexShrink: 0, marginTop: 1 }} />
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 13, color: style.color, lineHeight: 1.5, fontFamily: T.font }}>
-          {message}
-        </div>
+    <div
+      className="kyc-banner-slide mb-4 flex items-start gap-2.5 rounded-lg border px-4 py-3"
+      style={{ background: theme.bg, borderColor: theme.border }}
+    >
+      <Icon size={19} style={{ color: theme.color }} className="mt-0.5 flex-shrink-0" />
+      <div className="flex-1 text-[13px] leading-relaxed" style={{ color: theme.color }}>
+        {message}
       </div>
       {!autoDismiss && (
         <button
           onClick={() => { setVisible(false); if (onDismiss) onDismiss(); }}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: style.color,
-            cursor: 'pointer',
-            fontSize: 18,
-            padding: '0 0 0 8px',
-            flexShrink: 0,
-          }}
+          className="flex-shrink-0 rounded p-0.5 transition-opacity hover:opacity-70"
+          style={{ color: theme.color }}
         >
-          <i className="bx bx-x" />
+          <X size={17} />
         </button>
       )}
     </div>
   );
 }
 
-// ─── StepBar ──────────────────────────────────────────────────────────────────
+// ─── StepBar ──────────────────────────────────────────────────────────────
 function StepBar({ currentStep, totalSteps = 4 }) {
   const labels = ['Document', 'Scan', 'Données', 'Selfie'];
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: 28 }}>
+    <div className="mb-7 flex items-center">
       {Array.from({ length: totalSteps }, (_, i) => (
         <React.Fragment key={i}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
-            <div style={{
-              width: 32, height: 32, borderRadius: '50%',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontWeight: 700, fontSize: 12, fontFamily: T.font,
-              background: i < currentStep
-                ? T.accent
-                : i === currentStep ? 'transparent' : T.surfaceAlt,
-              color: i < currentStep ? '#fff' : i === currentStep ? T.accent : T.textMuted,
-              border: i === currentStep
-                ? `2px solid ${T.accent}`
-                : i < currentStep ? 'none' : `2px solid ${T.border}`,
-              boxShadow: i === currentStep ? T.accentGlow : 'none',
-              flexShrink: 0,
-              transition: 'all .3s',
-            }}>
-              {i < currentStep
-                ? <i className="bx bx-check" style={{ fontSize: 16 }} />
-                : i + 1}
+          <div className="flex flex-col items-center gap-1.5">
+            <div
+              className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold transition-all duration-300 ${
+                i < currentStep
+                  ? 'bg-[#356267] text-white'
+                  : i === currentStep
+                  ? 'border-2 border-[#356267] bg-white text-[#356267] shadow-[0_0_0_4px_rgba(53,98,103,0.1)]'
+                  : 'border-2 border-[rgba(16,33,75,0.08)] bg-[#f8fafc] text-[#356267]/40'
+              }`}
+            >
+              {i < currentStep ? <Check size={15} /> : i + 1}
             </div>
-            <span style={{
-              fontSize: 9, fontWeight: 700, letterSpacing: '.6px',
-              textTransform: 'uppercase', whiteSpace: 'nowrap',
-              color: i <= currentStep ? T.accent : T.textMuted,
-              fontFamily: T.font,
-            }}>
+            <span
+              className={`whitespace-nowrap text-[9px] font-bold uppercase tracking-wide ${
+                i <= currentStep ? 'text-[#356267]' : 'text-[#356267]/40'
+              }`}
+            >
               {labels[i]}
             </span>
           </div>
           {i < totalSteps - 1 && (
-            <div style={{
-              flex: 1, height: 2, borderRadius: 1, margin: '0 3px',
-              marginBottom: 18,
-              background: i < currentStep
-                ? `linear-gradient(90deg, ${T.accent}, ${T.blue})`
-                : T.border,
-              transition: 'background .3s',
-            }} />
+            <div
+              className={`mx-1 mb-[18px] h-[2px] flex-1 rounded transition-colors duration-300 ${
+                i < currentStep ? 'bg-gradient-to-r from-[#356267] to-[#4ea674]' : 'bg-[rgba(16,33,75,0.08)]'
+              }`}
+            />
           )}
         </React.Fragment>
       ))}
@@ -329,7 +191,7 @@ export default function KYCFlow() {
   const webcamRef    = useRef(null);
   const fileInputRef = useRef(null);
 
-  useEffect(() => { injectBoxicons(); }, []);
+  useEffect(() => { injectAssets(); }, []);
 
   const showBanner = (message, type = 'info', autoDismiss = false) => {
     setBanner({ message, type, autoDismiss });
@@ -407,19 +269,10 @@ export default function KYCFlow() {
   // ── Loading screen ──────────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div style={S.page}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{
-            width: 44, height: 44,
-            border: '3px solid rgba(255,255,255,.3)',
-            borderTopColor: '#fff',
-            borderRadius: '50%',
-            animation: 'kycSpin .8s linear infinite',
-            margin: '0 auto 16px',
-          }} />
-          <p style={{ color: 'rgba(255,255,255,.8)', fontSize: 14, fontFamily: T.font }}>
-            Chargement de votre session…
-          </p>
+      <div className={pageWrap}>
+        <div className="text-center" style={{ fontFamily: "'Sora', sans-serif" }}>
+          <div className="mx-auto mb-4 h-11 w-11 animate-spin rounded-full border-[3px] border-white/30 border-t-white" />
+          <p className="text-[14px] text-white/85">Chargement de votre session…</p>
         </div>
       </div>
     );
@@ -428,18 +281,15 @@ export default function KYCFlow() {
   // ── No userId ───────────────────────────────────────────────────────────────
   if (!userId) {
     return (
-      <div style={S.page}>
-        <div style={{ ...S.card, textAlign: 'center', padding: '48px 32px' }}>
-          <div style={S.cardLine} />
-          <i className="bx bx-error-circle" style={{ fontSize: 56, color: T.warn, marginBottom: 16 }} />
-          <p style={{ color: T.textSub, marginBottom: 24, fontFamily: T.font }}>
+      <div className={pageWrap}>
+        <div className={`${cardBase} max-w-[480px] p-10 text-center`}>
+          <div className={cardLine} />
+          <AlertTriangle size={52} className="mx-auto mb-4 text-[#c2872e]" />
+          <p className="mb-6 text-[14px] text-[#356267]/75">
             Session expirée. Veuillez recommencer.
           </p>
-          <button
-            onClick={() => navigate('/connexion')}
-            style={{ ...S.btnPrimary, width: 'auto', padding: '12px 28px' }}
-          >
-            <i className="bx bx-log-in" style={{ fontSize: 18 }} /> Retour à la connexion
+          <button onClick={() => navigate('/connexion')} className={`${btnPrimary} w-auto px-7`}>
+            <LogIn size={18} /> Retour à la connexion
           </button>
         </div>
       </div>
@@ -464,7 +314,7 @@ export default function KYCFlow() {
     clearBanner();
     try {
       const result = await kycService.extractDocument(capturedFile);
-      
+
       if (result.status === 'success') {
         if (result.confidence_score <= 25) {
           showBanner('❌ Document illisible. Veuillez prendre une photo plus claire et mieux éclairée.', 'error');
@@ -480,8 +330,8 @@ export default function KYCFlow() {
         setLoading(false);
       }
     } catch (err) {
-      const errorMessage = err.response?.data?.message || 
-                          err.response?.data?.error || 
+      const errorMessage = err.response?.data?.message ||
+                          err.response?.data?.error ||
                           "Erreur lors de l'extraction OCR. Veuillez réessayer.";
       if (err.response?.status === 422 && err.response?.data?.error === 'DOCUMENT_ILLISIBLE') {
         showBanner('❌ ' + err.response?.data?.message, 'error');
@@ -489,7 +339,7 @@ export default function KYCFlow() {
         showBanner(errorMessage, 'error');
       }
       setLoading(false);
-    } finally { 
+    } finally {
       setLoading(false);
     }
   };
@@ -511,12 +361,12 @@ export default function KYCFlow() {
         face_image_base64: extractedData?.face_image_base64 || '',
         document_full_image_base64: extractedData?.document_full_image_base64 || '',
       };
-      
+
       console.log("[KYC] Envoi confirmation avec:", {
         has_full_image: !!confirmPayload.document_full_image_base64,
         full_image_length: confirmPayload.document_full_image_base64?.length || 0
       });
-      
+
       await kycService.confirmData(userId, confirmPayload);
       setStep(4);
       showBanner('Données confirmées !', 'success');
@@ -534,12 +384,12 @@ export default function KYCFlow() {
     clearBanner();
     try {
       const result = await kycService.verifyFace(userId, selfieBlob);
-      
+
       // ✅ FIX: Vérifier que result existe avant de lui assigner une propriété
       if (result && typeof result === 'object') {
         result.document_type = docType;
         setFaceResult(result);
-        
+
         if (result.verified) {
           if (result.access_token) {
             localStorage.setItem('access_token', result.access_token);
@@ -589,89 +439,62 @@ export default function KYCFlow() {
   // ════════════════════════════════════════════════════════════════════════════
   if (step === 0) {
     return (
-      <div style={S.page}>
-        <div style={S.card}>
-          <div style={S.cardLine} />
+      <div className={pageWrap}>
+        <div className={`${cardBase} max-w-[500px]`}>
+          <div className={cardLine} />
 
           {banner && (
-            <Banner
-              type={banner.type}
-              message={banner.message}
-              onDismiss={clearBanner}
-              autoDismiss={banner.autoDismiss}
-            />
+            <Banner type={banner.type} message={banner.message} onDismiss={clearBanner} autoDismiss={banner.autoDismiss} />
           )}
 
-          <div style={{ textAlign: 'center', marginBottom: 28 }}>
-            <div style={{
-              width: 72, height: 72, borderRadius: '50%',
-              background: T.accentBg, border: `2px solid ${T.accentBdr}`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              margin: '0 auto 18px',
-              animation: 'kycPulse 2.5s ease infinite',
-            }}>
-              <i className="bx bx-shield-quarter" style={{ fontSize: 36, color: T.accent }} />
+          <div className="mb-7 text-center">
+            <div className="kyc-pulse mx-auto mb-4 flex h-[72px] w-[72px] items-center justify-center rounded-full border-2 border-[#356267]/25 bg-[#c2f2f2]/40">
+              <Fingerprint size={34} className="text-[#356267]" />
             </div>
-            <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: T.text, fontFamily: T.fontDisplay }}>
+            <h2 className="text-[22px] font-extrabold text-[#10214b]">
               Vérification d'identité
             </h2>
-            <p style={{ margin: '8px 0 0', color: T.textMuted, fontSize: 14, lineHeight: 1.65, fontFamily: T.font }}>
+            <p className="mt-2 text-[14px] leading-relaxed text-[#356267]/75">
               Complétez ces étapes pour activer votre compte.
             </p>
           </div>
 
-          <div style={{
-            background: T.surfaceAlt, border: `1px solid ${T.border}`,
-            borderRadius: T.radiusSm, padding: '12px 16px', marginBottom: 20,
-            display: 'flex', alignItems: 'center', gap: 12,
-          }}>
-            <i className="bx bx-time-five" style={{ fontSize: 22, color: T.accent, flexShrink: 0 }} />
+          <div className="mb-5 flex items-center gap-3 rounded-[10px] border border-[rgba(16,33,75,0.08)] bg-[#f8fafc] px-4 py-3">
+            <Clock size={22} className="flex-shrink-0 text-[#356267]" />
             <div>
-              <div style={{ fontWeight: 600, fontSize: 14, color: T.text, fontFamily: T.font }}>Temps estimé</div>
-              <div style={{ fontSize: 12, color: T.textMuted, fontFamily: T.font }}>2 – 5 minutes</div>
+              <div className="text-[14px] font-semibold text-[#10214b]">Temps estimé</div>
+              <div className="text-[12px] text-[#356267]/60">2 – 5 minutes</div>
             </div>
           </div>
 
-          <div style={{ marginBottom: 22 }}>
+          <div className="mb-6 flex flex-col gap-2.5">
             {[
-              { icon: 'bx-id-card',      title: 'Scannez votre document',     desc: "Carte d'identité nationale ou passeport" },
-              { icon: 'bx-check-shield', title: 'Confirmez vos informations', desc: 'Vérifiez les données extraites automatiquement' },
-              { icon: 'bx-face',         title: 'Vérification faciale',       desc: 'Un selfie pour confirmer votre identité' },
+              { Icon: CreditCard, title: 'Scannez votre document',     desc: "Carte d'identité nationale ou passeport" },
+              { Icon: ShieldCheck, title: 'Confirmez vos informations', desc: 'Vérifiez les données extraites automatiquement' },
+              { Icon: UserCheck,  title: 'Vérification faciale',       desc: 'Un selfie pour confirmer votre identité' },
             ].map((item, i) => (
-              <div key={i} style={{
-                display: 'flex', gap: 14, marginBottom: 10,
-                background: T.surfaceAlt, border: `1px solid ${T.border}`,
-                borderRadius: T.radiusSm, padding: '13px 15px',
-              }}>
-                <div style={{
-                  width: 42, height: 42, borderRadius: 11, flexShrink: 0,
-                  background: T.accentBg, border: `1px solid ${T.accentBdr}`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <i className={`bx ${item.icon}`} style={{ fontSize: 22, color: T.accent }} />
+              <div key={i} className="flex gap-3.5 rounded-[10px] border border-[rgba(16,33,75,0.08)] bg-[#f8fafc] px-4 py-3.5">
+                <div className="flex h-[42px] w-[42px] flex-shrink-0 items-center justify-center rounded-xl border border-[#356267]/20 bg-[#c2f2f2]/40">
+                  <item.Icon size={22} className="text-[#356267]" />
                 </div>
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: 14, color: T.text, fontFamily: T.font }}>{item.title}</div>
-                  <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2, fontFamily: T.font }}>{item.desc}</div>
+                  <div className="text-[14px] font-semibold text-[#10214b]">{item.title}</div>
+                  <div className="mt-0.5 text-[12px] text-[#356267]/60">{item.desc}</div>
                 </div>
               </div>
             ))}
           </div>
 
-          <div style={{
-            background: T.accentBg, border: `1px solid ${T.accentBdr}`,
-            borderRadius: T.radiusXs, padding: '10px 14px', marginBottom: 22,
-            display: 'flex', gap: 10, alignItems: 'flex-start',
-          }}>
-            <i className="bx bx-lock-alt" style={{ fontSize: 17, color: T.accent, marginTop: 1, flexShrink: 0 }} />
-            <span style={{ fontSize: 12, color: T.accent, lineHeight: 1.6, fontFamily: T.font }}>
+          <div className="mb-6 flex items-start gap-2.5 rounded-lg border border-[#356267]/20 bg-[#c2f2f2]/30 px-3.5 py-2.5">
+            <Lock size={17} className="mt-0.5 flex-shrink-0 text-[#356267]" />
+            <span className="text-[12px] leading-relaxed text-[#356267]">
               Vos données sont traitées de façon sécurisée et chiffrée.
             </span>
           </div>
 
-          <button onClick={() => setStep(1)} style={S.btnPrimary}>
+          <button onClick={() => setStep(1)} className={btnPrimary}>
             Commencer la vérification
-            <i className="bx bx-right-arrow-alt" style={{ fontSize: 20 }} />
+            <ArrowRight size={19} />
           </button>
         </div>
       </div>
@@ -683,77 +506,65 @@ export default function KYCFlow() {
   // ════════════════════════════════════════════════════════════════════════════
   if (step === 1) {
     const documents = [
-      { val: 'passport', label: 'Passeport',                   desc: 'Document de voyage international',            icon: 'bx-globe' },
-      { val: 'cni',      label: "Carte d'identité nationale",  desc: "Pièce d'identité officielle mauritanienne",   icon: 'bx-id-card' },
-      { val: 'sejour',   label: 'Carte de séjour',             desc: 'Pour les résidents étrangers',                icon: 'bx-home' },
+      { val: 'passport', label: 'Passeport',                   desc: 'Document de voyage international',            Icon: Globe },
+      { val: 'cni',      label: "Carte d'identité nationale",  desc: "Pièce d'identité officielle mauritanienne",   Icon: CreditCard },
+      { val: 'sejour',   label: 'Carte de séjour',             desc: 'Pour les résidents étrangers',                Icon: Home },
     ];
     return (
-      <div style={S.page}>
-        <div style={{ ...S.card, maxWidth: 520 }}>
-          <div style={S.cardLine} />
-          
+      <div className={pageWrap}>
+        <div className={`${cardBase} max-w-[520px]`}>
+          <div className={cardLine} />
+
           {banner && (
-            <Banner
-              type={banner.type}
-              message={banner.message}
-              onDismiss={clearBanner}
-              autoDismiss={banner.autoDismiss}
-            />
+            <Banner type={banner.type} message={banner.message} onDismiss={clearBanner} autoDismiss={banner.autoDismiss} />
           )}
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-            <button onClick={() => setStep(0)} style={S.backBtn}>
-              <i className="bx bx-chevron-left" style={{ fontSize: 18 }} />
+          <div className="mb-5 flex items-center gap-3">
+            <button onClick={() => setStep(0)} className={backBtn}>
+              <ChevronLeft size={18} />
             </button>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: T.text, fontFamily: T.fontDisplay }}>
-              Type de document
-            </h3>
+            <h3 className="text-[16px] font-bold text-[#10214b]">Type de document</h3>
           </div>
           <StepBar currentStep={0} />
-          <h2 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 800, color: T.text, fontFamily: T.fontDisplay }}>
+          <h2 className="mb-1.5 text-[20px] font-extrabold text-[#10214b]">
             Choisissez votre document
           </h2>
-          <p style={{ margin: '0 0 20px', color: T.textMuted, fontSize: 13, fontFamily: T.font }}>
+          <p className="mb-5 text-[13px] text-[#356267]/60">
             Sélectionnez le document à utiliser.
           </p>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
-            {documents.map(doc => (
-              <div key={doc.val} onClick={() => setDocType(doc.val)} style={{
-                border: `1.5px solid ${docType === doc.val ? T.accent : T.border}`,
-                borderRadius: T.radiusSm, padding: '16px', cursor: 'pointer',
-                background: docType === doc.val ? T.accentBg : T.surfaceAlt,
-                display: 'flex', alignItems: 'center', gap: 14,
-                transition: 'all .15s',
-                boxShadow: docType === doc.val ? T.accentGlow : 'none',
-              }}>
-                <div style={{
-                  width: 46, height: 46, borderRadius: 12, flexShrink: 0,
-                  background: docType === doc.val ? T.accentBg : T.surface,
-                  border: `1px solid ${docType === doc.val ? T.accentBdr : T.border}`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <i className={`bx ${doc.icon}`} style={{ fontSize: 24, color: docType === doc.val ? T.accent : T.textMuted }} />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: T.text, fontFamily: T.font }}>{doc.label}</div>
-                  <div style={{ fontSize: 12, color: T.textMuted, fontFamily: T.font }}>{doc.desc}</div>
-                </div>
-                {docType === doc.val && (
-                  <div style={{
-                    width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
-                    background: T.accent,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <i className="bx bx-check" style={{ fontSize: 15, color: '#fff' }} />
+          <div className="mb-5 flex flex-col gap-2.5">
+            {documents.map(doc => {
+              const active = docType === doc.val;
+              return (
+                <div
+                  key={doc.val}
+                  onClick={() => setDocType(doc.val)}
+                  className={`flex cursor-pointer items-center gap-3.5 rounded-[10px] border-[1.5px] p-4 transition-all ${
+                    active ? 'border-[#356267] bg-[#c2f2f2]/30 shadow-[0_0_0_4px_rgba(53,98,103,0.08)]' : 'border-[rgba(16,33,75,0.08)] bg-[#f8fafc]'
+                  }`}
+                >
+                  <div className={`flex h-[46px] w-[46px] flex-shrink-0 items-center justify-center rounded-xl border ${
+                    active ? 'border-[#356267]/30 bg-white' : 'border-[rgba(16,33,75,0.08)] bg-white'
+                  }`}>
+                    <doc.Icon size={23} className={active ? 'text-[#356267]' : 'text-[#356267]/40'} />
                   </div>
-                )}
-              </div>
-            ))}
+                  <div className="flex-1">
+                    <div className="text-[14px] font-bold text-[#10214b]">{doc.label}</div>
+                    <div className="text-[12px] text-[#356267]/60">{doc.desc}</div>
+                  </div>
+                  {active && (
+                    <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[#356267]">
+                      <Check size={15} className="text-white" />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
-          <button onClick={() => setStep(2)} style={S.btnPrimary}>
-            Suivant <i className="bx bx-right-arrow-alt" style={{ fontSize: 20 }} />
+          <button onClick={() => setStep(2)} className={btnPrimary}>
+            Suivant <ArrowRight size={19} />
           </button>
         </div>
       </div>
@@ -766,74 +577,62 @@ export default function KYCFlow() {
   if (step === 2) {
     const docLabel = docType === 'passport' ? 'passeport' : docType === 'cni' ? "carte d'identité" : 'carte de séjour';
     return (
-      <div style={S.page}>
-        <div style={{ ...S.card, maxWidth: 520 }}>
-          <div style={S.cardLine} />
-          
+      <div className={pageWrap}>
+        <div className={`${cardBase} max-w-[520px]`}>
+          <div className={cardLine} />
+
           {banner && (
-            <Banner
-              type={banner.type}
-              message={banner.message}
-              onDismiss={clearBanner}
-              autoDismiss={banner.autoDismiss}
-            />
+            <Banner type={banner.type} message={banner.message} onDismiss={clearBanner} autoDismiss={banner.autoDismiss} />
           )}
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-            <button onClick={() => setStep(1)} style={S.backBtn}>
-              <i className="bx bx-chevron-left" style={{ fontSize: 18 }} />
+          <div className="mb-5 flex items-center gap-3">
+            <button onClick={() => setStep(1)} className={backBtn}>
+              <ChevronLeft size={18} />
             </button>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: T.text, fontFamily: T.fontDisplay }}>
-              Scanner le document
-            </h3>
+            <h3 className="text-[16px] font-bold text-[#10214b]">Scanner le document</h3>
           </div>
           <StepBar currentStep={1} />
-          <h2 style={{ margin: '0 0 20px', fontSize: 20, fontWeight: 800, color: T.text, fontFamily: T.fontDisplay }}>
+          <h2 className="mb-5 text-[20px] font-extrabold text-[#10214b]">
             Photographiez votre {docLabel}
           </h2>
 
           {!capturedImage && !showCamera && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
+            <div className="mb-5 flex flex-col gap-2.5">
               <div
                 onClick={() => setShowCamera(true)}
-                style={{
-                  border: `2px dashed ${T.accentBdr}`,
-                  borderRadius: T.radiusSm, padding: '28px 20px',
-                  textAlign: 'center', cursor: 'pointer',
-                  background: T.accentBg,
-                }}
+                className="cursor-pointer rounded-[10px] border-2 border-dashed border-[#356267]/25 bg-[#c2f2f2]/20 px-5 py-7 text-center transition-colors hover:bg-[#c2f2f2]/35"
               >
-                <i className="bx bx-camera" style={{ fontSize: 42, color: T.accent, display: 'block', marginBottom: 10 }} />
-                <div style={{ fontWeight: 600, fontSize: 15, color: T.text, fontFamily: T.font, marginBottom: 4 }}>
-                  Prendre une photo
-                </div>
-                <div style={{ fontSize: 12, color: T.textMuted, fontFamily: T.font }}>
-                  Ouvrir la caméra de l'appareil
-                </div>
+                <Camera size={40} className="mx-auto mb-2.5 text-[#356267]" />
+                <div className="mb-1 text-[15px] font-semibold text-[#10214b]">Prendre une photo</div>
+                <div className="text-[12px] text-[#356267]/60">Ouvrir la caméra de l'appareil</div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ flex: 1, height: 1, background: T.border }} />
-                <span style={{ fontSize: 12, color: T.textMuted, fontFamily: T.font }}>ou</span>
-                <div style={{ flex: 1, height: 1, background: T.border }} />
+              <div className="flex items-center gap-2.5">
+                <div className="h-px flex-1 bg-[rgba(16,33,75,0.08)]" />
+                <span className="text-[12px] text-[#356267]/45">ou</span>
+                <div className="h-px flex-1 bg-[rgba(16,33,75,0.08)]" />
               </div>
 
-              <button onClick={() => fileInputRef.current?.click()} style={S.btnSecondary}>
-                <i className="bx bx-image-add" style={{ fontSize: 18 }} /> Choisir depuis la galerie
+              <button onClick={() => fileInputRef.current?.click()} className={btnSecondary}>
+                <ImagePlus size={18} /> Choisir depuis la galerie
               </button>
-              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelect} style={{ display: 'none' }} />
+              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
             </div>
           )}
 
           {showCamera && !capturedImage && (
-            <div style={{ marginBottom: 20 }}>
-              <Webcam ref={webcamRef} audio={false} screenshotFormat="image/jpeg"
-                style={{ width: '100%', borderRadius: T.radiusSm, border: `2px solid ${T.accentBdr}` }} />
-              <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
-                <button onClick={handleCaptureDoc} style={{ ...S.btnPrimary, flex: 2 }}>
-                  <i className="bx bx-aperture" style={{ fontSize: 18 }} /> Capturer
+            <div className="mb-5">
+              <Webcam
+                ref={webcamRef}
+                audio={false}
+                screenshotFormat="image/jpeg"
+                className="w-full rounded-[10px] border-2 border-[#356267]/25"
+              />
+              <div className="mt-3 flex gap-2.5">
+                <button onClick={handleCaptureDoc} className={`${btnPrimary} flex-[2]`}>
+                  <Aperture size={18} /> Capturer
                 </button>
-                <button onClick={() => setShowCamera(false)} style={{ ...S.btnSecondary, flex: 1 }}>
+                <button onClick={() => setShowCamera(false)} className={`${btnSecondary} flex-1`}>
                   Annuler
                 </button>
               </div>
@@ -841,34 +640,33 @@ export default function KYCFlow() {
           )}
 
           {capturedImage && (
-            <div style={{ marginBottom: 20 }}>
-              <h4 style={{ margin: '0 0 12px', color: T.text, fontFamily: T.font }}>Vérifiez la photo</h4>
-              <img src={capturedImage} alt="document" style={{
-                width: '100%', borderRadius: T.radiusSm,
-                border: `2px solid ${T.accentBdr}`,
-                objectFit: 'cover', maxHeight: 300,
-              }} />
-              <div style={{
-                background: T.accentBg, border: `1px solid ${T.accentBdr}`,
-                borderRadius: T.radiusSm, padding: '12px 16px', margin: '12px 0',
-              }}>
+            <div className="mb-5">
+              <h4 className="mb-3 font-semibold text-[#10214b]">Vérifiez la photo</h4>
+              <img
+                src={capturedImage}
+                alt="document"
+                className="max-h-[300px] w-full rounded-[10px] border-2 border-[#356267]/25 object-cover"
+              />
+              <div className="my-3 rounded-[10px] border border-[#356267]/20 bg-[#c2f2f2]/20 px-4 py-3">
                 {['Texte clairement lisible', "Pas de reflets ni d'ombres", 'Les quatre coins visibles', 'Image nette et non floue'].map((item, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: i < 3 ? 7 : 0 }}>
-                    <i className="bx bx-check-circle" style={{ fontSize: 18, color: T.accent, flexShrink: 0 }} />
-                    <span style={{ fontSize: 13, color: T.accent, fontFamily: T.font }}>{item}</span>
+                  <div key={i} className={`flex items-center gap-2.5 ${i < 3 ? 'mb-1.5' : ''}`}>
+                    <CheckCircle2 size={17} className="flex-shrink-0 text-[#356267]" />
+                    <span className="text-[13px] text-[#356267]">{item}</span>
                   </div>
                 ))}
               </div>
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button onClick={handleSendOCR} disabled={loading} style={{ ...S.btnPrimary, flex: 2, opacity: loading ? .6 : 1 }}>
+              <div className="flex gap-2.5">
+                <button onClick={handleSendOCR} disabled={loading} className={`${btnPrimary} flex-[2]`}>
                   {loading
-                    ? <><i className="bx bx-loader-alt bx-spin-kyc" style={{ fontSize: 16 }} /> Analyse en cours…</>
-                    : <><i className="bx bx-scan" style={{ fontSize: 16 }} /> Analyser le document</>
+                    ? <><Loader2 size={16} className="animate-spin" /> Analyse en cours…</>
+                    : <><ScanLine size={16} /> Analyser le document</>
                   }
                 </button>
-                <button onClick={() => { setCapturedImage(null); setCapturedFile(null); }}
-                  style={{ ...S.btnSecondary, flex: 1 }}>
-                  <i className="bx bx-refresh" style={{ fontSize: 16 }} /> Reprendre
+                <button
+                  onClick={() => { setCapturedImage(null); setCapturedFile(null); }}
+                  className={`${btnSecondary} flex-1`}
+                >
+                  <RefreshCw size={16} /> Reprendre
                 </button>
               </div>
             </div>
@@ -883,66 +681,45 @@ export default function KYCFlow() {
   // ════════════════════════════════════════════════════════════════════════════
   if (step === 3) {
     const confidence = extractedData?.confidence_score
-      ? Math.round(extractedData.confidence_score ) : null;
+      ? Math.round(extractedData.confidence_score) : null;
     return (
-      <div style={S.page}>
-        <div style={{ ...S.card, maxWidth: 520 }}>
-          <div style={S.cardLine} />
-          
+      <div className={pageWrap}>
+        <div className={`${cardBase} max-w-[520px]`}>
+          <div className={cardLine} />
+
           {banner && (
-            <Banner
-              type={banner.type}
-              message={banner.message}
-              onDismiss={clearBanner}
-              autoDismiss={banner.autoDismiss}
-            />
+            <Banner type={banner.type} message={banner.message} onDismiss={clearBanner} autoDismiss={banner.autoDismiss} />
           )}
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-            <button onClick={() => setStep(2)} style={S.backBtn}>
-              <i className="bx bx-chevron-left" style={{ fontSize: 18 }} />
+          <div className="mb-5 flex items-center gap-3">
+            <button onClick={() => setStep(2)} className={backBtn}>
+              <ChevronLeft size={18} />
             </button>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: T.text, fontFamily: T.fontDisplay }}>
-              Confirmer vos informations
-            </h3>
+            <h3 className="text-[16px] font-bold text-[#10214b]">Confirmer vos informations</h3>
           </div>
           <StepBar currentStep={2} />
-          <h2 style={{ margin: '0 0 4px', fontSize: 20, fontWeight: 800, color: T.text, fontFamily: T.fontDisplay }}>
+          <h2 className="mb-1 text-[20px] font-extrabold text-[#10214b]">
             Informations extraites
           </h2>
-          <p style={{ margin: '0 0 14px', fontSize: 13, color: T.textMuted, fontFamily: T.font }}>
+          <p className="mb-3.5 text-[13px] text-[#356267]/60">
             Vérifiez que ces informations sont correctes
           </p>
 
           {confidence && (
-            <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: 7,
-              background: T.accentBg, border: `1px solid ${T.accentBdr}`,
-              borderRadius: 20, padding: '5px 14px', marginBottom: 16,
-              fontSize: 13, color: T.accent, fontWeight: 700, fontFamily: T.font,
-            }}>
-              <i className="bx bx-check-shield" style={{ fontSize: 16 }} />
+            <div className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-[#356267]/25 bg-[#c2f2f2]/30 px-3.5 py-1.5 text-[13px] font-bold text-[#356267]">
+              <ShieldCheck size={16} />
               Confiance : {confidence}%
             </div>
           )}
 
           {confidence && confidence <= 50 && confidence > 25 && (
-            <div style={{
-              background: T.warnBg,
-              border: `1px solid ${T.warnBdr}`,
-              borderRadius: T.radiusXs,
-              padding: '10px 14px',
-              marginBottom: 16,
-              display: 'flex',
-              gap: 10,
-              alignItems: 'flex-start',
-            }}>
-              <i className="bx bx-error" style={{ fontSize: 18, color: T.warn, flexShrink: 0 }} />
+            <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-[rgba(194,135,46,0.3)] bg-[#fdf3e3] px-3.5 py-2.5">
+              <AlertTriangle size={18} className="flex-shrink-0 text-[#b4791f]" />
               <div>
-                <div style={{ fontSize: 12, color: T.warn, fontWeight: 600, marginBottom: 4 }}>
+                <div className="mb-1 text-[12px] font-semibold text-[#b4791f]">
                   ⚠️ Confiance limitée ({confidence}%)
                 </div>
-                <div style={{ fontSize: 11, color: T.warn, lineHeight: 1.4 }}>
+                <div className="text-[11px] leading-snug text-[#b4791f]">
                   Certaines informations n'ont pas pu être lues correctement.
                   Veuillez vérifier et corriger les champs ci-dessus avant de continuer.
                 </div>
@@ -951,30 +728,26 @@ export default function KYCFlow() {
           )}
 
           {!extractedData?.face_image_base64 && (
-            <div style={{
-              background: T.warnBg, border: `1px solid ${T.warnBdr}`,
-              borderRadius: T.radiusXs, padding: '10px 14px', marginBottom: 16,
-              display: 'flex', gap: 10, alignItems: 'flex-start',
-            }}>
-              <i className="bx bx-info-circle" style={{ fontSize: 18, color: T.warn, marginTop: 1, flexShrink: 0 }} />
-              <span style={{ fontSize: 12, color: T.warn, lineHeight: 1.6, fontFamily: T.font }}>
+            <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-[rgba(194,135,46,0.3)] bg-[#fdf3e3] px-3.5 py-2.5">
+              <Info size={18} className="mt-0.5 flex-shrink-0 text-[#b4791f]" />
+              <span className="text-[12px] leading-relaxed text-[#b4791f]">
                 Aucun visage extrait du document. La vérification faciale sera plus stricte.
               </span>
             </div>
           )}
 
-          <div style={{ marginBottom: 14 }}>
-            <p style={S.sectionLabel}>IDENTITÉ</p>
-            <div style={S.infoBox}>
+          <div className="mb-3.5">
+            <p className={sectionLabel}>IDENTITÉ</p>
+            <div className={infoBox}>
               {[
                 ['NNI',         extractedData?.nni],
                 ['Nom ',     extractedData?.nom_fr],
                 ['Prénom ', extractedData?.prenom_fr],
                 ['Nom du père', extractedData?.father_name]
               ].map(([label, value], i, arr) => (
-                <div key={label} style={{ ...S.infoRow, borderBottom: i < arr.length - 1 ? `1px solid ${T.border}` : 'none' }}>
-                  <span style={{ fontSize: 14, color: T.textMuted, fontFamily: T.font }}>{label}</span>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: value ? T.text : T.textMuted, fontFamily: T.font }}>
+                <div key={label} className={`${infoRow} ${i < arr.length - 1 ? 'border-b border-[rgba(16,33,75,0.08)]' : ''}`}>
+                  <span className="text-[14px] text-[#356267]/60">{label}</span>
+                  <span className={`text-[14px] font-semibold ${value ? 'text-[#10214b]' : 'text-[#356267]/40'}`}>
                     {value || '—'}
                   </span>
                 </div>
@@ -982,18 +755,18 @@ export default function KYCFlow() {
             </div>
           </div>
 
-          <div style={{ marginBottom: 20 }}>
-            <p style={S.sectionLabel}>ÉTAT CIVIL</p>
-            <div style={S.infoBox}>
+          <div className="mb-5">
+            <p className={sectionLabel}>ÉTAT CIVIL</p>
+            <div className={infoBox}>
               {[
                 ['Lieu de naissance', extractedData?.birth_place],
                 ['Date de naissance', extractedData?.birth_date],
                 ['Sexe',              extractedData?.gender === 'M' ? 'Masculin' : extractedData?.gender === 'F' ? 'Féminin' : extractedData?.gender || '—'],
                 ['Nationalité',       extractedData?.nationality],
               ].map(([label, value], i, arr) => (
-                <div key={label} style={{ ...S.infoRow, borderBottom: i < arr.length - 1 ? `1px solid ${T.border}` : 'none' }}>
-                  <span style={{ fontSize: 14, color: T.textMuted, fontFamily: T.font }}>{label}</span>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: value ? T.text : T.textMuted, fontFamily: T.font }}>
+                <div key={label} className={`${infoRow} ${i < arr.length - 1 ? 'border-b border-[rgba(16,33,75,0.08)]' : ''}`}>
+                  <span className="text-[14px] text-[#356267]/60">{label}</span>
+                  <span className={`text-[14px] font-semibold ${value ? 'text-[#10214b]' : 'text-[#356267]/40'}`}>
                     {value || '—'}
                   </span>
                 </div>
@@ -1001,10 +774,10 @@ export default function KYCFlow() {
             </div>
           </div>
 
-          <button onClick={handleConfirmData} disabled={loading} style={{ ...S.btnPrimary, opacity: loading ? .6 : 1 }}>
+          <button onClick={handleConfirmData} disabled={loading} className={btnPrimary}>
             {loading
-              ? <><i className="bx bx-loader-alt bx-spin-kyc" style={{ fontSize: 16 }} /> En cours…</>
-              : <><i className="bx bx-check" style={{ fontSize: 18 }} /> Confirmer et continuer</>
+              ? <><Loader2 size={16} className="animate-spin" /> En cours…</>
+              : <><Check size={18} /> Confirmer et continuer</>
             }
           </button>
         </div>
@@ -1017,80 +790,61 @@ export default function KYCFlow() {
   // ════════════════════════════════════════════════════════════════════════════
   if (step === 4) {
     return (
-      <div style={S.page}>
-        <div style={{ ...S.card, maxWidth: 520 }}>
-          <div style={S.cardLine} />
-          
+      <div className={pageWrap}>
+        <div className={`${cardBase} max-w-[520px]`}>
+          <div className={cardLine} />
+
           {banner && (
-            <Banner
-              type={banner.type}
-              message={banner.message}
-              onDismiss={clearBanner}
-              autoDismiss={banner.autoDismiss}
-            />
+            <Banner type={banner.type} message={banner.message} onDismiss={clearBanner} autoDismiss={banner.autoDismiss} />
           )}
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-            <button onClick={() => setStep(3)} style={S.backBtn}>
-              <i className="bx bx-chevron-left" style={{ fontSize: 18 }} /> Retour
+          <div className="mb-5 flex items-center gap-3">
+            <button onClick={() => setStep(3)} className={backBtn}>
+              <ChevronLeft size={18} /> Retour
             </button>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: T.text, fontFamily: T.fontDisplay }}>
-              Reconnaissance faciale
-            </h3>
+            <h3 className="text-[16px] font-bold text-[#10214b]">Reconnaissance faciale</h3>
           </div>
           <StepBar currentStep={3} />
-          <h2 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 800, color: T.text, fontFamily: T.fontDisplay }}>
+          <h2 className="mb-1.5 text-[20px] font-extrabold text-[#10214b]">
             Prenez un selfie
           </h2>
-          <p style={{ margin: '0 0 20px', fontSize: 13, color: T.textMuted, lineHeight: 1.65, fontFamily: T.font }}>
+          <p className="mb-5 text-[13px] leading-relaxed text-[#356267]/60">
             Positionnez votre visage dans le cercle, dans un endroit bien éclairé
           </p>
 
           {!selfiePreview && !showSelfieCamera && (
-            <div style={{ textAlign: 'center', marginBottom: 20 }}>
-              <div style={{
-                width: 200, height: 200, borderRadius: '50%',
-                border: `3px dashed ${T.accentBdr}`,
-                background: T.accentBg,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                margin: '0 auto 22px',
-              }}>
-                <i className="bx bx-user" style={{ fontSize: 72, color: T.accentBdr }} />
+            <div className="mb-5 text-center">
+              <div className="mx-auto mb-5 flex h-[200px] w-[200px] items-center justify-center rounded-full border-[3px] border-dashed border-[#356267]/25 bg-[#c2f2f2]/20">
+                <User size={68} className="text-[#356267]/30" />
               </div>
-              <button onClick={() => setShowSelfieCamera(true)}
-                style={{ ...S.btnPrimary, width: 'auto', padding: '13px 28px' }}>
-                <i className="bx bx-camera" style={{ fontSize: 18 }} /> Ouvrir la caméra
+              <button onClick={() => setShowSelfieCamera(true)} className={`${btnPrimary} w-auto px-7`}>
+                <Camera size={18} /> Ouvrir la caméra
               </button>
             </div>
           )}
 
           {showSelfieCamera && !selfiePreview && (
-            <div style={{ marginBottom: 20 }}>
-              <div style={{
-                position: 'relative', overflow: 'hidden', borderRadius: '50%',
-                width: 240, height: 240, margin: '0 auto 16px',
-                border: `3px solid ${T.accent}`,
-                boxShadow: T.accentGlow,
-              }}>
-                <Webcam ref={webcamRef} audio={false} screenshotFormat="image/jpeg"
+            <div className="mb-5">
+              <div className="mx-auto mb-4 h-[240px] w-[240px] overflow-hidden rounded-full border-[3px] border-[#356267] shadow-[0_0_0_6px_rgba(53,98,103,0.12)]">
+                <Webcam
+                  ref={webcamRef}
+                  audio={false}
+                  screenshotFormat="image/jpeg"
                   videoConstraints={{ facingMode: 'user' }}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  className="h-full w-full object-cover"
+                />
               </div>
-              <div style={{
-                background: T.blueBg, border: `1px solid ${T.blueBdr}`,
-                borderRadius: T.radiusXs, padding: '10px 14px', marginBottom: 12,
-                display: 'flex', gap: 10, alignItems: 'center',
-              }}>
-                <i className="bx bx-bulb" style={{ fontSize: 18, color: T.blue, flexShrink: 0 }} />
-                <span style={{ fontSize: 12, color: T.blue, lineHeight: 1.6, fontFamily: T.font }}>
+              <div className="mb-3 flex items-center gap-2.5 rounded-lg border border-[#356267]/20 bg-[#c2f2f2]/25 px-3.5 py-2.5">
+                <Lightbulb size={18} className="flex-shrink-0 text-[#356267]" />
+                <span className="text-[12px] leading-relaxed text-[#356267]">
                   Retirez lunettes, regardez la caméra, bonne lumière
                 </span>
               </div>
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button onClick={handleCaptureSelfie} style={{ ...S.btnPrimary, flex: 2 }}>
-                  <i className="bx bx-aperture" style={{ fontSize: 18 }} /> Prendre le selfie
+              <div className="flex gap-2.5">
+                <button onClick={handleCaptureSelfie} className={`${btnPrimary} flex-[2]`}>
+                  <Aperture size={18} /> Prendre le selfie
                 </button>
-                <button onClick={() => setShowSelfieCamera(false)} style={{ ...S.btnSecondary, flex: 1 }}>
+                <button onClick={() => setShowSelfieCamera(false)} className={`${btnSecondary} flex-1`}>
                   Annuler
                 </button>
               </div>
@@ -1098,62 +852,52 @@ export default function KYCFlow() {
           )}
 
           {selfiePreview && (
-            <div style={{ marginBottom: 20 }}>
-              <div style={{
-                width: 200, height: 200, borderRadius: '50%', overflow: 'hidden',
-                margin: '0 auto 16px',
-                border: `3px solid ${T.accent}`,
-                boxShadow: T.accentGlow,
-              }}>
-                <img src={selfiePreview} alt="selfie" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <div className="mb-5">
+              <div className="mx-auto mb-4 h-[200px] w-[200px] overflow-hidden rounded-full border-[3px] border-[#356267] shadow-[0_0_0_6px_rgba(53,98,103,0.12)]">
+                <img src={selfiePreview} alt="selfie" className="h-full w-full object-cover" />
               </div>
 
               {faceResult && !faceResult.verified && (
-                <div style={{
-                  background: T.dangerBg,
-                  border: `1px solid ${T.dangerBdr}`,
-                  borderRadius: T.radiusSm,
-                  padding: '16px',
-                  marginBottom: 16,
-                }}>
-                  <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 12 }}>
-                    <i className="bx bx-error-circle" style={{ fontSize: 24, color: T.danger, flexShrink: 0 }} />
+                <div className="mb-4 rounded-[10px] border border-[rgba(213,80,83,0.25)] bg-[rgba(213,80,83,0.08)] p-4">
+                  <div className="mb-3 flex items-start gap-3">
+                    <AlertCircle size={23} className="flex-shrink-0 text-[#d55053]" />
                     <div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: T.danger, marginBottom: 4 }}>
+                      <div className="mb-1 text-[14px] font-bold text-[#d55053]">
                         {faceResult.document_type === 'passport' && 'Vérification passeport échouée'}
-                        {faceResult.document_type === 'cni' && 'Vérification carte d\'identité échouée'}
+                        {faceResult.document_type === 'cni' && "Vérification carte d'identité échouée"}
                         {faceResult.document_type === 'sejour' && 'Vérification carte de séjour échouée'}
                         {!faceResult.document_type && 'Échec de la vérification'}
                       </div>
-                      <div style={{ fontSize: 13, color: T.danger, lineHeight: 1.4 }}>
+                      <div className="text-[13px] leading-snug text-[#d55053]">
                         {faceResult.message || (
                           faceResult.document_type === 'passport' ? 'Le visage ne correspond pas à la photo du passeport.' :
-                          faceResult.document_type === 'cni' ? 'Le visage ne correspond pas à la photo de la carte d\'identité nationale.' :
+                          faceResult.document_type === 'cni' ? "Le visage ne correspond pas à la photo de la carte d'identité nationale." :
                           faceResult.document_type === 'sejour' ? 'Le visage ne correspond pas à la photo de la carte de séjour.' :
-                          'Le visage ne correspond pas au document d\'identité.'
+                          "Le visage ne correspond pas au document d'identité."
                         )}
                       </div>
                     </div>
                   </div>
 
                   {faceResult.similarity_score !== undefined && (
-                    <div style={{ marginBottom: 12 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <span style={{ fontSize: 12, color: T.textMuted }}>Similarité faciale</span>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: faceResult.similarity_score >= 75 ? T.success : T.danger }}>
+                    <div className="mb-3">
+                      <div className="mb-1 flex justify-between">
+                        <span className="text-[12px] text-[#356267]/60">Similarité faciale</span>
+                        <span className={`text-[12px] font-semibold ${faceResult.similarity_score >= 75 ? 'text-[#459071]' : 'text-[#d55053]'}`}>
                           {faceResult.similarity_score}%
                         </span>
                       </div>
-                      <div style={S.progressBar}>
-                        <div style={{
-                          width: `${Math.min(faceResult.similarity_score, 100)}%`,
-                          height: '100%',
-                          borderRadius: 4,
-                          background: `linear-gradient(90deg, ${faceResult.similarity_score >= 75 ? T.success : T.danger}, ${T.accent})`,
-                        }} />
+                      <div className={progressTrack}>
+                        <div
+                          className="h-full rounded"
+                          style={{
+                            width: `${Math.min(faceResult.similarity_score, 100)}%`,
+                            background: `linear-gradient(90deg, ${faceResult.similarity_score >= 75 ? '#459071' : '#d55053'}, #356267)`,
+                          }}
+                        />
                       </div>
                       {faceResult.similarity_score < 75 && (
-                        <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>
+                        <div className="mt-1 text-[11px] text-[#356267]/45">
                           Seuil minimum requis : 75%
                         </div>
                       )}
@@ -1161,50 +905,38 @@ export default function KYCFlow() {
                   )}
 
                   {faceResult.liveness_score !== undefined && (
-                    <div style={{ marginBottom: 12 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <span style={{ fontSize: 12, color: T.textMuted }}>Anti-spoofing (liveness)</span>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: faceResult.liveness_score >= 50 ? T.success : T.danger }}>
+                    <div className="mb-3">
+                      <div className="mb-1 flex justify-between">
+                        <span className="text-[12px] text-[#356267]/60">Anti-spoofing (liveness)</span>
+                        <span className={`text-[12px] font-semibold ${faceResult.liveness_score >= 50 ? 'text-[#459071]' : 'text-[#d55053]'}`}>
                           {faceResult.liveness_score}%
                         </span>
                       </div>
-                      <div style={S.progressBar}>
-                        <div style={{
-                          width: `${Math.min(faceResult.liveness_score, 100)}%`,
-                          height: '100%',
-                          borderRadius: 4,
-                          background: `linear-gradient(90deg, ${faceResult.liveness_score >= 50 ? T.success : T.danger}, ${T.accent})`,
-                        }} />
+                      <div className={progressTrack}>
+                        <div
+                          className="h-full rounded"
+                          style={{
+                            width: `${Math.min(faceResult.liveness_score, 100)}%`,
+                            background: `linear-gradient(90deg, ${faceResult.liveness_score >= 50 ? '#459071' : '#d55053'}, #356267)`,
+                          }}
+                        />
                       </div>
                     </div>
                   )}
 
                   {faceResult.nova_decision && (
-                    <div style={{
-                      background: T.accentBg,
-                      borderRadius: T.radiusXs,
-                      padding: '8px 12px',
-                      marginTop: 8,
-                    }}>
-                      <span style={{ fontSize: 11, color: T.textMuted }}>Décision du système : </span>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: faceResult.nova_decision === 'allow' ? T.success : T.danger }}>
-                        {faceResult.nova_decision === 'allow' ? 'Autorisé ✅' : 'Refusé ❌'}
+                    <div className="mt-2 rounded-lg bg-[#c2f2f2]/30 px-3 py-2">
+                      <span className="text-[11px] text-[#356267]/60">Décision du système : </span>
+                      <span className={`text-[11px] font-semibold ${faceResult.nova_decision === 'allow' ? 'text-[#459071]' : 'text-[#d55053]'}`}>
+                        {faceResult.nova_decision === 'allow' ? 'Autorisé ' : 'Refusé '}
                       </span>
                     </div>
                   )}
 
                   {!faceResult.suggestion && (
-                    <div style={{
-                      background: T.blueBg,
-                      borderRadius: T.radiusXs,
-                      padding: '10px 12px',
-                      marginTop: 12,
-                      display: 'flex',
-                      gap: 8,
-                      alignItems: 'flex-start',
-                    }}>
-                      <i className="bx bx-info-circle" style={{ fontSize: 16, color: T.blue }} />
-                      <span style={{ fontSize: 11, color: T.blue, lineHeight: 1.4 }}>
+                    <div className="mt-3 flex items-start gap-2 rounded-lg bg-[#c2f2f2]/30 px-3 py-2.5">
+                      <Info size={16} className="flex-shrink-0 text-[#356267]" />
+                      <span className="text-[11px] leading-snug text-[#356267]">
                         {faceResult.document_type === 'passport' && 'Assurez-vous que la photo du passeport est visible et que vous êtes bien éclairé.'}
                         {faceResult.document_type === 'cni' && 'Prenez un selfie bien éclairé, de face, sans lunettes ni masque.'}
                         {faceResult.document_type === 'sejour' && 'Placez-vous face à la caméra, dans un endroit bien éclairé.'}
@@ -1214,17 +946,9 @@ export default function KYCFlow() {
                   )}
 
                   {faceResult.suggestion && (
-                    <div style={{
-                      background: T.blueBg,
-                      borderRadius: T.radiusXs,
-                      padding: '10px 12px',
-                      marginTop: 12,
-                      display: 'flex',
-                      gap: 8,
-                      alignItems: 'flex-start',
-                    }}>
-                      <i className="bx bx-info-circle" style={{ fontSize: 16, color: T.blue }} />
-                      <span style={{ fontSize: 11, color: T.blue, lineHeight: 1.4 }}>
+                    <div className="mt-3 flex items-start gap-2 rounded-lg bg-[#c2f2f2]/30 px-3 py-2.5">
+                      <Info size={16} className="flex-shrink-0 text-[#356267]" />
+                      <span className="text-[11px] leading-snug text-[#356267]">
                         {faceResult.suggestion}
                       </span>
                     </div>
@@ -1233,35 +957,26 @@ export default function KYCFlow() {
               )}
 
               {faceResult && faceResult.verified && (
-                <div style={{
-                  background: T.successBg,
-                  border: `1px solid ${T.successBdr}`,
-                  borderRadius: T.radiusSm,
-                  padding: '12px 16px',
-                  marginBottom: 16,
-                  display: 'flex',
-                  gap: 10,
-                  alignItems: 'center',
-                }}>
-                  <i className="bx bx-check-circle" style={{ fontSize: 22, color: T.success }} />
-                  <span style={{ fontSize: 13, color: T.success }}>
-                     {faceResult.message || 'Identité vérifiée avec succès !'}
+                <div className="mb-4 flex items-center gap-2.5 rounded-[10px] border border-[rgba(78,166,116,0.3)] bg-[#e9f8e7] px-4 py-3">
+                  <CheckCircle2 size={22} className="text-[#459071]" />
+                  <span className="text-[13px] text-[#459071]">
+                    {faceResult.message || 'Identité vérifiée avec succès !'}
                   </span>
                 </div>
               )}
 
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button onClick={handleVerifyFace} disabled={loading}
-                  style={{ ...S.btnPrimary, flex: 2, opacity: loading ? .7 : 1 }}>
+              <div className="flex gap-2.5">
+                <button onClick={handleVerifyFace} disabled={loading} className={`${btnPrimary} flex-[2]`}>
                   {loading
-                    ? <><i className="bx bx-loader-alt bx-spin-kyc" style={{ fontSize: 16 }} /> Vérification…</>
-                    : <><i className="bx bx-search-alt" style={{ fontSize: 16 }} /> Vérifier mon identité</>
+                    ? <><Loader2 size={16} className="animate-spin" /> Vérification…</>
+                    : <><Search size={16} /> Vérifier mon identité</>
                   }
                 </button>
                 <button
                   onClick={() => { setSelfiePreview(null); setSelfieBlob(null); setFaceResult(null); setShowSelfieCamera(true); }}
-                  style={{ ...S.btnSecondary, flex: 1 }}>
-                  <i className="bx bx-refresh" style={{ fontSize: 16 }} /> Reprendre
+                  className={`${btnSecondary} flex-1`}
+                >
+                  <RefreshCw size={16} /> Reprendre
                 </button>
               </div>
             </div>
@@ -1276,160 +991,98 @@ export default function KYCFlow() {
   // ════════════════════════════════════════════════════════════════════════════
   if (step === 5) {
     return (
-      <div style={S.page}>
-        <div style={{ ...S.card, textAlign: 'center', maxWidth: 480 }}>
-          <div style={S.cardLine} />
-          
+      <div className={pageWrap}>
+        <div className={`${cardBase} max-w-[480px] text-center`}>
+          <div className={cardLine} />
+
           {banner && (
-            <Banner
-              type={banner.type}
-              message={banner.message}
-              onDismiss={clearBanner}
-              autoDismiss={banner.autoDismiss}
-            />
+            <Banner type={banner.type} message={banner.message} onDismiss={clearBanner} autoDismiss={banner.autoDismiss} />
           )}
 
-          <div style={{
-            width: 100, height: 100, borderRadius: '50%',
-            background: T.accentBg, border: `2px solid ${T.accentBdr}`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            margin: '0 auto 22px',
-            boxShadow: T.accentGlow,
-          }}>
-            <div style={{
-              width: 74, height: 74, borderRadius: '50%',
-              background: `linear-gradient(135deg, ${T.accent}, ${T.blue})`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <i className="bx bx-check" style={{ fontSize: 38, color: '#fff' }} />
+          <div className="mx-auto mb-6 flex h-[100px] w-[100px] items-center justify-center rounded-full border-2 border-[#356267]/25 bg-[#c2f2f2]/30 shadow-[0_0_0_6px_rgba(53,98,103,0.08)]">
+            <div className="flex h-[74px] w-[74px] items-center justify-center rounded-full bg-gradient-to-br from-[#356267] to-[#4ea674]">
+              <Check size={36} className="text-white" />
             </div>
           </div>
 
-          <div style={{
-            background: T.successBg,
-            border: `1px solid ${T.successBdr}`,
-            borderRadius: T.radiusSm,
-            padding: '16px 20px',
-            marginBottom: 16,
-            textAlign: 'left',
-          }}>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-              <i className="bx bx-party" style={{ fontSize: 28, color: T.success, flexShrink: 0 }} />
+          <div className="mb-4 rounded-[10px] border border-[rgba(78,166,116,0.3)] bg-[#e9f8e7] px-5 py-4 text-left">
+            <div className="flex items-start gap-3">
+              <PartyPopper size={27} className="flex-shrink-0 text-[#459071]" />
               <div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: T.success, marginBottom: 4, fontFamily: T.fontDisplay }}>
+                <div className="mb-1 text-[16px] font-extrabold text-[#459071]">
                   Bienvenue sur FinanceApp !
                 </div>
-                <div style={{ fontSize: 14, color: T.success, lineHeight: 1.6, fontFamily: T.font }}>
+                <div className="text-[14px] leading-relaxed text-[#459071]">
                   Votre compte a été vérifié avec succès. Vous pouvez dès maintenant vous connecter avec votre adresse email pour profiter de tous nos services financiers.
                 </div>
-                <div style={{
-                  marginTop: 8,
-                  display: 'flex',
-                  gap: 6,
-                  flexWrap: 'wrap',
-                }}>
-                  <span style={{
-                    background: T.successBg,
-                    padding: '2px 10px',
-                    borderRadius: 12,
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: T.success,
-                    fontFamily: T.font,
-                  }}>
-                    <i className="bx bx-check-circle" style={{ fontSize: 12, marginRight: 4 }} />
-                    Compte vérifié
-                  </span>
-                  <span style={{
-                    background: T.successBg,
-                    padding: '2px 10px',
-                    borderRadius: 12,
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: T.success,
-                    fontFamily: T.font,
-                  }}>
-                    <i className="bx bx-check-circle" style={{ fontSize: 12, marginRight: 4 }} />
-                    Sécurisé
-                  </span>
-                  <span style={{
-                    background: T.successBg,
-                    padding: '2px 10px',
-                    borderRadius: 12,
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: T.success,
-                    fontFamily: T.font,
-                  }}>
-                    <i className="bx bx-check-circle" style={{ fontSize: 12, marginRight: 4 }} />
-                    Prêt à utiliser
-                  </span>
+                <div className="mt-2.5 flex flex-wrap gap-1.5">
+                  {['Compte vérifié', 'Sécurisé', 'Prêt à utiliser'].map(label => (
+                    <span
+                      key={label}
+                      className="inline-flex items-center gap-1 rounded-full bg-white/60 px-2.5 py-1 text-[11px] font-semibold text-[#459071]"
+                    >
+                      <CheckCircle2 size={12} />
+                      {label}
+                    </span>
+                  ))}
                 </div>
               </div>
             </div>
           </div>
 
-          <h2 style={{ margin: '0 0 8px', fontSize: 24, fontWeight: 800, color: T.text, fontFamily: T.fontDisplay }}>
+          <h2 className="mb-2 text-[24px] font-extrabold text-[#10214b]">
             Vérification réussie !
           </h2>
-          <p style={{ margin: '0 0 24px', color: T.textMuted, fontSize: 14, lineHeight: 1.7, fontFamily: T.font }}>
+          <p className="mb-6 text-[14px] leading-relaxed text-[#356267]/60">
             Votre identité a été vérifiée. Toutes les fonctionnalités sont maintenant disponibles.
           </p>
 
           {faceResult && (
-            <div style={{
-              background: T.surfaceAlt, border: `1px solid ${T.border}`,
-              borderRadius: T.radiusSm, padding: 20, marginBottom: 24, textAlign: 'left',
-            }}>
-              <p style={{ margin: '0 0 14px', fontWeight: 700, fontSize: 14, color: T.text, fontFamily: T.fontDisplay }}>
+            <div className="mb-6 rounded-[10px] border border-[rgba(16,33,75,0.08)] bg-[#f8fafc] p-5 text-left">
+              <p className="mb-3.5 text-[14px] font-bold text-[#10214b]">
                 Résultats biométriques
               </p>
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontSize: 14, color: T.textMuted, fontFamily: T.font }}>Similarité faciale</span>
-                  <span style={{ fontWeight: 700, color: T.accent, fontFamily: T.font }}>
+              <div className="mb-3">
+                <div className="mb-1 flex justify-between">
+                  <span className="text-[14px] text-[#356267]/60">Similarité faciale</span>
+                  <span className="font-bold text-[#356267]">
                     {faceResult.similarity_score || 100}%
                   </span>
                 </div>
-                <div style={S.progressBar}>
-                  <div style={{
-                    width: `${Math.min(faceResult.similarity_score || 100, 100)}%`,
-                    height: '100%', borderRadius: 4,
-                    background: `linear-gradient(90deg, ${T.accent}, ${T.blue})`,
-                  }} />
+                <div className={progressTrack}>
+                  <div
+                    className="h-full rounded bg-gradient-to-r from-[#356267] to-[#4ea674]"
+                    style={{ width: `${Math.min(faceResult.similarity_score || 100, 100)}%` }}
+                  />
                 </div>
               </div>
               {faceResult.liveness_score !== undefined && (
                 <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <span style={{ fontSize: 14, color: T.textMuted, fontFamily: T.font }}>Score liveness</span>
-                    <span style={{ fontWeight: 700, color: T.accent, fontFamily: T.font }}>
+                  <div className="mb-1 flex justify-between">
+                    <span className="text-[14px] text-[#356267]/60">Score liveness</span>
+                    <span className="font-bold text-[#356267]">
                       {faceResult.liveness_score}%
                     </span>
                   </div>
-                  <div style={S.progressBar}>
-                    <div style={{
-                      width: `${Math.min(faceResult.liveness_score || 0, 100)}%`,
-                      height: '100%', borderRadius: 4,
-                      background: `linear-gradient(90deg, ${T.accent}, ${T.blue})`,
-                    }} />
+                  <div className={progressTrack}>
+                    <div
+                      className="h-full rounded bg-gradient-to-r from-[#356267] to-[#4ea674]"
+                      style={{ width: `${Math.min(faceResult.liveness_score || 0, 100)}%` }}
+                    />
                   </div>
                 </div>
               )}
             </div>
           )}
 
-          <button 
+          <button
             onClick={() => {
               clearBanner();
               navigate('/authchoix');
-            }} 
-            style={{
-              ...S.btnPrimary,
-              background: `linear-gradient(135deg, ${T.accent}, ${T.blue})`,
             }}
+            className={`${btnPrimary} bg-gradient-to-br from-[#356267] to-[#4ea674] hover:enabled:bg-none hover:enabled:bg-[#2a4f53]`}
           >
-            <i className="bx bx-log-in-circle" style={{ fontSize: 18 }} /> 
+            <LogIn size={18} />
             OK — Accéder à mon compte
           </button>
         </div>

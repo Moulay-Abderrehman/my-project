@@ -1,193 +1,73 @@
+// frontend/src/pages/Categories.js
 import React, { useEffect, useState, useRef } from 'react';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import ActionBlockedModal from '../components/ActionBlockedModal';
+import {
+  Tag,
+  Building2,
+  User,
+  Plus,
+  X,
+  Check,
+  Trash2,
+  Lock,
+  Star,
+  PlusCircle,
+  ChevronDown,
+  TrendingUp,
+  TrendingDown,
+  ArrowLeftRight,
+  UtensilsCrossed,
+  MoreHorizontal,
+  GraduationCap,
+  Briefcase,
+  Home,
+  Gamepad2,
+  Wallet,
+  HeartPulse,
+  Car,
+  Plane,
+  ShoppingBasket,
+  CircleDollarSign,
+  Coffee,
+  ShoppingBag,
+  Dumbbell,
+  Laptop,
+  Users,
+} from 'lucide-react';
 
 // ============================================
-// COMPOSANT ICÔNES SVG
+// COMPOSANT ICÔNES (lucide-react — bibliothèque standard, cohérente, moderne)
 // ============================================
+const IconCategory = () => <Tag size={18} strokeWidth={2} />;
+const IconBuilding = () => <Building2 size={18} strokeWidth={2} />;
+const IconUser = () => <User size={18} strokeWidth={2} />;
+const IconPlus = () => <Plus size={14} strokeWidth={2} />;
+const IconClose = () => <X size={14} strokeWidth={2} />;
+const IconCheck = () => <Check size={14} strokeWidth={2} />;
+const IconTrash = () => <Trash2 size={14} strokeWidth={2} />;
+const IconLock = () => <Lock size={40} strokeWidth={2} />;
+const IconStar = () => <Star size={10} strokeWidth={2} />;
+const IconPlusCircle = () => <PlusCircle size={18} strokeWidth={2} />;
+const IconChevronDown = () => <ChevronDown size={12} strokeWidth={2} />;
+const IconTrendingUp = () => <TrendingUp size={8} strokeWidth={2} />;
+const IconTrendingDown = () => <TrendingDown size={8} strokeWidth={2} />;
+const IconTransfer = () => <ArrowLeftRight size={8} strokeWidth={2} />;
 
-// Icônes principales
-const IconCategory = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
-    <line x1="7" y1="7" x2="7.01" y2="7"/>
-  </svg>
-);
+const IconAlimentation = () => <UtensilsCrossed size={16} strokeWidth={2} />;
+const IconAutres = () => <MoreHorizontal size={16} strokeWidth={2} />;
+const IconEducation = () => <GraduationCap size={16} strokeWidth={2} />;
+const IconFreelance = () => <Briefcase size={16} strokeWidth={2} />;
+const IconLogement = () => <Home size={16} strokeWidth={2} />;
+const IconLoisirs = () => <Gamepad2 size={16} strokeWidth={2} />;
+const IconSalaire = () => <Wallet size={16} strokeWidth={2} />;
+const IconSante = () => <HeartPulse size={16} strokeWidth={2} />;
+const IconTransport = () => <Car size={16} strokeWidth={2} />;
+const IconVoyage = () => <Plane size={16} strokeWidth={2} />;
 
-const IconBuilding = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <rect x="4" y="2" width="16" height="20" rx="2" ry="2"/>
-    <line x1="9" y1="22" x2="9" y2="18"/>
-    <line x1="15" y1="22" x2="15" y2="18"/>
-  </svg>
-);
-
-const IconUser = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-    <circle cx="12" cy="7" r="4"/>
-  </svg>
-);
-
-// Icônes d'action
-const IconPlus = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-  </svg>
-);
-
-const IconClose = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-  </svg>
-);
-
-const IconCheck = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <polyline points="20 6 9 17 4 12"/>
-  </svg>
-);
-
-const IconTrash = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <polyline points="3 6 5 6 21 6"/>
-    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-  </svg>
-);
-
-const IconLock = () => (
-  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-  </svg>
-);
-
-const IconStar = () => (
-  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-  </svg>
-);
-
-const IconPlusCircle = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <circle cx="12" cy="12" r="10"/>
-    <line x1="12" y1="8" x2="12" y2="16"/>
-    <line x1="8" y1="12" x2="16" y2="12"/>
-  </svg>
-);
-
-const IconChevronDown = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <polyline points="6 9 12 15 18 9"/>
-  </svg>
-);
-
-// Icônes de type
-const IconTrendingUp = () => (
-  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
-    <polyline points="17 6 23 6 23 12"/>
-  </svg>
-);
-
-const IconTrendingDown = () => (
-  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/>
-    <polyline points="17 18 23 18 23 12"/>
-  </svg>
-);
-
-const IconTransfer = () => (
-  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <line x1="12" y1="5" x2="12" y2="19"/>
-    <line x1="5" y1="12" x2="19" y2="12"/>
-  </svg>
-);
-
-// ============================================
-// ICÔNES SPÉCIFIQUES POUR CATÉGORIES SYSTÈME
-// ============================================
-
-const IconAlimentation = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
-    <line x1="3" y1="6" x2="21" y2="6"/>
-    <path d="M16 10a4 4 0 0 1-8 0"/>
-  </svg>
-);
-
-const IconAutres = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <circle cx="12" cy="12" r="10"/>
-    <circle cx="12" cy="8" r="1"/>
-    <circle cx="12" cy="12" r="1"/>
-    <circle cx="12" cy="16" r="1"/>
-  </svg>
-);
-
-const IconEducation = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
-    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
-  </svg>
-);
-
-const IconFreelance = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
-    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
-  </svg>
-);
-
-const IconLogement = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2h-5v-7H9v7H5a2 2 0 0 1-2-2z"/>
-  </svg>
-);
-
-const IconLoisirs = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M6 11h4M8 9v4"/>
-    <rect x="2" y="6" width="20" height="12" rx="2"/>
-    <circle cx="17" cy="12" r="2"/>
-    <circle cx="12" cy="12" r="2"/>
-  </svg>
-);
-
-const IconSalaire = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <circle cx="12" cy="12" r="10"/>
-    <path d="M12 6v6l4 2"/>
-  </svg>
-);
-
-const IconSante = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-  </svg>
-);
-
-const IconTransport = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <rect x="4" y="4" width="16" height="16" rx="2"/>
-    <circle cx="8" cy="18" r="2"/>
-    <circle cx="16" cy="18" r="2"/>
-    <line x1="8" y1="8" x2="16" y2="8"/>
-    <line x1="8" y1="12" x2="16" y2="12"/>
-  </svg>
-);
-
-const IconVoyage = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/>
-    <line x1="8" y1="2" x2="8" y2="18"/>
-    <line x1="16" y1="6" x2="16" y2="22"/>
-  </svg>
-);
-
-// Mapping des icônes système par nom
 const getSystemIcon = (nom) => {
   const icons = {
     'Alimentation': IconAlimentation,
@@ -204,127 +84,22 @@ const getSystemIcon = (nom) => {
   return icons[nom] || IconCategory;
 };
 
-// ============================================
-// ICÔNES POUR LE SÉLECTEUR
-// ============================================
+const IconDefault = () => <Tag size={20} strokeWidth={2} />;
+const IconCourses = () => <ShoppingBasket size={20} strokeWidth={2} />;
+const IconMoney = () => <CircleDollarSign size={20} strokeWidth={2} />;
+const IconHouse = () => <Home size={20} strokeWidth={2} />;
+const IconHealth = () => <HeartPulse size={20} strokeWidth={2} />;
+const IconCar = () => <Car size={20} strokeWidth={2} />;
+const IconCoffee = () => <Coffee size={20} strokeWidth={2} />;
+const IconWork = () => <Briefcase size={20} strokeWidth={2} />;
+const IconStudy = () => <GraduationCap size={20} strokeWidth={2} />;
+const IconEntertainment = () => <Gamepad2 size={20} strokeWidth={2} />;
+const IconTravel = () => <Plane size={20} strokeWidth={2} />;
+const IconShopping = () => <ShoppingBag size={20} strokeWidth={2} />;
+const IconSport = () => <Dumbbell size={20} strokeWidth={2} />;
+const IconTech = () => <Laptop size={20} strokeWidth={2} />;
+const IconFamily = () => <Users size={20} strokeWidth={2} />;
 
-const IconDefault = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
-    <line x1="7" y1="7" x2="7.01" y2="7"/>
-  </svg>
-);
-
-const IconCourses = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
-    <line x1="3" y1="6" x2="21" y2="6"/>
-    <path d="M16 10a4 4 0 0 1-8 0"/>
-  </svg>
-);
-
-const IconMoney = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <circle cx="12" cy="12" r="10"/>
-    <path d="M12 6v6l4 2"/>
-  </svg>
-);
-
-const IconHouse = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2h-5v-7H9v7H5a2 2 0 0 1-2-2z"/>
-  </svg>
-);
-
-const IconHealth = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-  </svg>
-);
-
-const IconCar = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M5 10l1-4h12l1 4"/>
-    <rect x="3" y="10" width="18" height="8" rx="2"/>
-    <circle cx="7" cy="16" r="2"/>
-    <circle cx="17" cy="16" r="2"/>
-  </svg>
-);
-
-const IconCoffee = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M18 8h1a4 4 0 0 1 0 8h-1"/>
-    <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/>
-    <line x1="6" y1="1" x2="6" y2="4"/>
-    <line x1="10" y1="1" x2="10" y2="4"/>
-    <line x1="14" y1="1" x2="14" y2="4"/>
-  </svg>
-);
-
-const IconWork = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
-    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
-  </svg>
-);
-
-const IconStudy = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
-    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
-  </svg>
-);
-
-const IconEntertainment = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M6 11h4M8 9v4"/>
-    <rect x="2" y="6" width="20" height="12" rx="2"/>
-    <circle cx="17" cy="12" r="2"/>
-    <circle cx="12" cy="12" r="2"/>
-  </svg>
-);
-
-const IconTravel = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/>
-    <line x1="8" y1="2" x2="8" y2="18"/>
-    <line x1="16" y1="6" x2="16" y2="22"/>
-  </svg>
-);
-
-const IconShopping = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
-    <line x1="3" y1="6" x2="21" y2="6"/>
-    <path d="M16 10a4 4 0 0 1-8 0"/>
-  </svg>
-);
-
-const IconSport = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <circle cx="12" cy="12" r="10"/>
-    <path d="M12 8v4l3 3M12 2v2M12 20v2"/>
-  </svg>
-);
-
-const IconTech = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <rect x="4" y="4" width="16" height="12" rx="2" ry="2"/>
-    <line x1="8" y1="20" x2="16" y2="20"/>
-    <line x1="12" y1="16" x2="12" y2="20"/>
-  </svg>
-);
-
-const IconFamily = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-    <circle cx="12" cy="7" r="4"/>
-    <circle cx="20" cy="5" r="2"/>
-    <circle cx="4" cy="5" r="2"/>
-  </svg>
-);
-
-// Liste complète des icônes
 const ICONES_LIST = [
   { value: 'default', label: 'Défaut', icon: IconDefault },
   { value: 'courses', label: 'Courses', icon: IconCourses },
@@ -343,9 +118,6 @@ const ICONES_LIST = [
   { value: 'family', label: 'Famille', icon: IconFamily },
 ];
 
-// ============================================
-// COULEURS
-// ============================================
 const COULEURS_LIST = [
   { value: '#3b82f6', name: 'Bleu' },
   { value: '#8b5cf6', name: 'Violet' },
@@ -367,17 +139,16 @@ const COULEURS_LIST = [
   { value: '#fb923c', name: 'Orange clair' },
 ];
 
-// Composant renderer d'icône
 const Icon = ({ name, size = 18, color = 'currentColor', isSystem = false, categoryName = '' }) => {
   let IconComponent;
-  
+
   if (isSystem && categoryName) {
     IconComponent = getSystemIcon(categoryName);
   } else {
     const found = ICONES_LIST.find(i => i.value === name);
     IconComponent = found ? found.icon : IconDefault;
   }
-  
+
   return (
     <div style={{ width: size, height: size, color: color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <IconComponent />
@@ -386,10 +157,53 @@ const Icon = ({ name, size = 18, color = 'currentColor', isSystem = false, categ
 };
 
 // ============================================
+// COMPOSANT MODAL DE CONFIRMATION PERSONNALISÉ
+// ============================================
+function ConfirmModal({ isOpen, onClose, onConfirm, title, message, confirmText = 'Confirmer', cancelText = 'Annuler' }) {
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[99999] bg-[#10214b]/50 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl px-6 py-7 max-w-[400px] w-full shadow-[0_20px_60px_rgba(16,33,75,0.15)] text-center animate-[fadeIn_0.3s_ease]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="w-12 h-12 rounded-full bg-[rgba(213,80,83,0.08)] flex items-center justify-center mx-auto mb-3">
+          <i className="bx bx-trash text-2xl text-[#d55053]" />
+        </div>
+        <h3 className="m-0 mb-2 text-lg font-bold text-[#10214b]">
+          {title}
+        </h3>
+        <p className="m-0 mb-5 text-sm text-[#356267]/75 leading-relaxed">
+          {message}
+        </p>
+        <div className="flex gap-2.5">
+          <button
+            onClick={onClose}
+            className="flex-1 min-h-[44px] rounded-xl border border-[#10214b]/10 bg-[#f8fafc] text-[#356267]/75 text-[13px] font-semibold cursor-pointer transition-colors hover:bg-[#eef2f2]"
+          >
+            {cancelText}
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-[2] min-h-[44px] rounded-xl border-none bg-[#d55053] text-white text-[13px] font-bold cursor-pointer transition-all shadow-[0_4px_12px_rgba(213,80,83,0.3)] hover:-translate-y-0.5 hover:shadow-[0_6px_20px_rgba(213,80,83,0.4)]"
+          >
+            {confirmText}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
 // COMPOSANT PRINCIPAL
 // ============================================
 export default function Categories() {
-  const { abonnement, estEnEssai, estExpire } = useAuth();
+  const { abonnement, estEnEssai, estExpire, isVisitor, exitVisitorMode } = useAuth();
   const navigate = useNavigate();
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -398,20 +212,23 @@ export default function Categories() {
   const [form, setForm] = useState({ nom: '', icone: 'default', couleur: '#3b82f6', type: 'les_deux' });
   const [activeTab, setActiveTab] = useState('system');
   const [isMobile, setIsMobile] = useState(false);
-  
-  // États pour les dropdowns
+
+  const [actionBlockedModal, setActionBlockedModal] = useState({ isOpen: false, message: null });
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, categoryId: null, categoryName: '' });
+
   const [showIconDropdown, setShowIconDropdown] = useState(false);
   const [showColorDropdown, setShowColorDropdown] = useState(false);
   const iconDropdownRef = useRef(null);
   const colorDropdownRef = useRef(null);
+
+  const isVisitorMode = isVisitor;
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth <= 640);
     checkMobile();
     window.addEventListener('resize', checkMobile);
     chargerCategories();
-    
-    // Fermer les dropdowns quand on clique en dehors
+
     const handleClickOutside = (event) => {
       if (iconDropdownRef.current && !iconDropdownRef.current.contains(event.target)) {
         setShowIconDropdown(false);
@@ -429,7 +246,7 @@ export default function Categories() {
 
   const enEssaiActif = estEnEssai();
   const expireActif = estExpire();
-  const peutCreer = !enEssaiActif && !expireActif && abonnement?.est_actif;
+  const peutCreer = !isVisitorMode && !enEssaiActif && !expireActif && abonnement?.est_actif;
 
   const nbMax = abonnement?.nb_categories_autorisees ?? 200;
   const mesCats = categories.filter(c => c.utilisateur !== null);
@@ -449,16 +266,28 @@ export default function Categories() {
     }
   };
 
+  const ouvrirActionBloquee = () => {
+    setActionBlockedModal({
+      isOpen: true,
+      message: {
+        title: '🔒 Créez un compte',
+        message: 'Pour créer ou modifier des catégories, créez un compte en 30 secondes.',
+        action: 'Créer un compte',
+        actionType: 'signup'
+      }
+    });
+  };
+
   const getTypeLabel = (type) => {
     if (type === 'entree') return 'Entrée';
     if (type === 'sortie') return 'Sortie';
     return 'Les deux';
   };
 
-  const getTypeBadgeClass = (type) => {
-    if (type === 'entree') return 'badge-income';
-    if (type === 'sortie') return 'badge-expense';
-    return 'badge-both';
+  const getTypeBadgeClasses = (type) => {
+    if (type === 'entree') return 'bg-[#e9f8e7] text-[#2a4f53]';
+    if (type === 'sortie') return 'bg-[rgba(213,80,83,0.1)] text-[#d55053]';
+    return 'bg-[#c2f2f2]/50 text-[#2a4f53]';
   };
 
   const getTypeIconComponent = (type) => {
@@ -467,18 +296,52 @@ export default function Categories() {
     return IconTransfer;
   };
 
+  const ouvrirConfirmSuppression = (id, nom) => {
+    setConfirmModal({
+      isOpen: true,
+      categoryId: id,
+      categoryName: nom
+    });
+  };
+
+  const confirmerSuppression = async () => {
+    const { categoryId } = confirmModal;
+    setConfirmModal({ isOpen: false, categoryId: null, categoryName: '' });
+
+    if (isVisitorMode) {
+      ouvrirActionBloquee();
+      return;
+    }
+
+    try {
+      await api.delete(`/transactions/categories/${categoryId}/`);
+      toast.success('✅ Catégorie supprimée avec succès !');
+      chargerCategories();
+    } catch (err) {
+      if (err.response?.status === 403 && err.response?.data?.visitor_mode) {
+        ouvrirActionBloquee();
+        return;
+      }
+      toast.error('❌ Impossible de supprimer la catégorie.');
+    }
+  };
+
   const creerCategorie = async (e) => {
     e.preventDefault();
+    if (isVisitorMode) {
+      ouvrirActionBloquee();
+      return;
+    }
     if (!peutCreer) {
-      toast.error("Abonnez-vous pour créer des catégories.");
+      toast.error("📢 Abonnez-vous pour créer des catégories.");
       return;
     }
     if (limitAtteinte) {
-      toast.error(`Limite de ${nbMax} catégories atteinte.`);
+      toast.error(`📊 Limite de ${nbMax} catégories atteinte.`);
       return;
     }
     if (!form.nom.trim()) {
-      toast.error('Veuillez entrer un nom');
+      toast.error('✏️ Veuillez entrer un nom pour la catégorie.');
       return;
     }
     setSubmitting(true);
@@ -489,26 +352,28 @@ export default function Categories() {
         couleur: form.couleur,
         type: form.type,
       });
-      toast.success('Catégorie créée !');
+      toast.success('🎉 Catégorie créée avec succès !');
       setForm({ nom: '', icone: 'default', couleur: '#3b82f6', type: 'les_deux' });
       setShowForm(false);
       chargerCategories();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Erreur lors de la création');
+      if (err.response?.status === 403 && err.response?.data?.visitor_mode) {
+        ouvrirActionBloquee();
+        return;
+      }
+      toast.error(err.response?.data?.detail || '❌ Erreur lors de la création');
     } finally {
       setSubmitting(false);
     }
   };
 
   const supprimerCategorie = async (id) => {
-    if (!window.confirm('Supprimer cette catégorie ?')) return;
-    try {
-      await api.delete(`/transactions/categories/${id}/`);
-      toast.success('Catégorie supprimée');
-      chargerCategories();
-    } catch {
-      toast.error('Impossible de supprimer');
+    if (isVisitorMode) {
+      ouvrirActionBloquee();
+      return;
     }
+    // ✅ Remplacer window.confirm par le modal de confirmation
+    ouvrirConfirmSuppression(id, categories.find(c => c.id === id)?.nom || '');
   };
 
   const TypeIconRenderer = ({ type }) => {
@@ -520,705 +385,177 @@ export default function Categories() {
   const SelectedColor = COULEURS_LIST.find(c => c.value === form.couleur) || COULEURS_LIST[0];
 
   return (
-    <div className="categories-container">
-      <style>{`
-        * {
-          margin: 0;
-          padding: 0;
-          box-sizing: border-box;
-        }
-        
-        .categories-container {
-          max-width: 1000px;
-          margin: 0 auto;
-          padding: ${isMobile ? '12px' : '20px'};
-          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-          background: #f8fafc;
-          min-height: 100vh;
-        }
-        
-        /* Header */
-        .page-header {
-          margin-bottom: ${isMobile ? '16px' : '24px'};
-        }
-        
-        .header-title {
-          display: flex;
-          align-items: center;
-          gap: ${isMobile ? '10px' : '14px'};
-          margin-bottom: 4px;
-        }
-        
-        .header-icon {
-          width: ${isMobile ? '40px' : '48px'};
-          height: ${isMobile ? '40px' : '48px'};
-          background: linear-gradient(135deg, #6366f1, #8b5cf6);
-          border-radius: ${isMobile ? '12px' : '16px'};
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        
-        .header-icon svg {
-          stroke: white;
-          width: ${isMobile ? '18px' : '22px'};
-          height: ${isMobile ? '18px' : '22px'};
-        }
-        
-        .header-title h1 {
-          font-size: ${isMobile ? '20px' : '24px'};
-          font-weight: 700;
-          color: #0f172a;
-        }
-        
-        .header-subtitle {
-          color: #64748b;
-          font-size: ${isMobile ? '11px' : '13px'};
-          margin-left: ${isMobile ? '50px' : '62px'};
-        }
-        
-        /* Stats Bar */
-        .stats-bar {
-          display: flex;
-          gap: ${isMobile ? '8px' : '12px'};
-          margin-bottom: ${isMobile ? '16px' : '20px'};
-          flex-wrap: wrap;
-        }
-        
-        .stat-card {
-          background: white;
-          border-radius: ${isMobile ? '14px' : '16px'};
-          padding: ${isMobile ? '8px 12px' : '12px 16px'};
-          display: flex;
-          align-items: center;
-          gap: ${isMobile ? '8px' : '10px'};
-          flex: 1;
-          min-width: ${isMobile ? '100px' : '120px'};
-          border: 1px solid #e2e8f0;
-        }
-        
-        .stat-icon {
-          width: ${isMobile ? '32px' : '36px'};
-          height: ${isMobile ? '32px' : '36px'};
-          background: #eef2ff;
-          border-radius: ${isMobile ? '10px' : '12px'};
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        
-        .stat-icon svg {
-          stroke: #6366f1;
-          width: ${isMobile ? '14px' : '16px'};
-          height: ${isMobile ? '14px' : '16px'};
-        }
-        
-        .stat-info h4 {
-          font-size: ${isMobile ? '9px' : '10px'};
-          font-weight: 600;
-          color: #64748b;
-          text-transform: uppercase;
-          margin-bottom: 2px;
-        }
-        
-        .stat-number {
-          font-size: ${isMobile ? '18px' : '22px'};
-          font-weight: 800;
-          color: #0f172a;
-        }
-        
-        .stat-limit {
-          font-size: ${isMobile ? '9px' : '10px'};
-          color: #94a3b8;
-        }
-        
-        /* Tabs */
-        .tabs-container {
-          display: flex;
-          gap: ${isMobile ? '4px' : '8px'};
-          margin-bottom: ${isMobile ? '16px' : '20px'};
-          border-bottom: 2px solid #e2e8f0;
-        }
-        
-        .tab-btn {
-          padding: ${isMobile ? '8px 16px' : '10px 20px'};
-          background: transparent;
-          border: none;
-          font-size: ${isMobile ? '12px' : '13px'};
-          font-weight: 600;
-          color: #64748b;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          border-radius: 10px 10px 0 0;
-        }
-        
-        .tab-btn svg {
-          width: 14px;
-          height: 14px;
-        }
-        
-        .tab-btn.active {
-          color: #6366f1;
-          background: #eef2ff;
-          position: relative;
-        }
-        
-        .tab-btn.active::after {
-          content: '';
-          position: absolute;
-          bottom: -2px;
-          left: 0;
-          right: 0;
-          height: 2px;
-          background: #6366f1;
-        }
-        
-        /* Categories Grid */
-        .categories-grid {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: ${isMobile ? '8px' : '10px'};
-        }
-        
-        .category-item {
-          background: white;
-          border-radius: ${isMobile ? '12px' : '14px'};
-          padding: ${isMobile ? '10px 12px' : '12px 16px'};
-          display: flex;
-          align-items: center;
-          gap: ${isMobile ? '10px' : '12px'};
-          border: 1px solid #e2e8f0;
-          transition: all 0.2s;
-        }
-        
-        .category-item:active {
-          transform: scale(0.98);
-        }
-        
-        .category-icon {
-          width: ${isMobile ? '36px' : '40px'};
-          height: ${isMobile ? '36px' : '40px'};
-          border-radius: ${isMobile ? '10px' : '12px'};
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-        }
-        
-        .category-icon svg {
-          width: ${isMobile ? '16px' : '18px'};
-          height: ${isMobile ? '16px' : '18px'};
-          stroke: white;
-        }
-        
-        .category-content {
-          flex: 1;
-          min-width: 0;
-        }
-        
-        .category-name {
-          font-size: ${isMobile ? '13px' : '14px'};
-          font-weight: 700;
-          color: #0f172a;
-          margin-bottom: 4px;
-        }
-        
-        .category-badge {
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-          padding: 2px 8px;
-          border-radius: 16px;
-          font-size: ${isMobile ? '9px' : '10px'};
-          font-weight: 600;
-        }
-        
-        .category-badge svg {
-          width: 8px;
-          height: 8px;
-        }
-        
-        .badge-income {
-          background: #d1fae5;
-          color: #059669;
-        }
-        
-        .badge-expense {
-          background: #fee2e2;
-          color: #dc2626;
-        }
-        
-        .badge-both {
-          background: #e0e7ff;
-          color: #4f46e5;
-        }
-        
-        .btn-delete {
-          width: ${isMobile ? '28px' : '32px'};
-          height: ${isMobile ? '28px' : '32px'};
-          border-radius: 8px;
-          background: #fef2f2;
-          border: none;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-        }
-        
-        .btn-delete svg {
-          stroke: #ef4444;
-          width: 12px;
-          height: 12px;
-        }
-        
-        /* Create Button */
-        .create-btn-wrapper {
-          margin-bottom: ${isMobile ? '12px' : '16px'};
-          display: flex;
-          justify-content: flex-end;
-        }
-        
-        .btn-create {
-          background: linear-gradient(135deg, #6366f1, #8b5cf6);
-          border: none;
-          border-radius: 30px;
-          padding: ${isMobile ? '8px 16px' : '10px 20px'};
-          color: white;
-          font-weight: 600;
-          font-size: ${isMobile ? '12px' : '13px'};
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          box-shadow: 0 2px 8px rgba(99,102,241,0.3);
-        }
-        
-        .btn-create svg {
-          width: 12px;
-          height: 12px;
-          stroke: white;
-        }
-        
-        .btn-create.cancel {
-          background: #f1f5f9;
-          color: #64748b;
-          box-shadow: none;
-        }
-        
-        .btn-create.cancel svg {
-          stroke: #64748b;
-        }
-        
-        /* Form Modal */
-        .form-modal {
-          background: white;
-          border-radius: ${isMobile ? '14px' : '16px'};
-          padding: ${isMobile ? '14px' : '18px'};
-          margin-bottom: ${isMobile ? '14px' : '18px'};
-          border: 1px solid #e2e8f0;
-        }
-        
-        .form-title {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          margin-bottom: 14px;
-        }
-        
-        .form-title svg {
-          width: 16px;
-          height: 16px;
-          stroke: #7f809a;
-        }
-        
-        .form-title span {
-          font-size: ${isMobile ? '14px' : '15px'};
-          font-weight: 700;
-          color: #0f172a;
-        }
-        
-        .form-group {
-          margin-bottom: 12px;
-        }
-        
-        .form-group label {
-          display: block;
-          font-size: 10px;
-          font-weight: 600;
-          color: #64748b;
-          margin-bottom: 4px;
-          text-transform: uppercase;
-        }
-        
-        .form-group input {
-          width: 100%;
-          padding: ${isMobile ? '8px 10px' : '9px 12px'};
-          border: 1.5px solid #e2e8f0;
-          border-radius: 10px;
-          font-size: ${isMobile ? '12px' : '13px'};
-          outline: none;
-          background: white;
-        }
-        
-        .form-group input:focus {
-          border-color: #6366f1;
-        }
-        
-        /* Dropdown Selector Styles */
-        .selector-row {
-          display: flex;
-          gap: 12px;
-          flex-wrap: wrap;
-        }
-        
-        .selector-item {
-          flex: 1;
-          position: relative;
-        }
-        
-        .selector-button {
-          width: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 10px;
-          padding: ${isMobile ? '8px 10px' : '9px 12px'};
-          background: white;
-          border: 1.5px solid #e2e8f0;
-          border-radius: 10px;
-          cursor: pointer;
-          font-size: ${isMobile ? '12px' : '13px'};
-          transition: all 0.2s;
-        }
-        
-        .selector-button:hover {
-          border-color: #6366f1;
-        }
-        
-        .selector-left {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-        
-        .color-preview {
-          width: 20px;
-          height: 20px;
-          border-radius: 6px;
-          border: 1px solid #e2e8f0;
-        }
-        
-        /* Dropdown Menu */
-        .dropdown-menu {
-          position: absolute;
-          top: 100%;
-          left: 0;
-          right: 0;
-          margin-top: 4px;
-          background: white;
-          border: 1px solid #e2e8f0;
-          border-radius: 12px;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-          z-index: 100;
-          max-height: 200px;
-          overflow-y: auto;
-        }
-        
-        .icon-grid-dropdown {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 6px;
-          padding: 10px;
-        }
-        
-        .icon-dropdown-item {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 4px;
-          padding: 8px 4px;
-          border-radius: 8px;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .icon-dropdown-item:hover {
-          background: #eef2ff;
-        }
-        
-        .icon-dropdown-item.selected {
-          background: #eef2ff;
-          border: 1px solid #6366f1;
-        }
-        
-        .icon-dropdown-item svg {
-          width: 20px;
-          height: 20px;
-          stroke: #1e293b;
-        }
-        
-        .icon-dropdown-item span {
-          font-size: 9px;
-          color: #64748b;
-        }
-        
-        .color-grid-dropdown {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 8px;
-          padding: 10px;
-        }
-        
-        .color-dropdown-item {
-          width: 100%;
-          aspect-ratio: 1;
-          border-radius: 10px;
-          cursor: pointer;
-          transition: all 0.2s;
-          border: 2px solid transparent;
-        }
-        
-        .color-dropdown-item:hover {
-          transform: scale(1.05);
-          border-color: #1e293b;
-        }
-        
-        .color-dropdown-item.selected {
-          border-color: #1e293b;
-          transform: scale(1.05);
-        }
-        
-        .type-group {
-          display: flex;
-          gap: 8px;
-        }
-        
-        .type-option {
-          flex: 1;
-          padding: ${isMobile ? '6px' : '8px'};
-          border: 1.5px solid #e2e8f0;
-          border-radius: 10px;
-          background: #f8fafc;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 6px;
-          font-weight: 600;
-          font-size: ${isMobile ? '11px' : '12px'};
-        }
-        
-        .type-option svg {
-          width: 10px;
-          height: 10px;
-        }
-        
-        .form-actions {
-          display: flex;
-          gap: 10px;
-          margin-top: 14px;
-        }
-        
-        .btn-submit, .btn-cancel {
-          flex: 1;
-          padding: ${isMobile ? '8px' : '10px'};
-          border-radius: 10px;
-          font-weight: 600;
-          font-size: ${isMobile ? '11px' : '12px'};
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 6px;
-        }
-        
-        .btn-submit {
-          background: linear-gradient(135deg, #6366f1, #8b5cf6);
-          border: none;
-          color: white;
-        }
-        
-        .btn-submit svg {
-          stroke: white;
-          width: 12px;
-          height: 12px;
-        }
-        
-        .btn-cancel {
-          background: #f1f5f9;
-          border: 1px solid #e2e8f0;
-          color: #64748b;
-        }
-        
-        .empty-state {
-          text-align: center;
-          padding: ${isMobile ? '30px 16px' : '40px 20px'};
-          background: white;
-          border-radius: 14px;
-        }
-        
-        .empty-state svg {
-          width: 40px;
-          height: 40px;
-          stroke: #cbd5e1;
-          margin-bottom: 10px;
-        }
-        
-        .empty-state h3 {
-          font-size: ${isMobile ? '14px' : '15px'};
-          margin-bottom: 6px;
-        }
-        
-        .empty-state p {
-          font-size: ${isMobile ? '11px' : '12px'};
-          margin-bottom: 14px;
-        }
-        
-        .loading-state {
-          text-align: center;
-          padding: 40px;
-          background: white;
-          border-radius: 14px;
-        }
-        
-        .spinner {
-          width: 30px;
-          height: 30px;
-          border: 3px solid #e2e8f0;
-          border-top-color: #6366f1;
-          border-radius: 50%;
-          animation: spin 0.8s linear infinite;
-          margin: 0 auto 12px;
-        }
-        
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-        
-        /* Responsive Desktop */
-        @media (min-width: 641px) {
-          .categories-grid {
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-          }
-        }
-      `}</style>
+    <div className="max-w-[1000px] mx-auto p-3 sm:p-5 font-sans bg-[#f8fafc] min-h-screen">
+      <ActionBlockedModal
+        isOpen={actionBlockedModal.isOpen}
+        onClose={() => setActionBlockedModal({ isOpen: false, message: null })}
+        message={actionBlockedModal.message}
+      />
 
-      {/* Header */}
-      <div className="page-header">
-        <div className="header-title">
-          <div className="header-icon">
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal({ isOpen: false, categoryId: null, categoryName: '' })}
+        onConfirm={confirmerSuppression}
+        title="Supprimer cette catégorie ?"
+        message={`Êtes-vous sûr de vouloir supprimer la catégorie "${confirmModal.categoryName}" ? Cette action est irréversible.`}
+        confirmText="Oui, supprimer"
+        cancelText="Annuler"
+      />
+
+      {/* HEADER */}
+      <div className="mb-4 sm:mb-6">
+        <div className="flex items-center gap-2.5 sm:gap-3.5 mb-1">
+          <div
+            className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0"
+            style={{ background: isVisitorMode ? '#c98a1f' : '#356267' }}
+          >
             <Icon name="default" size={isMobile ? 18 : 22} color="white" />
           </div>
           <div>
-            <h1>Catégories</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-[#10214b] flex items-center">
+              Catégories
+              {isVisitorMode && (
+                <span className="text-xs sm:text-sm bg-[#fdf6e8] text-[#7a5410] px-2.5 py-0.5 rounded-full font-semibold ml-2">🔍 Démo</span>
+              )}
+            </h1>
           </div>
         </div>
-        <p className="header-subtitle">Organisez vos transactions</p>
+        <p className="text-[#356267]/60 text-[11px] sm:text-[13px] ml-[50px] sm:ml-[62px]">
+          {isVisitorMode ? 'Visualisation des catégories de démonstration' : 'Organisez vos transactions'}
+        </p>
       </div>
 
-      {/* Stats */}
-      <div className="stats-bar">
-        <div className="stat-card">
-          <div className="stat-icon"><Icon name="default" size={isMobile ? 14 : 16} /></div>
-          <div className="stat-info">
-            <h4>Total</h4>
-            <div className="stat-number">{sysCats.length + mesCats.length}</div>
+      {/* STATS */}
+      <div className="flex gap-2 sm:gap-3 mb-4 sm:mb-5 flex-wrap">
+        <div className={`bg-white rounded-2xl sm:rounded-[16px] px-3 py-2 sm:px-4 sm:py-3 flex items-center gap-2 sm:gap-2.5 flex-1 min-w-[100px] sm:min-w-[120px] border border-[#10214b]/8 ${isVisitorMode ? 'opacity-85' : ''}`}>
+          <div className="w-8 h-8 sm:w-9 sm:h-9 bg-[#356267]/10 rounded-[10px] sm:rounded-xl flex items-center justify-center shrink-0 text-[#356267]">
+            <Icon name="default" size={isMobile ? 14 : 16} />
+          </div>
+          <div className="min-w-0">
+            <h4 className="text-[9px] sm:text-[10px] font-semibold text-[#356267]/60 uppercase mb-0.5 tracking-wide">Total</h4>
+            <div className="text-lg sm:text-[22px] font-extrabold text-[#10214b]">{sysCats.length + mesCats.length}</div>
           </div>
         </div>
-        <div className="stat-card">
-          <div className="stat-icon"><IconBuilding /></div>
-          <div className="stat-info">
-            <h4>Système</h4>
-            <div className="stat-number">{sysCats.length}</div>
+        <div className={`bg-white rounded-2xl sm:rounded-[16px] px-3 py-2 sm:px-4 sm:py-3 flex items-center gap-2 sm:gap-2.5 flex-1 min-w-[100px] sm:min-w-[120px] border border-[#10214b]/8 ${isVisitorMode ? 'opacity-85' : ''}`}>
+          <div className="w-8 h-8 sm:w-9 sm:h-9 bg-[#356267]/10 rounded-[10px] sm:rounded-xl flex items-center justify-center shrink-0 text-[#356267]">
+            <IconBuilding />
+          </div>
+          <div className="min-w-0">
+            <h4 className="text-[9px] sm:text-[10px] font-semibold text-[#356267]/60 uppercase mb-0.5 tracking-wide">Système</h4>
+            <div className="text-lg sm:text-[22px] font-extrabold text-[#10214b]">{sysCats.length}</div>
           </div>
         </div>
-        <div className="stat-card">
-          <div className="stat-icon"><IconUser /></div>
-          <div className="stat-info">
-            <h4>Personnelles</h4>
-            <div className="stat-number">
+        <div className={`bg-white rounded-2xl sm:rounded-[16px] px-3 py-2 sm:px-4 sm:py-3 flex items-center gap-2 sm:gap-2.5 flex-1 min-w-[100px] sm:min-w-[120px] border border-[#10214b]/8 ${isVisitorMode ? 'opacity-85' : ''}`}>
+          <div className="w-8 h-8 sm:w-9 sm:h-9 bg-[#356267]/10 rounded-[10px] sm:rounded-xl flex items-center justify-center shrink-0 text-[#356267]">
+            <IconUser />
+          </div>
+          <div className="min-w-0">
+            <h4 className="text-[9px] sm:text-[10px] font-semibold text-[#356267]/60 uppercase mb-0.5 tracking-wide">Personnelles</h4>
+            <div className="text-lg sm:text-[22px] font-extrabold text-[#10214b]">
               {mesCats.length}
-              {nbMax !== -1 && <span className="stat-limit">/{nbMax}</span>}
+              {nbMax !== -1 && <span className="text-[9px] sm:text-[10px] font-normal text-[#356267]/45">/{nbMax}</span>}
             </div>
+            {isVisitorMode && (
+              <div className="text-[8px] text-[#c98a1f] font-semibold mt-px">
+                🔍 Démo
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="tabs-container">
-        <button className={`tab-btn ${activeTab === 'system' ? 'active' : ''}`} onClick={() => setActiveTab('system')}>
+      {/* TABS */}
+      <div className="flex gap-1 sm:gap-2 mb-4 sm:mb-5 border-b-2 border-[#10214b]/8">
+        <button
+          className={`min-h-[44px] px-4 sm:px-5 bg-transparent border-none text-xs sm:text-[13px] font-semibold cursor-pointer flex items-center gap-1.5 rounded-t-xl relative ${activeTab === 'system' ? 'text-[#356267] bg-[#356267]/10 after:content-[""] after:absolute after:-bottom-[2px] after:left-0 after:right-0 after:h-[2px] after:bg-[#356267]' : 'text-[#356267]/60'}`}
+          onClick={() => setActiveTab('system')}
+        >
           <IconBuilding />
           <span>Système</span>
         </button>
-        <button className={`tab-btn ${activeTab === 'personal' ? 'active' : ''}`} onClick={() => setActiveTab('personal')}>
+        <button
+          className={`min-h-[44px] px-4 sm:px-5 bg-transparent border-none text-xs sm:text-[13px] font-semibold cursor-pointer flex items-center gap-1.5 rounded-t-xl relative ${activeTab === 'personal' ? 'text-[#356267] bg-[#356267]/10 after:content-[""] after:absolute after:-bottom-[2px] after:left-0 after:right-0 after:h-[2px] after:bg-[#356267]' : 'text-[#356267]/60'}`}
+          onClick={() => setActiveTab('personal')}
+        >
           <IconUser />
           <span>Personnelles</span>
         </button>
       </div>
 
-      {/* Create Button */}
-      {activeTab === 'personal' && peutCreer && !limitAtteinte && (
-        <div className="create-btn-wrapper">
-          <button className={`btn-create ${showForm ? 'cancel' : ''}`} onClick={() => setShowForm(!showForm)}>
+      {activeTab === 'personal' && peutCreer && !limitAtteinte && !isVisitorMode && (
+        <div className="mb-3 sm:mb-4 flex justify-end">
+          <button
+            className={`min-h-[44px] rounded-full px-4 sm:px-5 font-semibold text-xs sm:text-[13px] cursor-pointer flex items-center gap-1.5 transition-colors ${showForm ? 'bg-[#f1f5f9] text-[#356267]/70' : 'bg-[#356267] text-white shadow-[0_2px_8px_rgba(53,98,103,0.3)] hover:bg-[#2a4f53]'}`}
+            onClick={() => setShowForm(!showForm)}
+          >
             {showForm ? <IconClose /> : <IconPlus />}
             {showForm ? 'Annuler' : 'Créer'}
           </button>
         </div>
       )}
 
-      {/* Form */}
-      {showForm && activeTab === 'personal' && (
-        <div className="form-modal">
-          <div className="form-title">
-            <IconPlusCircle />
-            <span>Nouvelle catégorie</span>
+      {activeTab === 'personal' && isVisitorMode && (
+        <div className="mb-3 sm:mb-4 flex justify-end">
+          <button
+            className="min-h-[44px] rounded-full px-4 sm:px-5 font-semibold text-xs sm:text-[13px] cursor-pointer flex items-center gap-1.5 bg-[#fdf6e8] text-[#7a5410] shadow-none"
+            onClick={ouvrirActionBloquee}
+          >
+            <IconLock />
+            Créer une catégorie
+          </button>
+        </div>
+      )}
+
+      {showForm && activeTab === 'personal' && !isVisitorMode && (
+        <div className="bg-white rounded-2xl p-3.5 sm:p-[18px] mb-3.5 sm:mb-[18px] border border-[#10214b]/8">
+          <div className="flex items-center gap-2 mb-3.5">
+            <span className="text-[#356267]"><IconPlusCircle /></span>
+            <span className="text-sm sm:text-[15px] font-bold text-[#10214b]">Nouvelle catégorie</span>
           </div>
           <form onSubmit={creerCategorie}>
-            <div className="form-group">
-              <label>Nom</label>
+            <div className="mb-3">
+              <label className="block text-[10px] font-semibold text-[#356267]/60 mb-1 uppercase tracking-wide">Nom</label>
               <input
                 type="text"
                 value={form.nom}
                 onChange={e => setForm({ ...form, nom: e.target.value })}
                 placeholder="Ex: Restaurant, Voyage..."
                 required
+                className="w-full min-h-[44px] px-3 border border-[#10214b]/10 rounded-xl text-[13px] outline-none bg-white focus:border-[#356267]"
               />
             </div>
-            
-            <div className="selector-row">
-              <div className="selector-item" ref={iconDropdownRef}>
-                <label>Icône</label>
-                <button 
-                  type="button" 
-                  className="selector-button"
+
+            <div className="flex gap-3 flex-wrap">
+              <div className="flex-1 relative min-w-[140px]" ref={iconDropdownRef}>
+                <label className="block text-[10px] font-semibold text-[#356267]/60 mb-1 uppercase tracking-wide">Icône</label>
+                <button
+                  type="button"
+                  className="w-full min-h-[44px] flex items-center justify-between gap-2.5 px-3 bg-white border border-[#10214b]/10 rounded-xl cursor-pointer text-[13px] transition-colors hover:border-[#356267]"
                   onClick={() => setShowIconDropdown(!showIconDropdown)}
                 >
-                  <div className="selector-left">
-                    <SelectedIcon />
+                  <div className="flex items-center gap-2 text-[#10214b]">
+                    <span className="text-[#356267]"><SelectedIcon /></span>
                     <span>{ICONES_LIST.find(i => i.value === form.icone)?.label || 'Défaut'}</span>
                   </div>
-                  <IconChevronDown />
+                  <span className="text-[#356267]/50"><IconChevronDown /></span>
                 </button>
                 {showIconDropdown && (
-                  <div className="dropdown-menu">
-                    <div className="icon-grid-dropdown">
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#10214b]/10 rounded-xl shadow-[0_4px_12px_rgba(16,33,75,0.1)] z-[100] max-h-[200px] overflow-y-auto">
+                    <div className="grid grid-cols-3 gap-1.5 p-2.5">
                       {ICONES_LIST.map(icon => {
                         const IconComp = icon.icon;
                         const isSelected = form.icone === icon.value;
                         return (
                           <div
                             key={icon.value}
-                            className={`icon-dropdown-item ${isSelected ? 'selected' : ''}`}
+                            className={`flex flex-col items-center gap-1 py-2 px-1 rounded-lg cursor-pointer transition-colors ${isSelected ? 'bg-[#356267]/10 border border-[#356267]' : 'hover:bg-[#356267]/5'}`}
                             onClick={() => {
                               setForm({ ...form, icone: icon.value });
                               setShowIconDropdown(false);
                             }}
                           >
-                            <IconComp />
-                            <span>{icon.label}</span>
+                            <span className="text-[#10214b]"><IconComp /></span>
+                            <span className="text-[9px] text-[#356267]/70">{icon.label}</span>
                           </div>
                         );
                       })}
@@ -1226,27 +563,27 @@ export default function Categories() {
                   </div>
                 )}
               </div>
-              
-              <div className="selector-item" ref={colorDropdownRef}>
-                <label>Couleur</label>
-                <button 
-                  type="button" 
-                  className="selector-button"
+
+              <div className="flex-1 relative min-w-[140px]" ref={colorDropdownRef}>
+                <label className="block text-[10px] font-semibold text-[#356267]/60 mb-1 uppercase tracking-wide">Couleur</label>
+                <button
+                  type="button"
+                  className="w-full min-h-[44px] flex items-center justify-between gap-2.5 px-3 bg-white border border-[#10214b]/10 rounded-xl cursor-pointer text-[13px] transition-colors hover:border-[#356267]"
                   onClick={() => setShowColorDropdown(!showColorDropdown)}
                 >
-                  <div className="selector-left">
-                    <div className="color-preview" style={{ background: form.couleur }}></div>
+                  <div className="flex items-center gap-2 text-[#10214b]">
+                    <div className="w-5 h-5 rounded-md border border-[#10214b]/10" style={{ background: form.couleur }}></div>
                     <span>{SelectedColor.name}</span>
                   </div>
-                  <IconChevronDown />
+                  <span className="text-[#356267]/50"><IconChevronDown /></span>
                 </button>
                 {showColorDropdown && (
-                  <div className="dropdown-menu">
-                    <div className="color-grid-dropdown">
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#10214b]/10 rounded-xl shadow-[0_4px_12px_rgba(16,33,75,0.1)] z-[100] max-h-[200px] overflow-y-auto">
+                    <div className="grid grid-cols-4 gap-2 p-2.5">
                       {COULEURS_LIST.map(color => (
                         <div
                           key={color.value}
-                          className={`color-dropdown-item ${form.couleur === color.value ? 'selected' : ''}`}
+                          className={`w-full aspect-square rounded-[10px] cursor-pointer transition-transform border-2 hover:scale-105 ${form.couleur === color.value ? 'border-[#10214b] scale-105' : 'border-transparent'}`}
                           style={{ background: color.value }}
                           onClick={() => {
                             setForm({ ...form, couleur: color.value });
@@ -1260,19 +597,19 @@ export default function Categories() {
                 )}
               </div>
             </div>
-            
-            <div className="form-group">
-              <label>Type</label>
-              <div className="type-group">
+
+            <div className="mb-3 mt-3">
+              <label className="block text-[10px] font-semibold text-[#356267]/60 mb-1 uppercase tracking-wide">Type</label>
+              <div className="flex gap-2">
                 {[
-                  { value: 'entree', label: 'Entrée', icon: IconTrendingUp, color: '#10b981' },
-                  { value: 'sortie', label: 'Sortie', icon: IconTrendingDown, color: '#ef4444' },
-                  { value: 'les_deux', label: 'Les deux', icon: IconTransfer, color: '#6366f1' },
+                  { value: 'entree', label: 'Entrée', icon: IconTrendingUp, color: '#4ea674' },
+                  { value: 'sortie', label: 'Sortie', icon: IconTrendingDown, color: '#d55053' },
+                  { value: 'les_deux', label: 'Les deux', icon: IconTransfer, color: '#356267' },
                 ].map(type => (
                   <div
                     key={type.value}
-                    className={`type-option ${form.type === type.value ? 'active' : ''}`}
-                    style={form.type === type.value ? { borderColor: type.color, background: `${type.color}08` } : {}}
+                    className="flex-1 min-h-[44px] border border-[#10214b]/10 rounded-xl bg-[#f8fafc] cursor-pointer flex items-center justify-center gap-1.5 font-semibold text-[11px] sm:text-xs"
+                    style={form.type === type.value ? { borderColor: type.color, background: `${type.color}10`, color: type.color } : { color: '#356267' }}
                     onClick={() => setForm({ ...form, type: type.value })}
                   >
                     <type.icon />
@@ -1281,13 +618,21 @@ export default function Categories() {
                 ))}
               </div>
             </div>
-            
-            <div className="form-actions">
-              <button type="submit" disabled={submitting} className="btn-submit">
-                {submitting ? <div className="spinner" style={{ width: 12, height: 12 }}></div> : <IconCheck />}
+
+            <div className="flex gap-2.5 mt-3.5">
+              <button
+                type="submit"
+                disabled={submitting}
+                className="flex-1 min-h-[44px] rounded-xl font-semibold text-[11px] sm:text-xs cursor-pointer flex items-center justify-center gap-1.5 bg-[#356267] text-white hover:bg-[#2a4f53] transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                {submitting ? <span className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin"></span> : <IconCheck />}
                 {submitting ? 'Création...' : 'Créer'}
               </button>
-              <button type="button" onClick={() => setShowForm(false)} className="btn-cancel">
+              <button
+                type="button"
+                onClick={() => setShowForm(false)}
+                className="flex-1 min-h-[44px] rounded-xl font-semibold text-[11px] sm:text-xs bg-[#f1f5f9] border border-[#10214b]/10 text-[#356267]/70 hover:bg-[#e2e8f0] transition-colors"
+              >
                 Annuler
               </button>
             </div>
@@ -1295,31 +640,30 @@ export default function Categories() {
         </div>
       )}
 
-      {/* Content */}
       {loading ? (
-        <div className="loading-state">
-          <div className="spinner"></div>
-          <p>Chargement...</p>
+        <div className="text-center py-10 bg-white rounded-2xl">
+          <div className="w-[30px] h-[30px] border-[3px] border-[#e2e8f0] border-t-[#356267] rounded-full animate-spin mx-auto mb-3"></div>
+          <p className="text-[#356267]/60 text-sm">Chargement...</p>
         </div>
       ) : activeTab === 'system' ? (
         sysCats.length === 0 ? (
-          <div className="empty-state">
-            <IconDefault />
-            <h3>Aucune catégorie</h3>
-            <p>Catégories système disponibles</p>
+          <div className="text-center py-8 sm:py-10 px-4 sm:px-5 bg-white rounded-2xl">
+            <span className="text-[#cbd5e1] inline-block mb-2.5"><IconDefault /></span>
+            <h3 className="text-sm sm:text-[15px] font-bold text-[#10214b] mb-1.5">Aucune catégorie</h3>
+            <p className="text-[11px] sm:text-xs text-[#356267]/60 mb-3.5">Catégories système disponibles</p>
           </div>
         ) : (
-          <div className="categories-grid">
+          <div className="grid grid-cols-1 sm:grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-2 sm:gap-2.5">
             {sysCats.map(cat => {
               const TypeIcon = getTypeIconComponent(cat.type);
               return (
-                <div key={cat.id} className="category-item">
-                  <div className="category-icon" style={{ background: cat.couleur || '#6366f1' }}>
+                <div key={cat.id} className="bg-white rounded-xl sm:rounded-[14px] px-3 py-2.5 sm:px-4 sm:py-3 flex items-center gap-2.5 sm:gap-3 border border-[#10214b]/8 transition-transform active:scale-[0.98]">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-[10px] sm:rounded-xl flex items-center justify-center shrink-0" style={{ background: cat.couleur || '#356267' }}>
                     <Icon isSystem={true} categoryName={cat.nom} size={isMobile ? 16 : 18} color="white" />
                   </div>
-                  <div className="category-content">
-                    <div className="category-name">{cat.nom}</div>
-                    <div className={`category-badge ${getTypeBadgeClass(cat.type)}`}>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13px] sm:text-sm font-bold text-[#10214b] mb-1 truncate">{cat.nom}</div>
+                    <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-semibold ${getTypeBadgeClasses(cat.type)}`}>
                       <TypeIcon />
                       <span>{getTypeLabel(cat.type)}</span>
                     </div>
@@ -1329,48 +673,81 @@ export default function Categories() {
             })}
           </div>
         )
-      ) : !peutCreer ? (
-        <div className="empty-state">
-          <IconLock />
-          <h3>Abonnement requis</h3>
-          <p>Abonnez-vous pour créer des catégories</p>
-          <button className="btn-create" onClick={() => navigate('/profil')}>
+      ) : !peutCreer && !isVisitorMode ? (
+        <div className="text-center py-8 sm:py-10 px-4 sm:px-5 bg-white rounded-2xl">
+          <span className="text-[#cbd5e1] inline-block mb-2.5"><IconLock /></span>
+          <h3 className="text-sm sm:text-[15px] font-bold text-[#10214b] mb-1.5">Abonnement requis</h3>
+          <p className="text-[11px] sm:text-xs text-[#356267]/60 mb-3.5">Abonnez-vous pour créer des catégories</p>
+          <button
+            className="min-h-[44px] rounded-full px-4 sm:px-5 font-semibold text-xs sm:text-[13px] cursor-pointer inline-flex items-center gap-1.5 bg-[#356267] text-white shadow-[0_2px_8px_rgba(53,98,103,0.3)] hover:bg-[#2a4f53] transition-colors"
+            onClick={() => navigate('/profil')}
+          >
             <IconStar /> Voir les offres
           </button>
         </div>
       ) : mesCats.length === 0 ? (
-        <div className="empty-state">
-          <IconDefault />
-          <h3>Aucune catégorie</h3>
-          <p>Créez votre première catégorie</p>
-          <button className="btn-create" onClick={() => setShowForm(true)}>
-            <IconPlus /> Créer
-          </button>
+        <div className="text-center py-8 sm:py-10 px-4 sm:px-5 bg-white rounded-2xl">
+          <span className="text-[#cbd5e1] inline-block mb-2.5"><IconDefault /></span>
+          <h3 className="text-sm sm:text-[15px] font-bold text-[#10214b] mb-1.5">{isVisitorMode ? '🔍 Données de démonstration' : 'Aucune catégorie'}</h3>
+          <p className="text-[11px] sm:text-xs text-[#356267]/60 mb-3.5">{isVisitorMode ? 'Créez un compte pour gérer vos catégories' : 'Créez votre première catégorie'}</p>
+          {isVisitorMode ? (
+            <button
+              className="min-h-[44px] rounded-full px-4 sm:px-5 font-semibold text-xs sm:text-[13px] cursor-pointer inline-flex items-center gap-1.5 bg-[#c98a1f] text-white hover:bg-[#b47a1a] transition-colors"
+              onClick={() => navigate('/inscription')}
+            >
+              <IconPlus /> Créer un compte
+            </button>
+          ) : (
+            <button
+              className="min-h-[44px] rounded-full px-4 sm:px-5 font-semibold text-xs sm:text-[13px] cursor-pointer inline-flex items-center gap-1.5 bg-[#356267] text-white shadow-[0_2px_8px_rgba(53,98,103,0.3)] hover:bg-[#2a4f53] transition-colors"
+              onClick={() => setShowForm(true)}
+            >
+              <IconPlus /> Créer
+            </button>
+          )}
         </div>
       ) : (
-        <div className="categories-grid">
+        <div className="grid grid-cols-1 sm:grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-2 sm:gap-2.5">
           {mesCats.map(cat => {
             const TypeIcon = getTypeIconComponent(cat.type);
             const foundIcon = ICONES_LIST.find(i => i.value === cat.icone);
             const IconComp = foundIcon ? foundIcon.icon : IconDefault;
             return (
-              <div key={cat.id} className="category-item">
-                <div className="category-icon" style={{ background: `linear-gradient(135deg, ${cat.couleur || '#6366f1'}, ${cat.couleur || '#6366f1'}cc)` }}>
+              <div key={cat.id} className={`bg-white rounded-xl sm:rounded-[14px] px-3 py-2.5 sm:px-4 sm:py-3 flex items-center gap-2.5 sm:gap-3 border border-[#10214b]/8 transition-transform active:scale-[0.98] ${isVisitorMode ? 'opacity-85' : ''}`}>
+                <div
+                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-[10px] sm:rounded-xl flex items-center justify-center shrink-0 text-white"
+                  style={{ background: `linear-gradient(135deg, ${cat.couleur || '#356267'}, ${cat.couleur || '#356267'}cc)` }}
+                >
                   <IconComp />
                 </div>
-                <div className="category-content">
-                  <div className="category-name">{cat.nom}</div>
-                  <div className={`category-badge ${getTypeBadgeClass(cat.type)}`}>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] sm:text-sm font-bold text-[#10214b] mb-1 truncate">{cat.nom}</div>
+                  <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-semibold ${getTypeBadgeClasses(cat.type)}`}>
                     <TypeIcon />
                     <span>{getTypeLabel(cat.type)}</span>
                   </div>
                 </div>
-                <button className="btn-delete" onClick={() => supprimerCategorie(cat.id)}>
+                <button
+                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg border-none flex items-center justify-center shrink-0 transition-opacity"
+                  style={{
+                    background: isVisitorMode ? '#fdf6e8' : 'rgba(213,80,83,0.08)',
+                    color: isVisitorMode ? '#c98a1f' : '#d55053',
+                    cursor: isVisitorMode ? 'not-allowed' : 'pointer',
+                    opacity: isVisitorMode ? 0.6 : 1,
+                  }}
+                  onClick={() => supprimerCategorie(cat.id)}
+                  title={isVisitorMode ? 'Mode exploration - Créez un compte' : ''}
+                >
                   <IconTrash />
                 </button>
               </div>
             );
           })}
+          {isVisitorMode && (
+            <div className="px-4 py-3 text-center bg-[#fdf6e8] rounded-xl text-xs text-[#7a5410] font-medium border border-[#e8c27a] mt-2 col-span-full">
+              🔍 Données de démonstration - Créez un compte pour gérer vos vraies catégories
+            </div>
+          )}
         </div>
       )}
     </div>

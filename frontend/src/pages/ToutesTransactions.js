@@ -1,19 +1,30 @@
-import React, { useEffect, useState, useRef } from 'react';
+// frontend/src/pages/ToutesTransactions.js
+import React, { useEffect, useState } from 'react';
 import api from '../api/axios';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 // ── SHARED STYLE CONSTANTS ──
 const COLORS = {
-  entree: '#10b981',
-  sortie: '#ef4444',
-  primary: '#6366f1',
-  primaryDark: '#4f46e5',
+  entree: '#5c7a1f',      // texte lisible sur fond clair, dérivé de #99cc33
+  entreeBg: '#99cc331a',
+  entreeBorder: '#99cc3350',
+  sortie: '#990000',
+  sortieBg: '#9900000d',
+  sortieBorder: '#99000030',
+  primary: '#003152',
+  primarySoft: '#0031520d',
+  primaryBorder: '#00315220',
+  primaryDark: '#00263f',
   text: '#0f172a',
   textMuted: '#64748b',
   textLight: '#94a3b8',
-  border: '#e2e8f0',
+  border: '#e5e9f0',
   bg: '#f8fafc',
   white: '#ffffff',
+  warning: '#92400e',
+  warningBg: '#fffbeb',
+  warningBorder: '#fde3a7',
 };
 
 // ── COMPOSANT DE MESSAGE BANNIERE ──
@@ -22,27 +33,27 @@ function MessageBanner({ type, message, onClose }) {
 
   const styles = {
     success: {
-      background: '#ecfdf5',
-      border: '1px solid #6ee7b7',
-      color: '#065f46',
+      background: COLORS.entreeBg,
+      border: `1px solid ${COLORS.entreeBorder}`,
+      color: COLORS.entree,
       icon: 'bx-check-circle',
     },
     error: {
-      background: '#fef2f2',
-      border: '1px solid #fca5a5',
-      color: '#991b1b',
+      background: COLORS.sortieBg,
+      border: `1px solid ${COLORS.sortieBorder}`,
+      color: COLORS.sortie,
       icon: 'bx-error-circle',
     },
     warning: {
-      background: '#fffbeb',
-      border: '1px solid #fcd34d',
-      color: '#92400e',
+      background: COLORS.warningBg,
+      border: `1px solid ${COLORS.warningBorder}`,
+      color: COLORS.warning,
       icon: 'bx-error',
     },
     info: {
-      background: '#eff6ff',
-      border: '1px solid #93c5fd',
-      color: '#1e40af',
+      background: COLORS.primarySoft,
+      border: `1px solid ${COLORS.primaryBorder}`,
+      color: COLORS.primary,
       icon: 'bx-info-circle',
     },
   };
@@ -55,16 +66,16 @@ function MessageBanner({ type, message, onClose }) {
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: 12,
-      padding: '12px 16px',
-      borderRadius: 12,
+      padding: '14px 18px',
+      borderRadius: 14,
       background: style.background,
-      border: `1px solid ${style.border}`,
-      marginBottom: 16,
+      border: style.border,
+      marginBottom: 24,
       animation: 'fadeUp 0.3s cubic-bezier(.16,1,.3,1) both',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <i className={`bx ${style.icon}`} style={{ fontSize: 20, color: style.color }} />
-        <span style={{ fontSize: 13, color: style.color, fontWeight: 500 }}>
+        <i className={`bx ${style.icon}`} style={{ fontSize: 20, color: style.color, flexShrink: 0 }} />
+        <span style={{ fontSize: 13, color: style.color, fontWeight: 500, lineHeight: 1.5 }}>
           {message}
         </span>
       </div>
@@ -80,6 +91,11 @@ function MessageBanner({ type, message, onClose }) {
             padding: '0 4px',
             opacity: 0.6,
             transition: 'opacity 0.2s',
+            minWidth: 44,
+            minHeight: 44,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
           onMouseEnter={e => e.currentTarget.style.opacity = '1'}
           onMouseLeave={e => e.currentTarget.style.opacity = '0.6'}
@@ -97,8 +113,8 @@ function TypeBadge({ type }) {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 4,
-      padding: '4px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700,
-      background: isEntree ? '#ecfdf5' : '#fef2f2',
+      padding: '4px 9px', borderRadius: 7, fontSize: 11, fontWeight: 700,
+      background: isEntree ? COLORS.entreeBg : COLORS.sortieBg,
       color: isEntree ? COLORS.entree : COLORS.sortie,
       fontFamily: "'DM Sans', sans-serif",
     }}>
@@ -109,7 +125,7 @@ function TypeBadge({ type }) {
 }
 
 // ── MODAL EXPORT PDF ──
-function ExportPDFModal({ transactions, onClose, isMobile, userEmail, userProfileImage, onLogoChange }) {
+function ExportPDFModal({ transactions, onClose, isMobile, userEmail, userProfileImage, onLogoChange, isVisitorMode }) {
   const [option, setOption] = useState('');
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
@@ -117,9 +133,7 @@ function ExportPDFModal({ transactions, onClose, isMobile, userEmail, userProfil
   const [employeId, setEmployeId] = useState('');
   const [employes, setEmployes] = useState([]);
   const [generating, setGenerating] = useState(false);
-  // const [customLogo, setCustomLogo] = useState(null); // ← COMMENTÉ : Logo personnalisé désactivé
   const [entrepriseEmail, setEntrepriseEmail] = useState(userEmail || 'contact@financeapp.com');
-  // const fileInputRef = useRef(null); // ← COMMENTÉ : Référence du fichier désactivée
 
   useEffect(() => {
     const ids = {};
@@ -133,21 +147,6 @@ function ExportPDFModal({ transactions, onClose, isMobile, userEmail, userProfil
     });
     setEmployes(Object.entries(ids).map(([id, data]) => ({ id, nom: data.nom, email: data.email })));
   }, [transactions]);
-
-  // ── FONCTION DE CHANGEMENT DE LOGO COMMENTÉE ──
-  /*
-  const handleLogoChange = (e) => {
-    const file = e.target.files[0];
-    if (file && file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setCustomLogo(event.target.result);
-        if (onLogoChange) onLogoChange(event.target.result);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-  */
 
   const filtrerTransactions = () => {
     let result = [...transactions];
@@ -198,14 +197,9 @@ function ExportPDFModal({ transactions, onClose, isMobile, userEmail, userProfil
 
     const generatedAt = `${new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })} à ${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
 
-    // ── LOGO SIMPLIFIÉ FIXE POUR LE PDF (sans personnalisation) ──
-    // const logoHTML = (customLogo || userProfileImage)
-    //   ? `<img src="${customLogo || userProfileImage}" style="height:52px;width:auto;max-width:150px;object-fit:contain;border-radius:10px;" alt="Logo" />`
-    //   : `<div style="display:flex;align-items:center;gap:12px;"> ... </div>`;
-    
     // Logo fixe sans personnalisation
     const logoHTML = `<div style="display:flex;align-items:center;gap:12px;">
-        <div style="width:48px;height:48px;background:linear-gradient(135deg, #0c2e7c, #1e4db7, #3b82f6);border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 4px 15px rgba(59,130,246,0.4);">
+        <div style="width:48px;height:48px;background:linear-gradient(135deg, #003152, #00517f, #0077b6);border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 4px 15px rgba(0,49,82,0.4);">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M3 13L8 8L13 13L21 5" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
             <path d="M21 12V19H3V5H12" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
@@ -214,47 +208,47 @@ function ExportPDFModal({ transactions, onClose, isMobile, userEmail, userProfil
           </svg>
         </div>
         <div>
-          <div style="font-size:22px;font-weight:900;color:#0f172a;letter-spacing:-0.5px;line-height:1;">Finance<span style="color:#3b82f6;">App</span></div>
+          <div style="font-size:22px;font-weight:900;color:#0f172a;letter-spacing:-0.5px;line-height:1;">Finance<span style="color:#003152;">App</span></div>
           <div style="font-size:11px;color:#64748b;margin-top:3px;display:flex;align-items:center;gap:4px;">
-            <i class="bx bx-check-shield" style="font-size:11px;color:#6366f1;"></i>
+            <i class="bx bx-check-shield" style="font-size:11px;color:#003152;"></i>
             Smart Finance
           </div>
         </div>
       </div>`;
 
     const showSolde = option === '1'
-      ? `<tr class="solde-row"><td colspan="5" style="text-align:right;font-weight:700;font-size:12px;padding:13px 16px;color:#0f172a;">Total Entrées</td><td style="font-weight:800;font-size:13px;color:#059669;padding:13px 16px;white-space:nowrap;">+${totalEntrees.toLocaleString('fr-FR')} MRU</td></tr>`
+      ? `<tr class="solde-row"><td colspan="5" style="text-align:right;font-weight:700;font-size:12px;padding:13px 16px;color:#0f172a;">Total Entrées</td><td style="font-weight:800;font-size:13px;color:#5c7a1f;padding:13px 16px;white-space:nowrap;">+${totalEntrees.toLocaleString('fr-FR')} MRU</td></tr>`
       : option === '2'
-        ? `<tr class="solde-row"><td colspan="5" style="text-align:right;font-weight:700;font-size:12px;padding:13px 16px;color:#0f172a;">Total Sorties</td><td style="font-weight:800;font-size:13px;color:#dc2626;padding:13px 16px;white-space:nowrap;">-${totalSorties.toLocaleString('fr-FR')} MRU</td></tr>`
-        : `<tr class="solde-row"><td colspan="5" style="text-align:right;font-weight:700;font-size:12px;padding:13px 16px;color:#0f172a;">Solde Net</td><td style="font-weight:800;font-size:13px;color:${soldeFinal >= 0 ? '#059669' : '#dc2626'};padding:13px 16px;white-space:nowrap;">${soldeFinal >= 0 ? '+' : ''}${soldeFinal.toLocaleString('fr-FR')} MRU</td></tr>`;
+        ? `<tr class="solde-row"><td colspan="5" style="text-align:right;font-weight:700;font-size:12px;padding:13px 16px;color:#0f172a;">Total Sorties</td><td style="font-weight:800;font-size:13px;color:#990000;padding:13px 16px;white-space:nowrap;">-${totalSorties.toLocaleString('fr-FR')} MRU</td></tr>`
+        : `<tr class="solde-row"><td colspan="5" style="text-align:right;font-weight:700;font-size:12px;padding:13px 16px;color:#0f172a;">Solde Net</td><td style="font-weight:800;font-size:13px;color:${soldeFinal >= 0 ? '#5c7a1f' : '#990000'};padding:13px 16px;white-space:nowrap;">${soldeFinal >= 0 ? '+' : ''}${soldeFinal.toLocaleString('fr-FR')} MRU</td></tr>`;
 
     const rows = data.map((t, i) => `
       <tr style="background:${i % 2 === 0 ? '#ffffff' : '#f8fafc'};">
         <td style="padding:10px 16px;">
-          <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:5px;font-size:11px;font-weight:700;background:${t.type === 'entree' ? '#ecfdf5' : '#fef2f2'};color:${t.type === 'entree' ? '#059669' : '#dc2626'};">
+          <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:5px;font-size:11px;font-weight:700;background:${t.type === 'entree' ? '#99cc331a' : '#9900000d'};color:${t.type === 'entree' ? '#5c7a1f' : '#990000'};">
             <i class="bx ${t.type === 'entree' ? 'bx-trending-up' : 'bx-trending-down'}" style="font-size:11px;"></i>
             ${t.type === 'entree' ? 'Entrée' : 'Sortie'}
           </span>
         </td>
-        <td style="padding:10px 16px;font-size:12px;font-weight:700;color:${t.type === 'entree' ? '#059669' : '#dc2626'};white-space:nowrap;">
+        <td style="padding:10px 16px;font-size:12px;font-weight:700;color:${t.type === 'entree' ? '#5c7a1f' : '#990000'};white-space:nowrap;">
           ${t.type === 'entree' ? '+' : '-'}${parseFloat(t.montant || 0).toLocaleString('fr-FR')} MRU
         </td>
         <td style="padding:10px 16px;font-size:11px;color:#374151;">
           <span style="display:inline-flex;align-items:center;gap:4px;">
-            <i class="bx bx-category" style="font-size:11px;color:#6366f1;"></i>
+            <i class="bx bx-category" style="font-size:11px;color:#003152;"></i>
             ${t.categorie_detail?.nom || '—'}
           </span>
         </td>
         <td style="padding:10px 16px;font-size:11px;color:#374151;max-width:180px;">${t.description || '—'}</td>
         <td style="padding:10px 16px;font-size:11px;color:#374151;">
-          <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;background:${t.source === 'budget' ? '#fffbeb' : '#ede9fe'};color:${t.source === 'budget' ? '#92400e' : '#4338ca'};">
+          <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;background:${t.source === 'budget' ? '#fffbeb' : '#0031521a'};color:${t.source === 'budget' ? '#92400e' : '#003152'};">
             <i class="bx ${t.source === 'budget' ? 'bx-target' : 'bx-edit'}" style="font-size:10px;"></i>
             ${t.source === 'budget' ? 'Budget' : 'Manuel'}
           </span>
         </td>
         <td style="padding:10px 16px;font-size:11px;color:#374151;white-space:nowrap;">
           <span style="display:inline-flex;align-items:center;gap:4px;">
-            <i class="bx bx-calendar" style="font-size:11px;color:#6366f1;"></i>
+            <i class="bx bx-calendar" style="font-size:11px;color:#003152;"></i>
             ${new Date(t.date_creation).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
           </span>
         </td>
@@ -315,7 +309,7 @@ function ExportPDFModal({ transactions, onClose, isMobile, userEmail, userProfil
     }
     .meta-box .meta-row i {
       font-size: 13px;
-      color: #6366f1;
+      color: #003152;
       width: 16px;
       text-align: center;
     }
@@ -341,7 +335,7 @@ function ExportPDFModal({ transactions, onClose, isMobile, userEmail, userProfil
       gap: 8px;
       margin-bottom: 5px;
     }
-    .report-title i { font-size: 19px; color: #6366f1; }
+    .report-title i { font-size: 19px; color: #003152; }
     .report-sub {
       font-size: 12px;
       color: #64748b;
@@ -351,7 +345,7 @@ function ExportPDFModal({ transactions, onClose, isMobile, userEmail, userProfil
       flex-wrap: wrap;
     }
     .report-sub span { display: flex; align-items: center; gap: 5px; }
-    .report-sub i { font-size: 12px; color: #6366f1; }
+    .report-sub i { font-size: 12px; color: #003152; }
     .stats-bar {
       display: flex;
       border-bottom: 1px solid #e2e8f0;
@@ -394,9 +388,9 @@ function ExportPDFModal({ transactions, onClose, isMobile, userEmail, userProfil
       letter-spacing: 0.5px;
       border-bottom: 2px solid #e2e8f0;
     }
-    th i { font-size: 11px; margin-right: 4px; vertical-align: middle; color: #6366f1; }
+    th i { font-size: 11px; margin-right: 4px; vertical-align: middle; color: #003152; }
     tbody tr { border-bottom: 1px solid #f1f5f9; }
-    .solde-row { background: #f8fafc !important; border-top: 2px solid #6366f1 !important; }
+    .solde-row { background: #f8fafc !important; border-top: 2px solid #003152 !important; }
     td { vertical-align: middle; }
     .empty-row td {
       text-align: center;
@@ -421,7 +415,7 @@ function ExportPDFModal({ transactions, onClose, isMobile, userEmail, userProfil
       align-items: center;
       gap: 6px;
     }
-    .footer-col i { font-size: 12px; color: #6366f1; }
+    .footer-col i { font-size: 12px; color: #003152; }
     .footer-col strong { color: #0f172a; }
     @media print {
       body { background: #fff; }
@@ -457,7 +451,7 @@ function ExportPDFModal({ transactions, onClose, isMobile, userEmail, userProfil
         <div class="meta-row" style="margin-top:5px;">
           <i class="bx bx-spreadsheet"></i>
           <span class="meta-label">Transactions</span>
-          <span style="color:#6366f1;font-weight:700;">${data.length} enregistrement(s)</span>
+          <span style="color:#003152;font-weight:700;">${data.length} enregistrement(s)</span>
         </div>
       </div>
     </div>
@@ -473,8 +467,8 @@ function ExportPDFModal({ transactions, onClose, isMobile, userEmail, userProfil
   </div>
   <div class="stats-bar">
     <div class="stat-cell">
-      <div class="stat-icon-wrap" style="background:#ede9fe;">
-        <i class="bx bx-list-ul" style="color:#6366f1;"></i>
+      <div class="stat-icon-wrap" style="background:#0031521a;">
+        <i class="bx bx-list-ul" style="color:#003152;"></i>
       </div>
       <div>
         <div class="stat-lbl"><i class="bx bx-grid" style="font-size:9px;"></i> Transactions</div>
@@ -483,32 +477,32 @@ function ExportPDFModal({ transactions, onClose, isMobile, userEmail, userProfil
     </div>
     ${option !== '2' ? `
     <div class="stat-cell">
-      <div class="stat-icon-wrap" style="background:#ecfdf5;">
-        <i class="bx bx-trending-up" style="color:#059669;"></i>
+      <div class="stat-icon-wrap" style="background:#99cc331a;">
+        <i class="bx bx-trending-up" style="color:#5c7a1f;"></i>
       </div>
       <div>
         <div class="stat-lbl">Total Entrées</div>
-        <div class="stat-val" style="color:#059669;">+${totalEntrees.toLocaleString('fr-FR')} MRU</div>
+        <div class="stat-val" style="color:#5c7a1f;">+${totalEntrees.toLocaleString('fr-FR')} MRU</div>
       </div>
     </div>` : ''}
     ${option !== '1' ? `
     <div class="stat-cell">
-      <div class="stat-icon-wrap" style="background:#fef2f2;">
-        <i class="bx bx-trending-down" style="color:#dc2626;"></i>
+      <div class="stat-icon-wrap" style="background:#9900000d;">
+        <i class="bx bx-trending-down" style="color:#990000;"></i>
       </div>
       <div>
         <div class="stat-lbl">Total Sorties</div>
-        <div class="stat-val" style="color:#dc2626;">-${totalSorties.toLocaleString('fr-FR')} MRU</div>
+        <div class="stat-val" style="color:#990000;">-${totalSorties.toLocaleString('fr-FR')} MRU</div>
       </div>
     </div>` : ''}
     ${option === '3' || option === '4' ? `
     <div class="stat-cell">
-      <div class="stat-icon-wrap" style="background:${soldeFinal >= 0 ? '#ecfdf5' : '#fef2f2'};">
-        <i class="bx bx-calculator" style="color:${soldeFinal >= 0 ? '#059669' : '#dc2626'};"></i>
+      <div class="stat-icon-wrap" style="background:${soldeFinal >= 0 ? '#99cc331a' : '#9900000d'};">
+        <i class="bx bx-calculator" style="color:${soldeFinal >= 0 ? '#5c7a1f' : '#990000'};"></i>
       </div>
       <div>
         <div class="stat-lbl">Solde Net</div>
-        <div class="stat-val" style="color:${soldeFinal >= 0 ? '#059669' : '#dc2626'};">${soldeFinal >= 0 ? '+' : ''}${soldeFinal.toLocaleString('fr-FR')} MRU</div>
+        <div class="stat-val" style="color:${soldeFinal >= 0 ? '#5c7a1f' : '#990000'};">${soldeFinal >= 0 ? '+' : ''}${soldeFinal.toLocaleString('fr-FR')} MRU</div>
       </div>
     </div>` : ''}
   </div>
@@ -572,15 +566,74 @@ function ExportPDFModal({ transactions, onClose, isMobile, userEmail, userProfil
 
   const inputStyle = {
     width: '100%',
-    padding: isMobile ? '9px 12px' : '10px 14px',
-    borderRadius: 8,
+    padding: isMobile ? '11px 14px' : '11px 14px',
+    borderRadius: 10,
     border: `1.5px solid ${COLORS.border}`,
     background: COLORS.bg,
-    fontSize: isMobile ? 12 : 13,
+    fontSize: isMobile ? 13 : 13,
     color: COLORS.text,
     fontFamily: "'DM Sans', sans-serif",
     outline: 'none',
+    boxSizing: 'border-box',
+    minHeight: 44,
   };
+
+  const optionMeta = {
+    '1': { icon: 'bx-trending-up', label: 'Entrées uniquement', desc: 'Toutes les transactions de type entrée', color: '#99cc33', textColor: COLORS.entree },
+    '2': { icon: 'bx-trending-down', label: 'Sorties uniquement', desc: 'Toutes les transactions de type sortie', color: COLORS.sortie, textColor: COLORS.sortie },
+    '3': { icon: 'bx-transfer-alt', label: 'Toutes les transactions', desc: 'Entrées + Sorties combinées', color: COLORS.primary, textColor: COLORS.primary },
+    '4': { icon: 'bx-user', label: 'Par employé', desc: "Transactions d'un employé spécifique", color: COLORS.primary, textColor: COLORS.primary },
+  };
+
+  // 🆕 Si mode visiteur, afficher un message au lieu du formulaire
+  if (isVisitorMode) {
+    return (
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(15,23,42,0.45)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: isMobile ? 16 : 24,
+      }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+        <div style={{
+          background: COLORS.white,
+          borderRadius: 20,
+          width: '100%',
+          maxWidth: 420,
+          padding: isMobile ? 28 : 40,
+          textAlign: 'center',
+          boxShadow: '0 20px 60px rgba(15,23,42,0.18)',
+        }}>
+          <div style={{
+            width: 64, height: 64, borderRadius: '50%',
+            background: COLORS.warningBg, display: 'flex', alignItems: 'center',
+            justifyContent: 'center', margin: '0 auto 16px',
+          }}>
+            <i className='bx bx-lock-alt' style={{ fontSize: 32, color: COLORS.warning }} />
+          </div>
+          <h3 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 800, color: COLORS.text, fontFamily: "'Outfit', sans-serif" }}>
+            🔍 Mode Exploration
+          </h3>
+          <p style={{ margin: '0 0 24px', fontSize: 13, color: COLORS.textMuted, lineHeight: 1.6 }}>
+            L'export PDF est réservé aux utilisateurs connectés avec un abonnement <strong>Entreprise</strong>.
+            Créez un compte pour accéder à toutes les fonctionnalités.
+          </p>
+          <button
+            onClick={onClose}
+            style={{
+              padding: '12px 28px', borderRadius: 12, minHeight: 44,
+              border: 'none', background: COLORS.primary,
+              color: '#fff', fontWeight: 700, fontSize: 13,
+              cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = COLORS.primaryDark}
+            onMouseLeave={e => e.currentTarget.style.background = COLORS.primary}
+          >
+            <i className='bx bx-x' style={{ marginRight: 4 }} /> Fermer
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{
@@ -592,19 +645,19 @@ function ExportPDFModal({ transactions, onClose, isMobile, userEmail, userProfil
     }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div style={{
         background: COLORS.white,
-        borderRadius: 16,
+        borderRadius: 20,
         width: '100%',
-        maxWidth: 520,
+        maxWidth: 540,
         maxHeight: '90vh',
         overflowY: 'auto',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.18)',
+        boxShadow: '0 20px 60px rgba(15,23,42,0.18)',
         padding: isMobile ? 20 : 32,
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28, flexWrap: 'wrap', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{
-              width: 38, height: 38, borderRadius: 10,
-              background: 'linear-gradient(135deg, #ede9fe, #c4b5fd)',
+              width: 40, height: 40, borderRadius: 12,
+              background: COLORS.primarySoft,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
               <i className='bx bx-file-pdf' style={{ fontSize: 20, color: COLORS.primary }} />
@@ -618,69 +671,14 @@ function ExportPDFModal({ transactions, onClose, isMobile, userEmail, userProfil
           </div>
           <button onClick={onClose} style={{
             background: COLORS.bg, border: `1.5px solid ${COLORS.border}`,
-            borderRadius: 8, width: 32, height: 32, cursor: 'pointer',
+            borderRadius: 10, width: 40, height: 40, cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center', color: COLORS.textMuted,
           }}>
             <i className='bx bx-x' style={{ fontSize: 18 }} />
           </button>
         </div>
 
-        {/* ── SECTION LOGO PERSONNALISÉ COMMENTÉE ── */}
-        {/*
-        <div style={{ marginBottom: 20 }}>
-          <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 10 }}>
-            <i className='bx bx-image' style={{ marginRight: 4 }} /> Logo personnalisé
-          </label>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            {(customLogo || userProfileImage) && (
-              <div style={{
-                width: 50, height: 50, borderRadius: 8,
-                background: COLORS.bg, border: `1px solid ${COLORS.border}`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                overflow: 'hidden'
-              }}>
-                <img src={customLogo || userProfileImage} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              </div>
-            )}
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              style={{
-                padding: '8px 16px', borderRadius: 8,
-                border: `1.5px solid ${COLORS.primary}`,
-                background: 'transparent',
-                cursor: 'pointer', fontSize: 12, fontWeight: 600,
-                color: COLORS.primary, fontFamily: "'DM Sans', sans-serif",
-              }}
-            >
-              <i className='bx bx-image-add' style={{ marginRight: 6 }} />
-              {customLogo ? 'Changer le logo' : 'Ajouter un logo'}
-            </button>
-            {customLogo && (
-              <button
-                onClick={() => setCustomLogo(null)}
-                style={{
-                  padding: '8px 16px', borderRadius: 8,
-                  border: `1.5px solid ${COLORS.border}`,
-                  background: 'transparent', cursor: 'pointer',
-                  fontSize: 12, fontWeight: 600, color: COLORS.textMuted,
-                }}
-              >
-                <i className='bx bx-trash' style={{ marginRight: 6 }} />
-                Supprimer
-              </button>
-            )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleLogoChange}
-              style={{ display: 'none' }}
-            />
-          </div>
-        </div>
-        */}
-
-        <div style={{ marginBottom: 20 }}>
+        <div style={{ marginBottom: 24 }}>
           <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 8 }}>
             <i className='bx bx-envelope' style={{ marginRight: 4 }} /> Email de l'entreprise
           </label>
@@ -693,66 +691,65 @@ function ExportPDFModal({ transactions, onClose, isMobile, userEmail, userProfil
           />
         </div>
 
-        <div style={{ marginBottom: 20 }}>
+        <div style={{ marginBottom: 24 }}>
           <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 10 }}>
             <i className='bx bx-filter' style={{ marginRight: 4 }} /> Type d'export
           </label>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {[
-              { val: '1', icon: 'bx-trending-up', label: 'Entrées uniquement', desc: 'Toutes les transactions de type entrée', color: COLORS.entree },
-              { val: '2', icon: 'bx-trending-down', label: 'Sorties uniquement', desc: 'Toutes les transactions de type sortie', color: COLORS.sortie },
-              { val: '3', icon: 'bx-transfer-alt', label: 'Toutes les transactions', desc: 'Entrées + Sorties combinées', color: COLORS.primary },
-              { val: '4', icon: 'bx-user', label: 'Par employé', desc: 'Transactions d\'un employé spécifique', color: '#8b5cf6' },
-            ].map(opt => (
-              <div
-                key={opt.val}
-                onClick={() => setOption(opt.val)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 12,
-                  padding: '12px 14px',
-                  borderRadius: 10,
-                  border: `2px solid ${option === opt.val ? opt.color : COLORS.border}`,
-                  background: option === opt.val ? `${opt.color}08` : COLORS.white,
-                  cursor: 'pointer',
-                  transition: 'all 0.15s',
-                }}
-              >
-                <div style={{
-                  width: 36, height: 36, borderRadius: 8, flexShrink: 0,
-                  background: option === opt.val ? `${opt.color}18` : COLORS.bg,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <i className={`bx ${opt.icon}`} style={{ fontSize: 18, color: option === opt.val ? opt.color : COLORS.textLight }} />
+            {['1', '2', '3', '4'].map(val => {
+              const opt = optionMeta[val];
+              const active = option === val;
+              return (
+                <div
+                  key={val}
+                  onClick={() => setOption(val)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '14px 16px',
+                    borderRadius: 12,
+                    border: `2px solid ${active ? opt.color : COLORS.border}`,
+                    background: active ? `${opt.color}0d` : COLORS.white,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <div style={{
+                    width: 38, height: 38, borderRadius: 10, flexShrink: 0,
+                    background: active ? `${opt.color}22` : COLORS.bg,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <i className={`bx ${opt.icon}`} style={{ fontSize: 18, color: active ? opt.color : COLORS.textLight }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: active ? opt.textColor : COLORS.text }}>{opt.label}</div>
+                    <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 1 }}>{opt.desc}</div>
+                  </div>
+                  <div style={{
+                    width: 18, height: 18, borderRadius: '50%',
+                    border: `2px solid ${active ? opt.color : COLORS.border}`,
+                    background: active ? opt.color : 'transparent',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0,
+                  }}>
+                    {active && <i className='bx bx-check' style={{ fontSize: 12, color: '#fff' }} />}
+                  </div>
                 </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: option === opt.val ? opt.color : COLORS.text }}>{opt.label}</div>
-                  <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 1 }}>{opt.desc}</div>
-                </div>
-                <div style={{
-                  width: 18, height: 18, borderRadius: '50%',
-                  border: `2px solid ${option === opt.val ? opt.color : COLORS.border}`,
-                  background: option === opt.val ? opt.color : 'transparent',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  flexShrink: 0,
-                }}>
-                  {option === opt.val && <i className='bx bx-check' style={{ fontSize: 12, color: '#fff' }} />}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
         {option === '4' && (
-          <div style={{ marginBottom: 20 }}>
+          <div style={{ marginBottom: 24 }}>
             <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 8 }}>
               <i className='bx bx-user' style={{ marginRight: 4 }} /> Sélectionner un employé
             </label>
             <div style={{ position: 'relative' }}>
-              <i className='bx bx-user' style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 16, color: COLORS.textLight, pointerEvents: 'none' }} />
+              <i className='bx bx-user' style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 16, color: COLORS.textLight, pointerEvents: 'none' }} />
               <select
                 value={employeId}
                 onChange={e => setEmployeId(e.target.value)}
-                style={{ ...inputStyle, paddingLeft: 36, appearance: 'none', paddingRight: 36 }}
+                style={{ ...inputStyle, paddingLeft: 38, appearance: 'none', paddingRight: 38 }}
               >
                 <option value="">-- Choisir un employé --</option>
                 {employes.map(e => (
@@ -761,7 +758,7 @@ function ExportPDFModal({ transactions, onClose, isMobile, userEmail, userProfil
                   </option>
                 ))}
               </select>
-              <i className='bx bx-chevron-down' style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 15, color: COLORS.textLight, pointerEvents: 'none' }} />
+              <i className='bx bx-chevron-down' style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 15, color: COLORS.textLight, pointerEvents: 'none' }} />
             </div>
             {employes.length === 0 && (
               <p style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 6 }}>
@@ -779,15 +776,15 @@ function ExportPDFModal({ transactions, onClose, isMobile, userEmail, userProfil
         )}
 
         {option && (
-          <div style={{ marginBottom: 24 }}>
+          <div style={{ marginBottom: 28 }}>
             <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 10 }}>
               <i className='bx bx-calendar' style={{ marginRight: 4 }} /> Période
             </label>
             <label style={{
               display: 'flex', alignItems: 'center', gap: 10,
-              padding: '10px 14px', borderRadius: 10,
+              padding: '12px 16px', borderRadius: 12,
               border: `2px solid ${toutesLesDates ? COLORS.primary : COLORS.border}`,
-              background: toutesLesDates ? '#ede9fe' : COLORS.white,
+              background: toutesLesDates ? COLORS.primarySoft : COLORS.white,
               cursor: 'pointer', marginBottom: 12, transition: 'all 0.15s',
             }}>
               <input
@@ -803,7 +800,7 @@ function ExportPDFModal({ transactions, onClose, isMobile, userEmail, userProfil
             </label>
 
             {!toutesLesDates && (
-              <div style={{ display: 'flex', gap: 10, flexDirection: isMobile ? 'column' : 'row' }}>
+              <div style={{ display: 'flex', gap: 12, flexDirection: isMobile ? 'column' : 'row' }}>
                 <div style={{ flex: 1 }}>
                   <label style={{ fontSize: 11, fontWeight: 600, color: COLORS.textMuted, display: 'block', marginBottom: 6 }}>
                     Date début
@@ -833,13 +830,13 @@ function ExportPDFModal({ transactions, onClose, isMobile, userEmail, userProfil
 
         {canGenerate && (
           <div style={{
-            background: 'linear-gradient(135deg, #eff6ff, #e0e7ff)',
-            borderRadius: 10, padding: '12px 16px', marginBottom: 20,
+            background: COLORS.primarySoft,
+            borderRadius: 12, padding: '14px 18px', marginBottom: 24,
             borderLeft: `3px solid ${COLORS.primary}`,
             display: 'flex', alignItems: 'center', gap: 10,
           }}>
             <i className='bx bx-info-circle' style={{ fontSize: 18, color: COLORS.primary, flexShrink: 0 }} />
-            <div style={{ fontSize: 12, color: '#1e40af', lineHeight: 1.5 }}>
+            <div style={{ fontSize: 12, color: COLORS.primary, lineHeight: 1.5 }}>
               <strong>{filtrerTransactions().length}</strong> transaction(s) seront exportées
               {!toutesLesDates && dateDebut && dateFin && (
                 <span> du <strong>{new Date(dateDebut).toLocaleDateString('fr-FR')}</strong> au <strong>{new Date(dateFin).toLocaleDateString('fr-FR')}</strong></span>
@@ -848,11 +845,11 @@ function ExportPDFModal({ transactions, onClose, isMobile, userEmail, userProfil
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: 10, flexDirection: isMobile ? 'column' : 'row' }}>
+        <div style={{ display: 'flex', gap: 12, flexDirection: isMobile ? 'column' : 'row' }}>
           <button
             onClick={onClose}
             style={{
-              flex: 1, padding: '12px', borderRadius: 10,
+              flex: 1, padding: '13px', minHeight: 44, borderRadius: 12,
               border: `1.5px solid ${COLORS.border}`,
               background: COLORS.bg, cursor: 'pointer',
               fontSize: 13, fontWeight: 600, color: COLORS.textMuted,
@@ -865,16 +862,17 @@ function ExportPDFModal({ transactions, onClose, isMobile, userEmail, userProfil
             onClick={generatePDF}
             disabled={!canGenerate || generating}
             style={{
-              flex: 2, padding: '12px', borderRadius: 10, border: 'none',
-              background: canGenerate
-                ? 'linear-gradient(135deg, #6366f1, #4f46e5)'
-                : COLORS.border,
+              flex: 2, padding: '13px', minHeight: 44, borderRadius: 12, border: 'none',
+              background: canGenerate ? COLORS.primary : COLORS.border,
               cursor: canGenerate ? 'pointer' : 'not-allowed',
               fontSize: 13, fontWeight: 700, color: canGenerate ? '#fff' : COLORS.textLight,
               fontFamily: "'DM Sans', sans-serif",
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
               transition: 'all 0.2s',
+              boxShadow: canGenerate ? '0 4px 14px rgba(0,49,82,0.28)' : 'none',
             }}
+            onMouseEnter={e => { if (canGenerate) e.currentTarget.style.background = COLORS.primaryDark; }}
+            onMouseLeave={e => { if (canGenerate) e.currentTarget.style.background = COLORS.primary; }}
           >
             {generating ? (
               <>
@@ -900,6 +898,8 @@ function ExportPDFModal({ transactions, onClose, isMobile, userEmail, userProfil
 
 // ── PAGE PRINCIPALE ───────────────────────────────────────────────────────────
 export default function ToutesTransactions() {
+  const navigate = useNavigate();
+  const { isVisitor } = useAuth(); // 🆕
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtreType, setFiltreType] = useState('');
@@ -910,15 +910,31 @@ export default function ToutesTransactions() {
   const [userEmail, setUserEmail] = useState('');
   const [userProfileImage, setUserProfileImage] = useState(null);
   const [subscriptionPlan, setSubscriptionPlan] = useState(null);
-  const navigate = useNavigate();
 
-  // ✅ État pour les messages
+  // ✅ États pour les messages
   const [pageMessage, setPageMessage] = useState(null);
   const [abonnementExpire, setAbonnementExpire] = useState(false);
   const [abonnementCharge, setAbonnementCharge] = useState(true);
 
+  const isVisitorMode = isVisitor; // 🆕
+
+  // 🆕 Données mock pour le mode visiteur
+  const mockTransactions = [
+    { id: 1, type: 'sortie', montant: 25000, date_creation: new Date(2026, 5, 28).toISOString(), description: 'Achat alimentation', source: 'manuel', is_visible: true, categorie_detail: { nom: 'Alimentation', couleur: '#990000' } },
+    { id: 2, type: 'sortie', montant: 5000, date_creation: new Date(2026, 5, 27).toISOString(), description: 'Transport en commun', source: 'manuel', is_visible: true, categorie_detail: { nom: 'Transport', couleur: '#003152' } },
+    { id: 3, type: 'sortie', montant: 15000, date_creation: new Date(2026, 5, 26).toISOString(), description: 'Facture électricité', source: 'manuel', is_visible: true, categorie_detail: { nom: 'Utilités', couleur: '#92400e' } },
+    { id: 4, type: 'entree', montant: 250000, date_creation: new Date(2026, 5, 25).toISOString(), description: 'Salaire mensuel', source: 'manuel', is_visible: true, categorie_detail: { nom: 'Salaire', couleur: '#99cc33' } },
+    { id: 5, type: 'sortie', montant: 8000, date_creation: new Date(2026, 5, 24).toISOString(), description: 'Abonnement streaming', source: 'manuel', is_visible: true, categorie_detail: { nom: 'Divertissement', couleur: '#003333' } },
+    { id: 6, type: 'sortie', montant: 35000, date_creation: new Date(2026, 5, 23).toISOString(), description: 'Restaurant', source: 'budget', is_visible: true, categorie_detail: { nom: 'Restaurant', couleur: '#990000' } },
+    { id: 7, type: 'sortie', montant: 12000, date_creation: new Date(2026, 5, 22).toISOString(), description: 'Achat vêtements', source: 'manuel', is_visible: true, categorie_detail: { nom: 'Habillement', couleur: '#003152' } },
+  ];
+
   // ✅ Vérifier l'abonnement
   const verifierAbonnement = async () => {
+    if (isVisitorMode) {
+      setAbonnementCharge(false);
+      return;
+    }
     try {
       const response = await api.get('/abonnements/statut/');
       setAbonnementExpire(!response.data.est_actif);
@@ -934,10 +950,22 @@ export default function ToutesTransactions() {
 
   useEffect(() => {
     verifierAbonnement();
-  }, []);
+  }, [isVisitorMode]);
 
   useEffect(() => {
     setLoading(true);
+
+    // 🆕 Si mode visiteur, utiliser les données mock
+    if (isVisitorMode) {
+      setTransactions(mockTransactions);
+      setPageMessage({
+        type: 'info',
+        text: '🔍 Mode Exploration - Visualisation des données de démonstration. Créez un compte pour vos vraies transactions.'
+      });
+      setLoading(false);
+      return;
+    }
+
     // Charger les transactions
     api.get('/transactions/toutes/')
       .then(res => {
@@ -947,11 +975,11 @@ export default function ToutesTransactions() {
       .catch(err => {
         const status = err.response?.status;
         const errorData = err.response?.data;
-        
+
         if (status === 401) {
-          setPageMessage({ 
-            type: 'error', 
-            text: 'Session expirée. Veuillez vous reconnecter.' 
+          setPageMessage({
+            type: 'error',
+            text: 'Session expirée. Veuillez vous reconnecter.'
           });
           setTimeout(() => {
             localStorage.removeItem('access_token');
@@ -961,49 +989,51 @@ export default function ToutesTransactions() {
           }, 2000);
           return;
         }
-        
+
         if (status === 403 && errorData?.error === 'abonnement_expire') {
           setAbonnementExpire(true);
-          setPageMessage({ 
-            type: 'error', 
-            text: 'Votre abonnement a expiré. Veuillez le renouveler pour accéder à toutes les transactions.' 
+          setPageMessage({
+            type: 'error',
+            text: 'Votre abonnement a expiré. Veuillez le renouveler pour accéder à toutes les transactions.'
           });
           return;
         }
-        
-        setPageMessage({ 
-          type: 'error', 
-          text: 'Erreur lors du chargement des transactions. Veuillez réessayer.' 
+
+        setPageMessage({
+          type: 'error',
+          text: 'Erreur lors du chargement des transactions. Veuillez réessayer.'
         });
       })
       .finally(() => setLoading(false));
 
-    // Charger les infos utilisateur
-    api.get('/comptes/profil/')
-      .then(res => {
-        if (res.data) {
-          setUserEmail(res.data.email || '');
-          setUserProfileImage(res.data.profile_image || null);
-        }
-      })
-      .catch(err => {
-        console.error('Erreur chargement profil:', err);
-        if (err.response?.status === 401) {
-          setPageMessage({ 
-            type: 'error', 
-            text: 'Session expirée. Veuillez vous reconnecter.' 
-          });
-          setTimeout(() => {
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
-            localStorage.removeItem('user');
-            window.location.href = '/connexion';
-          }, 2000);
-        }
-      });
-  }, []);
+    // Charger les infos utilisateur (uniquement si pas en mode visiteur)
+    if (!isVisitorMode) {
+      api.get('/comptes/profil/')
+        .then(res => {
+          if (res.data) {
+            setUserEmail(res.data.email || '');
+            setUserProfileImage(res.data.profile_image || null);
+          }
+        })
+        .catch(err => {
+          console.error('Erreur chargement profil:', err);
+          if (err.response?.status === 401) {
+            setPageMessage({
+              type: 'error',
+              text: 'Session expirée. Veuillez vous reconnecter.'
+            });
+            setTimeout(() => {
+              localStorage.removeItem('access_token');
+              localStorage.removeItem('refresh_token');
+              localStorage.removeItem('user');
+              window.location.href = '/connexion';
+            }, 2000);
+          }
+        });
+    }
+  }, [isVisitorMode]);
 
-  const isEntreprise = subscriptionPlan === 'entreprise';
+  const isEntreprise = subscriptionPlan === 'entreprise' && !isVisitorMode;
 
   // Fonction pour filtrer par période
   const filtrerParPeriode = (transactions, periode) => {
@@ -1067,16 +1097,11 @@ export default function ToutesTransactions() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Fonction handleLogoChange commentée car plus utilisée
-  // const handleLogoChange = (newLogo) => {
-  //   setUserProfileImage(newLogo);
-  // };
-
   return (
     <div style={{
-      maxWidth: 1200,
+      maxWidth: 1360,
       margin: '0 auto',
-      padding: isMobile ? '12px 12px' : '8px 16px',
+      padding: isMobile ? '16px 16px' : '16px 32px',
       fontFamily: "'DM Sans', 'Segoe UI', sans-serif"
     }}>
 
@@ -1093,14 +1118,19 @@ export default function ToutesTransactions() {
         .stat-card:nth-child(2) { animation-delay: 0.07s; }
         .stat-card:nth-child(3) { animation-delay: 0.14s; }
         .tx-row { transition: background 0.12s; }
-        .tx-row:hover { background: #f5f3ff !important; }
-        
+        .tx-row:hover { background: #f8fafc !important; }
+        .back-btn:hover { transform: translateX(-4px); background: #eef2f7 !important; }
+        .reset-btn:hover { background: #eef1f5 !important; color: #0f172a !important; }
+        .export-btn-active:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(0,49,82,0.32) !important; }
+        .quick-filter-btn:hover { border-color: #003152 !important; }
+        .select-field:focus, .text-field:focus { border-color: #003152 !important; background: #ffffff !important; box-shadow: 0 0 0 3px rgba(0,49,82,0.08); }
+
         @media (max-width: 700px) {
           .tx-table-wrap { display: none !important; }
           .tx-cards-wrap { display: flex !important; }
-          .filters-row { flex-direction: column !important; gap: 8px !important; }
+          .filters-row { flex-direction: column !important; gap: 10px !important; }
           .filters-row > div, .filters-row > button { width: 100% !important; min-width: unset !important; }
-          .stats-row { flex-direction: column !important; gap: 10px !important; }
+          .stats-row { flex-direction: column !important; gap: 12px !important; }
         }
         @media (min-width: 701px) {
           .tx-cards-wrap { display: none !important; }
@@ -1109,40 +1139,34 @@ export default function ToutesTransactions() {
       `}</style>
 
       {/* ── MESSAGE PAGE ── */}
-      <MessageBanner 
-        type={pageMessage?.type} 
-        message={pageMessage?.text} 
+      <MessageBanner
+        type={pageMessage?.type}
+        message={pageMessage?.text}
         onClose={() => setPageMessage(null)}
       />
 
       {/* ── BOUTON RETOUR ── */}
       <div style={{
-        marginBottom: isMobile ? 16 : 20,
+        marginBottom: isMobile ? 20 : 24,
       }}>
         <button
+          className="back-btn"
           onClick={() => navigate('/dashboard')}
           style={{
-            background: 'linear-gradient(135deg, #f1f5f9, #e2e8f0)',
+            background: '#f1f5f9',
             border: 'none',
-            borderRadius: 10,
-            padding: isMobile ? '8px 14px' : '10px 20px',
+            borderRadius: 12,
+            padding: isMobile ? '10px 16px' : '11px 20px',
+            minHeight: 44,
             cursor: 'pointer',
             fontSize: isMobile ? 12 : 13,
             fontWeight: 600,
-            color: '#475569',
+            color: COLORS.textMuted,
             display: 'inline-flex',
             alignItems: 'center',
-            gap: 6,
+            gap: 8,
             transition: 'all 0.2s',
             fontFamily: "'DM Sans', sans-serif",
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.transform = 'translateX(-4px)';
-            e.currentTarget.style.background = 'linear-gradient(135deg, #e2e8f0, #cbd5e1)';
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.transform = 'translateX(0)';
-            e.currentTarget.style.background = 'linear-gradient(135deg, #f1f5f9, #e2e8f0)';
           }}
         >
           <i className='bx bx-arrow-back' style={{ fontSize: isMobile ? 16 : 18 }} />
@@ -1155,115 +1179,113 @@ export default function ToutesTransactions() {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: isMobile ? 'flex-start' : 'center',
-        marginBottom: isMobile ? 16 : 22,
-        gap: isMobile ? 12 : 12,
+        marginBottom: isMobile ? 20 : 28,
+        gap: isMobile ? 16 : 16,
         flexDirection: isMobile ? 'column' : 'row',
         flexWrap: 'wrap'
       }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
             <div style={{
-              width: isMobile ? 28 : 36,
-              height: isMobile ? 28 : 36,
-              borderRadius: 8,
-              background: 'linear-gradient(135deg, #ede9fe, #c4b5fd)',
+              width: isMobile ? 32 : 40,
+              height: isMobile ? 32 : 40,
+              borderRadius: 12,
+              background: isVisitorMode ? COLORS.warningBg : COLORS.primarySoft,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <i className='bx bx-transfer-alt' style={{ fontSize: isMobile ? 16 : 19, color: COLORS.primary }} />
+              <i className='bx bx-transfer-alt' style={{ fontSize: isMobile ? 17 : 20, color: isVisitorMode ? COLORS.warning : COLORS.primary }} />
             </div>
             <h2 style={{
               margin: 0,
-              fontSize: isMobile ? 18 : 22,
+              fontSize: isMobile ? 19 : 24,
               fontWeight: 800,
               color: COLORS.text,
               fontFamily: "'Outfit', sans-serif",
               letterSpacing: '-0.3px',
             }}>
               Toutes les transactions
+              {isVisitorMode && <span style={{ fontSize: isMobile ? 11 : 13, background: COLORS.warningBg, color: COLORS.warning, padding: '3px 11px', borderRadius: 20, fontWeight: 600, marginLeft: 10 }}>🔍 Démo</span>}
             </h2>
             <span style={{
-              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+              background: COLORS.primary,
               color: COLORS.white,
-              borderRadius: 16,
-              padding: '2px 8px',
+              borderRadius: 20,
+              padding: '3px 10px',
               fontSize: isMobile ? 10 : 12,
               fontWeight: 700
             }}>
               {filtrees.length}
             </span>
           </div>
-          <p style={{ margin: 0, color: COLORS.textMuted, fontSize: isMobile ? 11 : 13 }}>
-            Archive complète — transactions masquées et budgets inclus
+          <p style={{ margin: 0, color: COLORS.textMuted, fontSize: isMobile ? 12 : 13.5 }}>
+            {isVisitorMode ? 'Visualisation des données de démonstration' : 'Archive complète — transactions masquées et budgets inclus'}
           </p>
         </div>
 
         {/* ── BOUTON EXPORT PDF ── */}
         <div style={{ position: 'relative', alignSelf: isMobile ? 'stretch' : 'auto' }}>
           <button
+            className={(isEntreprise && !abonnementExpire && !isVisitorMode) ? 'export-btn-active' : ''}
             onClick={() => {
+              if (isVisitorMode) {
+                setPageMessage({
+                  type: 'info',
+                  text: '🔍 Mode Exploration : Créez un compte pour exporter en PDF.'
+                });
+                return;
+              }
               if (abonnementExpire) {
-                setPageMessage({ 
-                  type: 'error', 
-                  text: 'Votre abonnement a expiré. Veuillez le renouveler pour exporter en PDF.' 
+                setPageMessage({
+                  type: 'error',
+                  text: 'Votre abonnement a expiré. Veuillez le renouveler pour exporter en PDF.'
                 });
                 return;
               }
               if (isEntreprise) {
                 setShowExportModal(true);
               } else {
-                setPageMessage({ 
-                  type: 'warning', 
-                  text: 'L\'export PDF est réservé à l\'abonnement Entreprise. Passez à l\'offre Entreprise pour y accéder.' 
+                setPageMessage({
+                  type: 'warning',
+                  text: "L'export PDF est réservé à l'abonnement Entreprise. Passez à l'offre Entreprise pour y accéder."
                 });
               }
             }}
-            disabled={!isEntreprise && !abonnementExpire}
-            title={!isEntreprise && !abonnementExpire ? "Réservé à l'abonnement Entreprise" : abonnementExpire ? "Votre abonnement a expiré" : undefined}
+            disabled={(isVisitorMode || !isEntreprise) && !abonnementExpire}
+            title={isVisitorMode ? "Mode exploration" : !isEntreprise && !abonnementExpire ? "Réservé à l'abonnement Entreprise" : abonnementExpire ? "Votre abonnement a expiré" : undefined}
             style={{
-              background: (isEntreprise && !abonnementExpire)
-                ? 'linear-gradient(135deg, #6366f1, #4f46e5)'
+              background: (isEntreprise && !abonnementExpire && !isVisitorMode)
+                ? COLORS.primary
                 : '#e2e8f0',
               border: 'none',
-              borderRadius: 10,
-              padding: isMobile ? '10px 16px' : '11px 22px',
-              cursor: (isEntreprise && !abonnementExpire) ? 'pointer' : 'not-allowed',
-              fontSize: isMobile ? 12 : 13,
+              borderRadius: 12,
+              padding: isMobile ? '12px 18px' : '13px 24px',
+              minHeight: 44,
+              cursor: (isEntreprise && !abonnementExpire && !isVisitorMode) ? 'pointer' : 'not-allowed',
+              fontSize: isMobile ? 12 : 13.5,
               fontWeight: 700,
-              color: (isEntreprise && !abonnementExpire) ? '#fff' : '#94a3b8',
+              color: (isEntreprise && !abonnementExpire && !isVisitorMode) ? '#fff' : '#94a3b8',
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 7,
+              gap: 8,
               transition: 'all 0.2s',
               fontFamily: "'DM Sans', sans-serif",
-              boxShadow: (isEntreprise && !abonnementExpire) ? '0 4px 14px rgba(99,102,241,0.35)' : 'none',
+              boxShadow: (isEntreprise && !abonnementExpire && !isVisitorMode) ? '0 4px 14px rgba(0,49,82,0.28)' : 'none',
               whiteSpace: 'nowrap',
               width: isMobile ? '100%' : 'auto',
               justifyContent: 'center',
-              opacity: (isEntreprise && !abonnementExpire) ? 1 : 0.7,
-            }}
-            onMouseEnter={e => {
-              if (isEntreprise && !abonnementExpire) {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 6px 20px rgba(99,102,241,0.45)';
-              }
-            }}
-            onMouseLeave={e => {
-              if (isEntreprise && !abonnementExpire) {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '0 4px 14px rgba(99,102,241,0.35)';
-              }
+              opacity: (isEntreprise && !abonnementExpire && !isVisitorMode) ? 1 : 0.7,
             }}
           >
-            <i className={`bx ${(isEntreprise && !abonnementExpire) ? 'bx-file-pdf' : 'bx-lock-alt'}`} style={{ fontSize: isMobile ? 16 : 18 }} />
+            <i className={`bx ${(isEntreprise && !abonnementExpire && !isVisitorMode) ? 'bx-file-pdf' : 'bx-lock-alt'}`} style={{ fontSize: isMobile ? 16 : 18 }} />
             Exporter en PDF
             <span style={{
-              background: (isEntreprise && !abonnementExpire) ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.08)',
+              background: (isEntreprise && !abonnementExpire && !isVisitorMode) ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.08)',
               borderRadius: 6,
-              padding: '1px 6px',
+              padding: '2px 7px',
               fontSize: 9,
               fontWeight: 700,
               letterSpacing: '0.3px',
-              color: (isEntreprise && !abonnementExpire) ? '#fff' : '#94a3b8',
+              color: (isEntreprise && !abonnementExpire && !isVisitorMode) ? '#fff' : '#94a3b8',
             }}>
               ENTREPRISE
             </span>
@@ -1271,20 +1293,40 @@ export default function ToutesTransactions() {
         </div>
       </div>
 
-      {/* ── BANNIÈRE si abonnement non-entreprise ── */}
-      {!isEntreprise && subscriptionPlan !== null && !abonnementExpire && (
+      {/* ── BANNIÈRE MODE VISITEUR ── */}
+      {isVisitorMode && (
         <div style={{
-          background: 'linear-gradient(135deg, #fefce8, #fef9c3)',
-          borderRadius: 12,
-          padding: isMobile ? '10px 14px' : '13px 20px',
-          marginBottom: isMobile ? 14 : 20,
+          background: COLORS.warningBg,
+          borderRadius: 14,
+          padding: isMobile ? '12px 16px' : '15px 22px',
+          marginBottom: isMobile ? 18 : 24,
+          borderLeft: '3px solid #f59e0b',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+        }}>
+          <i className='bx bx-info-circle' style={{ fontSize: isMobile ? 17 : 19, color: '#d97706', flexShrink: 0 }} />
+          <div style={{ fontSize: isMobile ? 11.5 : 13, color: COLORS.warning, lineHeight: 1.5 }}>
+            <strong>🔍 Mode Exploration</strong> — Vous visualisez des données de démonstration.
+            Créez un compte pour accéder à vos vraies transactions et exporter en PDF.
+          </div>
+        </div>
+      )}
+
+      {/* ── BANNIÈRE si abonnement non-entreprise ── */}
+      {!isEntreprise && subscriptionPlan !== null && !abonnementExpire && !isVisitorMode && (
+        <div style={{
+          background: COLORS.warningBg,
+          borderRadius: 14,
+          padding: isMobile ? '12px 16px' : '15px 22px',
+          marginBottom: isMobile ? 18 : 24,
           borderLeft: '3px solid #eab308',
           display: 'flex',
           alignItems: 'center',
-          gap: 10,
+          gap: 12,
         }}>
-          <i className='bx bx-lock-alt' style={{ fontSize: isMobile ? 16 : 18, color: '#ca8a04', flexShrink: 0 }} />
-          <div style={{ fontSize: isMobile ? 11 : 12.5, color: '#713f12', lineHeight: 1.45 }}>
+          <i className='bx bx-lock-alt' style={{ fontSize: isMobile ? 17 : 19, color: '#ca8a04', flexShrink: 0 }} />
+          <div style={{ fontSize: isMobile ? 11.5 : 13, color: '#713f12', lineHeight: 1.5 }}>
             <strong>Export PDF désactivé</strong> — Cette fonctionnalité est réservée à l'abonnement <strong>Entreprise</strong>.
             Mettez à niveau votre abonnement pour accéder à l'export PDF complet.
           </div>
@@ -1292,19 +1334,19 @@ export default function ToutesTransactions() {
       )}
 
       {/* ── BANNIÈRE si abonnement expiré ── */}
-      {abonnementExpire && (
+      {abonnementExpire && !isVisitorMode && (
         <div style={{
-          background: 'linear-gradient(135deg, #fef2f2, #fee2e2)',
-          borderRadius: 12,
-          padding: isMobile ? '10px 14px' : '13px 20px',
-          marginBottom: isMobile ? 14 : 20,
-          borderLeft: '3px solid #ef4444',
+          background: COLORS.sortieBg,
+          borderRadius: 14,
+          padding: isMobile ? '12px 16px' : '15px 22px',
+          marginBottom: isMobile ? 18 : 24,
+          borderLeft: `3px solid ${COLORS.sortie}`,
           display: 'flex',
           alignItems: 'center',
-          gap: 10,
+          gap: 12,
         }}>
-          <i className='bx bx-time' style={{ fontSize: isMobile ? 16 : 18, color: '#dc2626', flexShrink: 0 }} />
-          <div style={{ fontSize: isMobile ? 11 : 12.5, color: '#991b1b', lineHeight: 1.45 }}>
+          <i className='bx bx-time' style={{ fontSize: isMobile ? 17 : 19, color: COLORS.sortie, flexShrink: 0 }} />
+          <div style={{ fontSize: isMobile ? 11.5 : 13, color: COLORS.sortie, lineHeight: 1.5 }}>
             <strong>Abonnement expiré</strong> — Votre abonnement a expiré. Veuillez le renouveler pour continuer à utiliser toutes les fonctionnalités.
           </div>
         </div>
@@ -1312,77 +1354,83 @@ export default function ToutesTransactions() {
 
       {/* ── INFO BANNER ── */}
       <div style={{
-        background: 'linear-gradient(135deg, #eff6ff, #e0e7ff)',
-        borderRadius: 12,
-        padding: isMobile ? '10px 12px' : '14px 20px',
-        marginBottom: isMobile ? 16 : 24,
-        borderLeft: `3px solid ${COLORS.primary}`,
+        background: isVisitorMode ? COLORS.warningBg : COLORS.primarySoft,
+        borderRadius: 14,
+        padding: isMobile ? '12px 14px' : '16px 22px',
+        marginBottom: isMobile ? 20 : 28,
+        borderLeft: `3px solid ${isVisitorMode ? '#f59e0b' : COLORS.primary}`,
         display: 'flex',
         alignItems: 'flex-start',
-        gap: 10,
+        gap: 12,
       }}>
-        <i className='bx bx-info-circle' style={{ fontSize: isMobile ? 16 : 20, color: COLORS.primary, marginTop: 2 }} />
-        <span style={{ fontSize: isMobile ? 11 : 13, color: '#1e40af', lineHeight: 1.4 }}>
-          <strong>Info :</strong> Toutes les transactions sans exception — transactions masquées et budgets inclus.
+        <i className='bx bx-info-circle' style={{ fontSize: isMobile ? 17 : 21, color: isVisitorMode ? '#f59e0b' : COLORS.primary, marginTop: 1 }} />
+        <span style={{ fontSize: isMobile ? 12 : 13.5, color: isVisitorMode ? COLORS.warning : COLORS.primary, lineHeight: 1.5 }}>
+          <strong>Info :</strong> {isVisitorMode ? 'Données de démonstration - Transactions fictives pour explorer l\'application' : 'Toutes les transactions sans exception — transactions masquées et budgets inclus.'}
         </span>
       </div>
 
       {/* ── STATS CARDS ── */}
       <div className="stats-row" style={{
         display: 'flex',
-        gap: isMobile ? 10 : 14,
-        marginBottom: isMobile ? 16 : 22,
+        gap: isMobile ? 12 : 16,
+        marginBottom: isMobile ? 20 : 28,
         flexWrap: 'wrap'
       }}>
         {[
-          { label: 'Total', val: filtrees.length, suffix: '', color: COLORS.primary, bg: '#ede9fe', icon: 'bx-grid-alt' },
-          { label: 'Entrées', val: totalEntrees, suffix: ' MRU', color: COLORS.entree, bg: '#ecfdf5', icon: 'bx-trending-up' },
-          { label: 'Sorties', val: totalSorties, suffix: ' MRU', color: COLORS.sortie, bg: '#fef2f2', icon: 'bx-trending-down' },
+          { label: 'Total', val: filtrees.length, suffix: '', color: COLORS.primary, bg: COLORS.primarySoft, icon: 'bx-grid-alt' },
+          { label: 'Entrées', val: totalEntrees, suffix: ' MRU', color: COLORS.entree, bg: COLORS.entreeBg, icon: 'bx-trending-up' },
+          { label: 'Sorties', val: totalSorties, suffix: ' MRU', color: COLORS.sortie, bg: COLORS.sortieBg, icon: 'bx-trending-down' },
         ].map(s => (
           <div key={s.label} className="stat-card" style={{
-            flex: 1, minWidth: isMobile ? 'auto' : 180,
+            flex: 1, minWidth: isMobile ? 'auto' : 200,
             background: COLORS.white,
-            borderRadius: 12,
-            padding: isMobile ? '10px 12px' : '16px 18px',
-            boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-            border: `1px solid ${s.color}22`,
+            borderRadius: 16,
+            padding: isMobile ? '14px 16px' : '20px 22px',
+            boxShadow: '0 1px 3px rgba(15,23,42,0.04)',
+            border: `1px solid ${COLORS.border}`,
             display: 'flex',
             alignItems: 'center',
-            gap: isMobile ? 10 : 14,
+            gap: isMobile ? 12 : 16,
+            opacity: isVisitorMode ? 0.85 : 1,
           }}>
             <div style={{
-              width: isMobile ? 32 : 42,
-              height: isMobile ? 32 : 42,
-              borderRadius: 9,
+              width: isMobile ? 36 : 46,
+              height: isMobile ? 36 : 46,
+              borderRadius: 12,
               background: s.bg,
               flexShrink: 0,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}>
-              <i className={`bx ${s.icon}`} style={{ fontSize: isMobile ? 16 : 20, color: s.color }} />
+              <i className={`bx ${s.icon}`} style={{ fontSize: isMobile ? 17 : 22, color: s.color }} />
             </div>
             <div style={{ flex: 1 }}>
               <p style={{
                 margin: 0,
-                fontSize: isMobile ? 9 : 10.5,
+                fontSize: isMobile ? 9.5 : 11,
                 fontWeight: 700,
                 color: COLORS.textLight,
                 textTransform: 'uppercase',
-                letterSpacing: '0.3px'
+                letterSpacing: '0.4px'
               }}>
                 {s.label}
               </p>
               <p style={{
-                margin: '2px 0 0',
+                margin: '3px 0 0',
                 fontWeight: 800,
-                fontSize: isMobile ? 14 : 17,
+                fontSize: isMobile ? 15 : 19,
                 color: s.color,
                 fontFamily: "'Outfit', sans-serif",
                 wordBreak: 'break-word'
               }}>
                 {s.val.toLocaleString('fr-FR')}{s.suffix}
               </p>
+              {isVisitorMode && (
+                <p style={{ margin: '3px 0 0', fontSize: isMobile ? 8.5 : 10, color: '#f59e0b', fontWeight: 500 }}>
+                  🔍 Démo
+                </p>
+              )}
             </div>
           </div>
         ))}
@@ -1392,7 +1440,7 @@ export default function ToutesTransactions() {
       <div style={{
         display: 'flex',
         gap: 8,
-        marginBottom: 16,
+        marginBottom: 20,
         flexWrap: 'wrap'
       }}>
         {[
@@ -1405,60 +1453,64 @@ export default function ToutesTransactions() {
         ].map(f => (
           <button
             key={f.value}
+            className="quick-filter-btn"
             onClick={() => setFiltrePeriode(f.value)}
             style={{
-              background: filtrePeriode === f.value ? `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.primaryDark})` : COLORS.white,
+              background: filtrePeriode === f.value ? COLORS.primary : COLORS.white,
               border: `1.5px solid ${filtrePeriode === f.value ? COLORS.primary : COLORS.border}`,
-              borderRadius: 20,
-              padding: isMobile ? '6px 12px' : '8px 16px',
+              borderRadius: 24,
+              padding: isMobile ? '8px 14px' : '9px 18px',
+              minHeight: 40,
               cursor: 'pointer',
-              fontSize: isMobile ? 11 : 12,
+              fontSize: isMobile ? 11.5 : 12.5,
               fontWeight: 600,
               color: filtrePeriode === f.value ? COLORS.white : COLORS.textMuted,
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 5,
+              gap: 6,
               fontFamily: "'DM Sans', sans-serif",
               transition: 'all 0.2s'
             }}
           >
-            <i className={`bx ${f.icon}`} style={{ fontSize: isMobile ? 12 : 13 }} />
+            <i className={`bx ${f.icon}`} style={{ fontSize: isMobile ? 12 : 13.5 }} />
             {f.label}
           </button>
         ))}
       </div>
 
       {/* ── BARRE DE RECHERCHE ── */}
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 20 }}>
         <div style={{
           position: 'relative',
           background: COLORS.white,
-          borderRadius: 12,
+          borderRadius: 14,
           border: `1.5px solid ${COLORS.border}`,
           transition: 'all 0.2s'
         }}>
           <i className='bx bx-search' style={{
             position: 'absolute',
-            left: 14,
+            left: 16,
             top: '50%',
             transform: 'translateY(-50%)',
-            fontSize: isMobile ? 16 : 18,
+            fontSize: isMobile ? 17 : 19,
             color: COLORS.textLight
           }} />
           <input
+            className="text-field"
             type="text"
-            placeholder="Rechercher par description ou catégorie..."
+            placeholder={isVisitorMode ? "Rechercher dans les données de démonstration..." : "Rechercher par description ou catégorie..."}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
               width: '100%',
-              padding: isMobile ? '12px 16px 12px 42px' : '14px 18px 14px 46px',
-              fontSize: isMobile ? 12 : 13,
+              padding: isMobile ? '13px 16px 13px 46px' : '15px 20px 15px 50px',
+              fontSize: isMobile ? 13 : 14,
               border: 'none',
-              borderRadius: 12,
+              borderRadius: 14,
               outline: 'none',
               fontFamily: "'DM Sans', sans-serif",
-              background: 'transparent'
+              background: 'transparent',
+              boxSizing: 'border-box',
             }}
           />
           {searchTerm && (
@@ -1466,14 +1518,19 @@ export default function ToutesTransactions() {
               onClick={() => setSearchTerm('')}
               style={{
                 position: 'absolute',
-                right: 12,
+                right: 8,
                 top: '50%',
                 transform: 'translateY(-50%)',
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
                 color: COLORS.textLight,
-                fontSize: 16
+                fontSize: 16,
+                minWidth: 40,
+                minHeight: 40,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
             >
               <i className='bx bx-x' />
@@ -1485,60 +1542,54 @@ export default function ToutesTransactions() {
       {/* ── FILTRES ── */}
       <div className="filters-row" style={{
         display: 'flex',
-        gap: isMobile ? 8 : 10,
-        marginBottom: isMobile ? 14 : 18,
+        gap: isMobile ? 10 : 12,
+        marginBottom: isMobile ? 18 : 24,
         flexWrap: 'wrap',
         alignItems: 'flex-end',
         background: COLORS.white,
-        padding: isMobile ? '12px' : '16px 18px',
-        borderRadius: 12,
-        boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+        padding: isMobile ? '14px' : '20px 24px',
+        borderRadius: 16,
+        boxShadow: '0 1px 3px rgba(15,23,42,0.04)',
         border: `1px solid ${COLORS.border}`,
       }}>
-        <div style={{ flex: 1, minWidth: isMobile ? 'auto' : 140 }}>
+        <div style={{ flex: 1, minWidth: isMobile ? 'auto' : 160 }}>
           <label style={{
             display: 'flex',
             alignItems: 'center',
             gap: 4,
-            fontSize: isMobile ? 9 : 10.5,
+            fontSize: isMobile ? 9.5 : 11,
             color: COLORS.textMuted,
             fontWeight: 600,
             textTransform: 'uppercase',
             letterSpacing: '0.5px',
-            marginBottom: 4,
+            marginBottom: 6,
           }}>
-            <i className='bx bx-filter' style={{ fontSize: isMobile ? 10 : 11 }} />
+            <i className='bx bx-filter' style={{ fontSize: isMobile ? 10 : 12 }} />
             Type
           </label>
           <div style={{ position: 'relative' }}>
             <i className='bx bx-transfer' style={{
-              position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
-              fontSize: isMobile ? 13 : 16, color: COLORS.textLight, pointerEvents: 'none',
+              position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
+              fontSize: isMobile ? 14 : 17, color: COLORS.textLight, pointerEvents: 'none',
             }} />
             <select
+              className="select-field"
               value={filtreType}
               onChange={e => setFiltreType(e.target.value)}
               style={{
                 width: '100%', boxSizing: 'border-box',
-                padding: isMobile ? '8px 28px 8px 32px' : '10px 32px 10px 36px',
-                borderRadius: 8,
+                padding: isMobile ? '9px 30px 9px 34px' : '11px 34px 11px 38px',
+                minHeight: 44,
+                borderRadius: 10,
                 border: `1.5px solid ${COLORS.border}`,
                 background: COLORS.bg,
-                fontSize: isMobile ? 12 : 13.5,
+                fontSize: isMobile ? 12.5 : 14,
                 color: COLORS.text,
                 fontFamily: "'DM Sans', sans-serif",
                 outline: 'none',
                 cursor: 'pointer',
                 appearance: 'none',
                 transition: 'border-color 0.2s, box-shadow 0.2s',
-              }}
-              onFocus={e => {
-                e.currentTarget.style.borderColor = COLORS.primary;
-                e.currentTarget.style.background = COLORS.white;
-              }}
-              onBlur={e => {
-                e.currentTarget.style.borderColor = COLORS.border;
-                e.currentTarget.style.background = COLORS.bg;
               }}
             >
               <option value="">Tous</option>
@@ -1546,42 +1597,44 @@ export default function ToutesTransactions() {
               <option value="sortie">Sorties</option>
             </select>
             <i className='bx bx-chevron-down' style={{
-              position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
-              fontSize: isMobile ? 13 : 15, color: COLORS.textLight, pointerEvents: 'none',
+              position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+              fontSize: isMobile ? 14 : 16, color: COLORS.textLight, pointerEvents: 'none',
             }} />
           </div>
         </div>
 
-        <div style={{ flex: 1, minWidth: isMobile ? 'auto' : 140 }}>
+        <div style={{ flex: 1, minWidth: isMobile ? 'auto' : 160 }}>
           <label style={{
             display: 'flex',
             alignItems: 'center',
             gap: 4,
-            fontSize: isMobile ? 9 : 10.5,
+            fontSize: isMobile ? 9.5 : 11,
             color: COLORS.textMuted,
             fontWeight: 600,
             textTransform: 'uppercase',
             letterSpacing: '0.5px',
-            marginBottom: 4,
+            marginBottom: 6,
           }}>
-            <i className='bx bx-source' style={{ fontSize: isMobile ? 10 : 11 }} />
+            <i className='bx bx-source' style={{ fontSize: isMobile ? 10 : 12 }} />
             Source
           </label>
           <div style={{ position: 'relative' }}>
             <i className='bx bx-category' style={{
-              position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
-              fontSize: isMobile ? 13 : 16, color: COLORS.textLight, pointerEvents: 'none',
+              position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
+              fontSize: isMobile ? 14 : 17, color: COLORS.textLight, pointerEvents: 'none',
             }} />
             <select
+              className="select-field"
               value={filtreSource}
               onChange={e => setFiltreSource(e.target.value)}
               style={{
                 width: '100%', boxSizing: 'border-box',
-                padding: isMobile ? '8px 28px 8px 32px' : '10px 32px 10px 36px',
-                borderRadius: 8,
+                padding: isMobile ? '9px 30px 9px 34px' : '11px 34px 11px 38px',
+                minHeight: 44,
+                borderRadius: 10,
                 border: `1.5px solid ${COLORS.border}`,
                 background: COLORS.bg,
-                fontSize: isMobile ? 12 : 13.5,
+                fontSize: isMobile ? 12.5 : 14,
                 color: COLORS.text,
                 fontFamily: "'DM Sans', sans-serif",
                 outline: 'none',
@@ -1589,100 +1642,86 @@ export default function ToutesTransactions() {
                 appearance: 'none',
                 transition: 'border-color 0.2s, box-shadow 0.2s',
               }}
-              onFocus={e => {
-                e.currentTarget.style.borderColor = COLORS.primary;
-                e.currentTarget.style.background = COLORS.white;
-              }}
-              onBlur={e => {
-                e.currentTarget.style.borderColor = COLORS.border;
-                e.currentTarget.style.background = COLORS.bg;
-              }}
             >
               <option value="">Toutes</option>
               <option value="manuel">Manuel</option>
               <option value="budget">Budget</option>
             </select>
             <i className='bx bx-chevron-down' style={{
-              position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
-              fontSize: isMobile ? 13 : 15, color: COLORS.textLight, pointerEvents: 'none',
+              position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+              fontSize: isMobile ? 14 : 16, color: COLORS.textLight, pointerEvents: 'none',
             }} />
           </div>
         </div>
 
         <button
+          className="reset-btn"
           onClick={() => { setFiltreType(''); setFiltreSource(''); setSearchTerm(''); setFiltrePeriode(''); }}
           style={{
             background: COLORS.bg,
             border: `1.5px solid ${COLORS.border}`,
-            borderRadius: 8,
-            padding: isMobile ? '8px 12px' : '10px 16px',
+            borderRadius: 10,
+            padding: isMobile ? '9px 14px' : '11px 18px',
+            minHeight: 44,
             cursor: 'pointer',
-            fontSize: isMobile ? 12 : 13,
+            fontSize: isMobile ? 12.5 : 13.5,
             color: COLORS.textMuted,
             fontWeight: 600,
             display: 'flex',
             alignItems: 'center',
-            gap: 5,
+            gap: 6,
             fontFamily: "'DM Sans', sans-serif",
             transition: 'all 0.15s',
             whiteSpace: 'nowrap',
             justifyContent: 'center',
             width: isMobile ? '100%' : 'auto'
           }}
-          onMouseEnter={e => {
-            e.currentTarget.style.background = COLORS.border;
-            e.currentTarget.style.color = COLORS.text;
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.background = COLORS.bg;
-            e.currentTarget.style.color = COLORS.textMuted;
-          }}
         >
-          <i className='bx bx-reset' style={{ fontSize: isMobile ? 13 : 15 }} />
+          <i className='bx bx-reset' style={{ fontSize: isMobile ? 14 : 16 }} />
           Réinitialiser
         </button>
       </div>
 
       {/* ── ÉTAT CHARGEMENT ── */}
       {loading ? (
-        <div style={{ textAlign: 'center', padding: isMobile ? '40px 0' : '56px 0', color: COLORS.textLight }}>
+        <div style={{ textAlign: 'center', padding: isMobile ? '48px 0' : '64px 0', color: COLORS.textLight }}>
           <div style={{
-            width: isMobile ? 36 : 44,
-            height: isMobile ? 36 : 44,
-            border: '3px solid #ede9fe',
+            width: isMobile ? 38 : 46,
+            height: isMobile ? 38 : 46,
+            border: `3px solid ${COLORS.primarySoft}`,
             borderTopColor: COLORS.primary,
             borderRadius: '50%',
             animation: 'spin 0.8s linear infinite',
-            margin: '0 auto 12px',
+            margin: '0 auto 14px',
           }} />
-          <p style={{ fontSize: isMobile ? 12 : 14, margin: 0 }}>Chargement...</p>
+          <p style={{ fontSize: isMobile ? 13 : 14.5, margin: 0 }}>Chargement...</p>
         </div>
 
       ) : filtrees.length === 0 ? (
         <div style={{
           textAlign: 'center',
-          padding: isMobile ? '40px 16px' : '64px 20px',
+          padding: isMobile ? '44px 18px' : '72px 24px',
           background: COLORS.white,
-          borderRadius: 14,
+          borderRadius: 18,
           border: `1.5px dashed ${COLORS.border}`,
         }}>
           <div style={{
-            width: isMobile ? 48 : 64,
-            height: isMobile ? 48 : 64,
+            width: isMobile ? 52 : 68,
+            height: isMobile ? 52 : 68,
             borderRadius: '50%',
-            background: '#ede9fe',
+            background: isVisitorMode ? COLORS.warningBg : COLORS.primarySoft,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            margin: '0 auto 12px',
+            margin: '0 auto 16px',
           }}>
-            <i className='bx bx-folder-open' style={{ fontSize: isMobile ? 22 : 28, color: COLORS.primary }} />
+            <i className='bx bx-folder-open' style={{ fontSize: isMobile ? 24 : 30, color: isVisitorMode ? COLORS.warning : COLORS.primary }} />
           </div>
-          <p style={{ fontSize: isMobile ? 14 : 16, fontWeight: 700, color: COLORS.text, margin: '0 0 4px' }}>
-            Aucune transaction
+          <p style={{ fontSize: isMobile ? 15 : 17, fontWeight: 700, color: COLORS.text, margin: '0 0 6px' }}>
+            {isVisitorMode ? 'Données de démonstration en cours de chargement' : 'Aucune transaction'}
           </p>
-          <p style={{ fontSize: isMobile ? 11 : 13, color: COLORS.textMuted, margin: 0 }}>
-            Aucune transaction ne correspond à vos filtres
+          <p style={{ fontSize: isMobile ? 12 : 13.5, color: COLORS.textMuted, margin: 0 }}>
+            {isVisitorMode ? 'Les données de démonstration seront bientôt disponibles' : 'Aucune transaction ne correspond à vos filtres'}
           </p>
         </div>
 
@@ -1691,14 +1730,15 @@ export default function ToutesTransactions() {
           {/* ── TABLE ── */}
           <div className="tx-table-wrap" style={{
             background: COLORS.white,
-            borderRadius: 14,
+            borderRadius: 18,
             overflow: 'hidden',
-            boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+            boxShadow: '0 1px 3px rgba(15,23,42,0.04)',
             border: `1px solid ${COLORS.border}`,
+            opacity: isVisitorMode ? 0.92 : 1,
           }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
-                <tr style={{ background: 'linear-gradient(135deg, #f8fafc, #f1f5f9)' }}>
+                <tr style={{ background: isVisitorMode ? COLORS.warningBg : COLORS.bg }}>
                   {[
                     { label: 'Type', icon: 'bx-transfer' },
                     { label: 'Montant', icon: 'bx-money' },
@@ -1709,17 +1749,17 @@ export default function ToutesTransactions() {
                     { label: 'Statut', icon: 'bx-check-shield' },
                   ].map(h => (
                     <th key={h.label} style={{
-                      padding: '10px 12px',
+                      padding: '13px 16px',
                       textAlign: 'left',
-                      fontSize: 10,
+                      fontSize: 10.5,
                       fontWeight: 700,
                       color: COLORS.textMuted,
                       textTransform: 'uppercase',
                       letterSpacing: '0.5px',
                       borderBottom: `2px solid ${COLORS.border}`,
                     }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                        <i className={`bx ${h.icon}`} style={{ fontSize: 11 }} />
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                        <i className={`bx ${h.icon}`} style={{ fontSize: 12 }} />
                         {h.label}
                       </span>
                     </th>
@@ -1730,37 +1770,37 @@ export default function ToutesTransactions() {
                 {filtrees.map((t, i) => (
                   <tr key={t.id} className="tx-row" style={{
                     borderTop: `1px solid ${COLORS.border}`,
-                    background: i % 2 === 0 ? COLORS.white : '#fbfaff',
+                    background: i % 2 === 0 ? COLORS.white : '#fbfcfe',
                     opacity: t.is_visible ? 1 : 0.65,
                   }}>
-                    <td style={{ padding: '10px 12px' }}>
+                    <td style={{ padding: '13px 16px' }}>
                       <TypeBadge type={t.type} />
                     </td>
                     <td style={{
-                      padding: '10px 12px',
+                      padding: '13px 16px',
                       fontWeight: 700,
-                      fontSize: 13,
+                      fontSize: 13.5,
                       color: t.type === 'entree' ? COLORS.entree : COLORS.sortie,
                       fontFamily: "'Outfit', sans-serif",
                       whiteSpace: 'nowrap'
                     }}>
                       {t.type === 'entree' ? '+' : '-'}{parseFloat(t.montant).toLocaleString()} MRU
                     </td>
-                    <td style={{ padding: '10px 12px', fontSize: 12, color: COLORS.textMuted }}>
+                    <td style={{ padding: '13px 16px', fontSize: 12.5, color: COLORS.textMuted }}>
                       {t.categorie_detail ? (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                           <span style={{
                             width: 6, height: 6, borderRadius: '50%',
                             background: t.categorie_detail.couleur || COLORS.primary,
                             display: 'inline-block', flexShrink: 0
                           }} />
-                          <span style={{ fontSize: 11 }}>{t.categorie_detail.nom}</span>
+                          <span style={{ fontSize: 11.5 }}>{t.categorie_detail.nom}</span>
                         </span>
-                      ) : <span style={{ color: COLORS.border, fontSize: 11 }}>—</span>}
+                      ) : <span style={{ color: COLORS.border, fontSize: 11.5 }}>—</span>}
                     </td>
                     <td style={{
-                      padding: '10px 12px',
-                      fontSize: 11,
+                      padding: '13px 16px',
+                      fontSize: 11.5,
                       color: COLORS.textMuted,
                       maxWidth: 150,
                       overflow: 'hidden',
@@ -1769,42 +1809,42 @@ export default function ToutesTransactions() {
                     }}>
                       {t.description || <span style={{ color: COLORS.border }}>—</span>}
                     </td>
-                    <td style={{ padding: '10px 12px' }}>
+                    <td style={{ padding: '13px 16px' }}>
                       <span style={{
                         display: 'inline-flex',
                         alignItems: 'center',
                         gap: 4,
-                        padding: '3px 8px',
-                        borderRadius: 6,
-                        fontSize: 10,
+                        padding: '4px 9px',
+                        borderRadius: 7,
+                        fontSize: 10.5,
                         fontWeight: 600,
-                        background: t.source === 'budget' ? '#fffbeb' : '#ede9fe',
-                        color: t.source === 'budget' ? '#d97706' : COLORS.primary,
+                        background: t.source === 'budget' ? COLORS.warningBg : COLORS.primarySoft,
+                        color: t.source === 'budget' ? COLORS.warning : COLORS.primary,
                         whiteSpace: 'nowrap'
                       }}>
                         <i className={`bx ${t.source === 'budget' ? 'bx-target' : 'bx-edit'}`} style={{ fontSize: 11 }} />
                         {t.source === 'budget' ? 'Budget' : 'Manuel'}
                       </span>
                     </td>
-                    <td style={{ padding: '10px 12px', fontSize: 11, color: COLORS.textMuted, whiteSpace: 'nowrap' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <td style={{ padding: '13px 16px', fontSize: 11.5, color: COLORS.textMuted, whiteSpace: 'nowrap' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                         <i className='bx bx-calendar-event' style={{ fontSize: 11, color: COLORS.textLight }} />
                         {new Date(t.date_creation).toLocaleDateString('fr-FR', {
                           day: '2-digit', month: 'short', year: 'numeric'
                         })}
                       </span>
                     </td>
-                    <td style={{ padding: '10px 12px' }}>
+                    <td style={{ padding: '13px 16px' }}>
                       <span style={{
                         display: 'inline-flex',
                         alignItems: 'center',
                         gap: 4,
-                        padding: '3px 8px',
-                        borderRadius: 6,
-                        fontSize: 10,
+                        padding: '4px 9px',
+                        borderRadius: 7,
+                        fontSize: 10.5,
                         fontWeight: 600,
-                        background: t.is_visible ? '#ecfdf5' : '#f1f5f9',
-                        color: t.is_visible ? '#059669' : '#94a3b8',
+                        background: t.is_visible ? COLORS.entreeBg : '#f1f5f9',
+                        color: t.is_visible ? COLORS.entree : '#94a3b8',
                         whiteSpace: 'nowrap'
                       }}>
                         <i className={`bx ${t.is_visible ? 'bx-check-circle' : 'bx-hide'}`} style={{ fontSize: 11 }} />
@@ -1815,24 +1855,37 @@ export default function ToutesTransactions() {
                 ))}
               </tbody>
             </table>
+            {isVisitorMode && (
+              <div style={{
+                padding: '14px 20px',
+                textAlign: 'center',
+                background: COLORS.warningBg,
+                borderTop: '1px solid #fde3a7',
+                fontSize: isMobile ? 11.5 : 13,
+                color: COLORS.warning,
+                fontWeight: 500,
+              }}>
+                🔍 Données de démonstration - Créez un compte pour accéder à vos vraies transactions
+              </div>
+            )}
           </div>
 
           {/* ── CARDS (mobile) ── */}
-          <div className="tx-cards-wrap" style={{ flexDirection: 'column', gap: 10 }}>
+          <div className="tx-cards-wrap" style={{ flexDirection: 'column', gap: 12 }}>
             {filtrees.map(t => (
               <div key={t.id} style={{
                 background: COLORS.white,
-                borderRadius: 12,
-                padding: '12px',
-                boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+                borderRadius: 14,
+                padding: '14px',
+                boxShadow: '0 1px 3px rgba(15,23,42,0.04)',
                 border: `1px solid ${COLORS.border}`,
                 opacity: t.is_visible ? 1 : 0.65,
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                   <TypeBadge type={t.type} />
                   <span style={{
                     fontWeight: 700,
-                    fontSize: 14,
+                    fontSize: 15,
                     color: t.type === 'entree' ? COLORS.entree : COLORS.sortie,
                     fontFamily: "'Outfit', sans-serif"
                   }}>
@@ -1840,17 +1893,17 @@ export default function ToutesTransactions() {
                   </span>
                 </div>
 
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 8 }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: COLORS.textMuted }}>
-                    <i className='bx bx-category' style={{ fontSize: 12 }} />
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 10 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: COLORS.textMuted }}>
+                    <i className='bx bx-category' style={{ fontSize: 13 }} />
                     {t.categorie_detail?.nom || '—'}
                   </span>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: COLORS.textMuted }}>
-                    <i className={`bx ${t.source === 'budget' ? 'bx-target' : 'bx-edit'}`} style={{ fontSize: 12 }} />
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: COLORS.textMuted }}>
+                    <i className={`bx ${t.source === 'budget' ? 'bx-target' : 'bx-edit'}`} style={{ fontSize: 13 }} />
                     {t.source === 'budget' ? 'Budget' : 'Manuel'}
                   </span>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: COLORS.textMuted }}>
-                    <i className='bx bx-calendar' style={{ fontSize: 12 }} />
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: COLORS.textMuted }}>
+                    <i className='bx bx-calendar' style={{ fontSize: 13 }} />
                     {new Date(t.date_creation).toLocaleDateString('fr-FR', {
                       day: '2-digit', month: 'short', year: 'numeric'
                     })}
@@ -1858,22 +1911,22 @@ export default function ToutesTransactions() {
                 </div>
 
                 {t.description && (
-                  <p style={{ margin: '0 0 8px', fontSize: 11, color: COLORS.textMuted, lineHeight: 1.4 }}>
+                  <p style={{ margin: '0 0 10px', fontSize: 11.5, color: COLORS.textMuted, lineHeight: 1.5 }}>
                     {t.description}
                   </p>
                 )}
 
-                <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 8, marginTop: 4 }}>
+                <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 10, marginTop: 4 }}>
                   <span style={{
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 4,
-                    padding: '3px 8px',
-                    borderRadius: 6,
-                    fontSize: 10,
+                    padding: '4px 9px',
+                    borderRadius: 7,
+                    fontSize: 10.5,
                     fontWeight: 600,
-                    background: t.is_visible ? '#ecfdf5' : '#f1f5f9',
-                    color: t.is_visible ? '#059669' : '#94a3b8',
+                    background: t.is_visible ? COLORS.entreeBg : '#f1f5f9',
+                    color: t.is_visible ? COLORS.entree : '#94a3b8',
                   }}>
                     <i className={`bx ${t.is_visible ? 'bx-check-circle' : 'bx-hide'}`} style={{ fontSize: 11 }} />
                     {t.is_visible ? 'Active' : 'Masquée'}
@@ -1881,19 +1934,33 @@ export default function ToutesTransactions() {
                 </div>
               </div>
             ))}
+            {isVisitorMode && (
+              <div style={{
+                padding: '14px 18px',
+                textAlign: 'center',
+                background: COLORS.warningBg,
+                borderRadius: 14,
+                fontSize: 12.5,
+                color: COLORS.warning,
+                fontWeight: 500,
+                border: '1px solid #fde3a7',
+              }}>
+                🔍 Données de démonstration - Créez un compte pour vos vraies transactions
+              </div>
+            )}
           </div>
         </>
       )}
 
       {/* ── MODAL EXPORT PDF ── */}
-      {showExportModal && isEntreprise && !abonnementExpire && (
+      {showExportModal && isEntreprise && !abonnementExpire && !isVisitorMode && (
         <ExportPDFModal
           transactions={transactions}
           onClose={() => setShowExportModal(false)}
           isMobile={isMobile}
           userEmail={userEmail}
           userProfileImage={userProfileImage}
-          // onLogoChange={handleLogoChange} // ← COMMENTÉ : Logo personnalisé désactivé
+          isVisitorMode={isVisitorMode}
         />
       )}
     </div>

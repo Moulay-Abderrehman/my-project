@@ -1,4 +1,4 @@
-#backend/abonnements/models.py
+# backend/abonnements/models.py
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
@@ -11,6 +11,7 @@ class Plan(models.Model):
         ('essai',      'Essai Gratuit'),
         ('standard',   'Standard'),
         ('entreprise', 'Entreprise'),
+        ('demo',       'Démo / Visiteur'),  # 🆕 Nouveau plan pour le mode visiteur
     ]
     id                = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     nom               = models.CharField(max_length=20, choices=NOM_CHOICES, unique=True)
@@ -18,12 +19,21 @@ class Plan(models.Model):
     prix_annuel       = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     nb_categories_max = models.IntegerField(default=2)   # -1 = illimité
     description       = models.TextField(blank=True)
+    
+    # 🆕 Nouveaux champs pour le mode visiteur
+    est_demo          = models.BooleanField(default=False, help_text="Plan réservé à la démonstration")
+    ordre_affichage   = models.PositiveIntegerField(default=0, help_text="Ordre d'affichage dans l'interface")
 
     class Meta:
         verbose_name = "Plan"
+        ordering = ['ordre_affichage', 'nom']
 
     def __str__(self):
         return self.get_nom_display()
+    
+    def est_plan_demo(self):
+        """Vérifie si c'est un plan de démonstration"""
+        return self.nom == 'demo' or self.est_demo
 
 
 # ─── FEATURE ─────────────────────────────────────────────────────────────────
@@ -57,11 +67,13 @@ class Abonnement(models.Model):
         ('3_mois',  '3 Mois'),
         ('6_mois',  '6 Mois'),
         ('annuel',  'Annuel'),
+        ('demo',    'Démo / Visiteur'),  # 🆕 Nouveau type pour la démo
     ]
     STATUT_CHOICES = [
         ('actif',      'Actif'),
         ('expire',     'Expiré'),
         ('en_attente', 'En attente'),
+        ('demo',       'Démo / Visiteur'),  # 🆕 Statut pour le mode visiteur
     ]
 
 
@@ -72,6 +84,7 @@ class Abonnement(models.Model):
         '3_mois':  90,
         '6_mois':  180,
         'annuel':  365,
+        'demo':    0,  # 🆕 La démo n'a pas de durée (permanente)
     }
 
     id          = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -83,34 +96,113 @@ class Abonnement(models.Model):
     )
     type        = models.CharField(max_length=10, choices=TYPE_CHOICES, default='essai')
     date_debut  = models.DateTimeField(default=timezone.now)
-    date_fin    = models.DateTimeField()
+    date_fin    = models.DateTimeField(null=True, blank=True)  # 🆕 Peut être null pour la démo
     statut      = models.CharField(max_length=15, choices=STATUT_CHOICES, default='actif')
     montant     = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     nb_renouvellements = models.PositiveIntegerField(default=0)
+    
+    # 🆕 Nouveaux champs pour le mode visiteur
+    est_demo    = models.BooleanField(default=False, help_text="Indique si c'est un abonnement de démonstration")
+    date_expiration_demo = models.DateTimeField(null=True, blank=True, help_text="Date d'expiration de la démo (si limitée dans le temps)")
 
     # ── méthodes utilitaires ─────────────────────────────────────────────────
     def est_actif(self):
-        return self.statut == 'actif' and self.date_fin > timezone.now()
+        """Vérifie si l'abonnement est actif"""
+        if self.statut == 'demo':
+            # La démo est toujours considérée comme active (mais en lecture seule)
+            return True
+        if self.statut == 'actif' and self.date_fin:
+            return self.date_fin > timezone.now()
+        return False
+    
+    def est_demo_mode(self):
+        """Vérifie si c'est un mode démo/visiteur"""
+        return self.statut == 'demo' or self.type == 'demo' or self.est_demo
+    
+    def est_expire(self):
+        """Vérifie si l'abonnement est expiré (hors démo)"""
+        if self.est_demo_mode():
+            return False  # La démo n'expire jamais
+        return not self.est_actif()
 
     def jours_restants(self):
-        if self.date_fin > timezone.now():
+        """Retourne le nombre de jours restants (0 pour la démo)"""
+        if self.est_demo_mode():
+            return 0
+        if self.date_fin and self.date_fin > timezone.now():
             return (self.date_fin - timezone.now()).days
         return 0
 
     def get_plan_nom(self):
-        return self.plan.nom if self.plan else 'essai'
+        """Retourne le nom du plan"""
+        if self.plan:
+            return self.plan.nom
+        return 'essai'
+    
+    def get_plan_display(self):
+        """Retourne l'affichage du plan"""
+        if self.est_demo_mode():
+            return "Mode Exploration"
+        return self.get_type_display()
 
     def nb_categories_autorisees(self):
         """Retourne le nombre max de catégories perso selon le plan."""
+        if self.est_demo_mode():
+            return 0  # 🆕 La démo ne permet pas de catégories personnalisées
         if self.plan:
             return self.plan.nb_categories_max
         return 2  
     
+    def est_abonne(self):
+        """Vérifie si l'utilisateur est réellement abonné (hors démo)"""
+        if self.est_demo_mode():
+            return False  # La démo n'est pas un abonnement réel
+        return self.est_actif()
+    
+    def peut_creer_transaction(self):
+        """Vérifie si l'utilisateur peut créer des transactions"""
+        if self.est_demo_mode():
+            return False  # La démo est en lecture seule
+        return self.est_actif()
+    
+    def peut_creer_budget(self):
+        """Vérifie si l'utilisateur peut créer des budgets"""
+        if self.est_demo_mode():
+            return False  # La démo est en lecture seule
+        return self.est_actif()
+    
+    def peut_modifier_profil(self):
+        """Vérifie si l'utilisateur peut modifier son profil"""
+        if self.est_demo_mode():
+            return False  # La démo est en lecture seule
+        return True  # Même expiré, on peut modifier son profil
+    
+    def est_entreprise(self):
+        """Vérifie si c'est un abonnement entreprise"""
+        if self.est_demo_mode():
+            return False
+        return self.plan and self.plan.nom == 'entreprise'
+    
     @property
     def duree_jours(self):
+        """Retourne la durée en jours"""
+        if self.est_demo_mode():
+            return 0
         return self.DUREE_JOURS_MAP.get(self.type, 30)
+    
+    @property
+    def est_visiteur(self):
+        """Alias pour est_demo_mode (compatibilité frontend)"""
+        return self.est_demo_mode()
+    
+    @property
+    def est_lecture_seule(self):
+        """Indique si l'abonnement est en lecture seule (démo ou expiré)"""
+        return self.est_demo_mode() or self.est_expire()
 
     def __str__(self):
+        if self.est_demo_mode():
+            return f"{self.utilisateur} — Mode Exploration"
         return f"{self.utilisateur} — {self.type} ({self.statut})"
 
     class Meta:

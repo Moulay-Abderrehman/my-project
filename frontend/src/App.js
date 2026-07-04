@@ -1,7 +1,9 @@
+// frontend/src/App.js
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { VisitorProvider } from './context/VisitorContext';
 
 // ── Pages Auth ────────────────────────────────────────────────────────────────
 import AuthChoix        from './pages/AuthChoix';
@@ -53,28 +55,62 @@ const PrivateRoute = ({ children }) => {
   return user ? children : <Navigate to="/" replace />;
 };
 
-// ─── Route publique : redirige si déjà connecté ───────────────────────────────
+// ✅ Route publique : redirige si connecté, sinon affiche la page
 const PublicRoute = ({ children }) => {
   const { user, loading } = useAuth();
   if (loading) return <LoadingScreen />;
-  return user ? <Navigate to="/dashboard" replace /> : children;
+  // ✅ Seulement rediriger si l'utilisateur est connecté (pas en mode visiteur)
+  if (user) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  // ✅ Si pas d'utilisateur connecté, afficher la page (même en mode visiteur)
+  return children;
 };
 
-// ─── Route Entreprise : accessible uniquement aux comptes entreprise ──────────
-// Recharge le profil depuis l'API pour avoir le role à jour
+// ─── Route Entreprise ──────────────────────────────────────────────────────────
 const EntrepriseRoute = ({ children }) => {
-  const { user, loading, estEntreprise, rechargerProfil } = useAuth();
+  const { user, loading, estEntreprise, rechargerProfil, isVisitor } = useAuth();
 
   useEffect(() => {
-    // Recharger le profil depuis l'API pour s'assurer que role est à jour
     if (user) rechargerProfil();
-  }, []); // eslint-disable-line
+  }, []);
 
   if (loading) return <LoadingScreen />;
 
   if (!user) return <Navigate to="/" replace />;
 
-  // Vérification : role === 'entreprise' OU plan_nom === 'entreprise'
+  if (isVisitor) {
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        height: '80vh', flexDirection: 'column', gap: 16, textAlign: 'center',
+        fontFamily: "'Sora',sans-serif",
+      }}>
+        <div style={{ fontSize: 48 }}>🔍</div>
+        <h2 style={{ margin: 0, color: '#f59e0b', fontSize: 20 }}>Mode Exploration</h2>
+        <p style={{ color: '#64748b', fontSize: 14 }}>
+          La gestion des employés est réservée aux comptes <strong>Entreprise</strong>.
+          Créez un compte et abonnez-vous pour y accéder.
+        </p>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+          <button onClick={() => window.history.back()} style={{
+            background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: 10,
+            padding: '10px 24px', cursor: 'pointer', fontWeight: 700, fontSize: 14,
+          }}>
+            Retour
+          </button>
+          <button onClick={() => window.location.href = '/inscription'} style={{
+            background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+            color: '#fff', border: 'none', borderRadius: 10,
+            padding: '10px 24px', cursor: 'pointer', fontWeight: 700, fontSize: 14,
+          }}>
+            <i className='bx bx-user-plus' style={{ marginRight: 4 }} /> Créer un compte
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!estEntreprise()) {
     return (
       <div style={{
@@ -103,55 +139,49 @@ const EntrepriseRoute = ({ children }) => {
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <Toaster position="top-right" toastOptions={{
-          style: {
-            borderRadius: 10, background: '#1e293b', color: '#f1f5f9',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.3)', fontSize: 14,
-          },
-          success: { iconTheme: { primary: '#10b981', secondary: '#fff' } },
-          error:   { iconTheme: { primary: '#ef4444', secondary: '#fff' } },
-        }} />
+      <VisitorProvider>
+        <Router>
+          <Toaster position="top-right" toastOptions={{
+            style: {
+              borderRadius: 10, background: '#1e293b', color: '#f1f5f9',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.3)', fontSize: 14,
+            },
+            success: { iconTheme: { primary: '#10b981', secondary: '#fff' } },
+            error:   { iconTheme: { primary: '#ef4444', secondary: '#fff' } },
+          }} />
 
-        <Routes>
-          {/* ── Routes publiques ────────────────────────────────────────── */}
-          <Route path="/"                    element={<PublicRoute><AuthChoix /></PublicRoute>} />
-          <Route path="/connexion"           element={<PublicRoute><Connexion /></PublicRoute>} />
-          <Route path="/inscription"         element={<PublicRoute><Inscription /></PublicRoute>} />
-          <Route path="/mot-de-passe-oublie" element={<MotDePasseOublie />} />
-          <Route path="/activer-employe"     element={<ActiverEmploye />} />
-          <Route path="/auth/google/callback" element={<GoogleCallback />} />
-          {/*} Dans les routes*/}
-          <Route path="/auth/sso/callback" element={<SSOCallback />} />
- 
-          {/* ── KYC (route unifiée) ─────────────────────────────────────── */}
-          <Route path="/kyc" element={<KYCFlow />} />
+          <Routes>
+            {/* ── Routes publiques ────────────────────────────────────────── */}
+            <Route path="/" element={<PublicRoute><AuthChoix /></PublicRoute>} />
+            <Route path="/connexion" element={<PublicRoute><Connexion /></PublicRoute>} />
+            <Route path="/inscription" element={<PublicRoute><Inscription /></PublicRoute>} />
+            <Route path="/mot-de-passe-oublie" element={<MotDePasseOublie />} />
+            <Route path="/activer-employe" element={<ActiverEmploye />} />
+            <Route path="/auth/google/callback" element={<GoogleCallback />} />
+            <Route path="/auth/sso/callback" element={<SSOCallback />} />
+      
+            {/* ── KYC (route unifiée) ─────────────────────────────────────── */}
+            <Route path="/kyc" element={<KYCFlow />} />
 
+            {/* ── Routes protégées ────────────────────────────────────────── */}
+            <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
+              <Route path="dashboard" element={<Dashboard />} />
+              <Route path="transactions" element={<Transactions />} />
+              <Route path="toutes-transactions" element={<ToutesTransactions />} />
+              <Route path="budgets" element={<Budgets />} />
+              <Route path="categories" element={<Categories />} />
+              <Route path="notifications" element={<Notifications />} />
+              <Route path="profil" element={<Profil />} />
+              <Route path="employes" element={<EntrepriseRoute><Employes /></EntrepriseRoute>} />
+            </Route>
 
-          {/* ── Routes protégées ────────────────────────────────────────── */}
-          <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
-            <Route path="dashboard"           element={<Dashboard />} />
-            <Route path="transactions"        element={<Transactions />} />
-            <Route path="toutes-transactions" element={<ToutesTransactions />} />
-            <Route path="budgets"             element={<Budgets />} />
-            <Route path="categories"          element={<Categories />} />
-            <Route path="notifications"       element={<Notifications />} />
-            <Route path="profil"              element={<Profil />} />
-
-            {/* ── Page Employés : entreprise uniquement ─────────────────── */}
-            <Route path="employes" element={
-              <EntrepriseRoute><Employes /></EntrepriseRoute>
-            } />         
-          </Route>
-
-          {/* Fallback */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Router>
+            {/* Fallback */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Router>
+      </VisitorProvider>
     </AuthProvider>
   );
 }
 
 export default App;
-
-

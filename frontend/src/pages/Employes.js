@@ -1,10 +1,32 @@
+// frontend/src/pages/Employes.js
 import React, { useState, useEffect } from 'react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
+import ActionBlockedModal from '../components/ActionBlockedModal';
+import {
+  Users,
+  Search,
+  Building2,
+  Trophy,
+  UserPlus,
+  ChevronRight,
+  Mail,
+  X,
+  Send,
+  Link as LinkIcon,
+  Copy,
+  UserCheck,
+  Clock,
+  CheckCircle2,
+  Crown,
+  Lock,
+  Info,
+  Loader2,
+} from 'lucide-react';
 
 export default function Employes() {
-  const { user } = useAuth();
+  const { user, isVisitor, exitVisitorMode } = useAuth(); // 🆕
   const [employes, setEmployes] = useState([]);
   const [emailInvit, setEmailInvit] = useState('');
   const [loading, setLoading] = useState(true);
@@ -12,7 +34,17 @@ export default function Employes() {
   const [showForm, setShowForm] = useState(false);
   const [lienManuel, setLienManuel] = useState('');
 
+  // 🆕 Modal d'action bloquée
+  const [actionBlockedModal, setActionBlockedModal] = useState({ isOpen: false, message: null });
+
+  const isVisitorMode = isVisitor; // 🆕
+
   const chargerEmployes = async () => {
+    // 🆕 Si mode visiteur, ne pas charger les employés réels
+    if (isVisitorMode) {
+      setLoading(false);
+      return;
+    }
     try {
       const res = await api.get('/comptes/mes-employes/');
       setEmployes(res.data);
@@ -23,10 +55,39 @@ export default function Employes() {
     }
   };
 
-  useEffect(() => { chargerEmployes(); }, []);
+  useEffect(() => { chargerEmployes(); }, [isVisitorMode]);
+
+  // 🆕 Fonction pour ouvrir le modal d'action bloquée
+  const ouvrirActionBloquee = (actionType = 'signup') => {
+    const messages = {
+      signup: {
+        title: '🔒 Créez un compte',
+        message: 'Pour inviter des employés, créez un compte en 30 secondes et passez à l\'abonnement Entreprise.',
+        action: 'Créer un compte',
+        actionType: 'signup'
+      },
+      subscribe: {
+        title: '🚀 Abonnement Entreprise',
+        message: 'La gestion des employés est réservée aux comptes Entreprise. Abonnez-vous pour y accéder.',
+        action: 'Voir les offres',
+        actionType: 'subscribe'
+      }
+    };
+    setActionBlockedModal({
+      isOpen: true,
+      message: messages[actionType] || messages.signup,
+    });
+  };
 
   const handleInviter = async (e) => {
     e.preventDefault();
+
+    // 🆕 Vérification du mode visiteur
+    if (isVisitorMode) {
+      ouvrirActionBloquee('signup');
+      return;
+    }
+
     if (!emailInvit.trim()) return;
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -56,6 +117,11 @@ export default function Employes() {
       setShowForm(false);
       chargerEmployes();
     } catch (err) {
+      // 🆕 Gestion du mode visiteur
+      if (err.response?.status === 403 && err.response?.data?.visitor_mode) {
+        ouvrirActionBloquee('signup');
+        return;
+      }
       const errMsg =
         err.response?.data?.error ||
         err.response?.data?.email_employe?.[0] ||
@@ -80,566 +146,302 @@ export default function Employes() {
 
   const activeCount = employes.filter(e => e.is_active).length;
 
+  // 🆕 Données mock pour le mode visiteur
+  const mockEmployes = [
+    { id: 1, prenom: 'Marie', nom: 'Dupont', email: 'marie.dupont@demo.com', is_active: true, invitation_email: 'marie.dupont@demo.com' },
+    { id: 2, prenom: 'Jean', nom: 'Martin', email: 'jean.martin@demo.com', is_active: true, invitation_email: 'jean.martin@demo.com' },
+    { id: 3, prenom: '', nom: '', email: '', is_active: false, invitation_email: 'invitation@demo.com' },
+  ];
+
+  // Si mode visiteur, afficher les données mock
+  const employesDisplay = isVisitorMode ? mockEmployes : employes;
+  const activeCountDisplay = isVisitorMode ? 2 : activeCount;
+
   return (
-    <div className="employes-container">
-      {/* Header compact */}
-      <div className="employes-header">
-        <div className="header-content">
-          <div className="header-icon">
-            <i className='bx bx-group'></i>
+    <div className="min-h-screen bg-[#f8fafc]">
+      {/* 🆕 MODAL ACTION BLOQUÉE */}
+      <ActionBlockedModal
+        isOpen={actionBlockedModal.isOpen}
+        onClose={() => setActionBlockedModal({ isOpen: false, message: null })}
+        message={actionBlockedModal.message}
+      />
+
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 sm:py-10 pb-12 space-y-4">
+
+        {/* Header */}
+        <div className="flex items-center gap-4 mb-2">
+          <div
+            className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 text-white ${
+              isVisitorMode ? 'bg-[#d55053]' : 'bg-[#356267]'
+            }`}
+          >
+            {isVisitorMode ? <Search size={22} /> : <Users size={22} />}
           </div>
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold text-[#10214b] tracking-tight flex items-center gap-2">
+              Employés
+              {isVisitorMode && (
+                <span className="text-[11px] font-semibold bg-[rgba(213,80,83,0.08)] text-[#d55053] border border-[rgba(213,80,83,0.25)] px-2.5 py-0.5 rounded-full">
+                  Démo
+                </span>
+              )}
+            </h1>
+            <p className="text-sm text-[rgba(53,98,103,0.75)] mt-1">
+              {isVisitorMode
+                ? 'Visualisation des données de démonstration'
+                : `${employesDisplay.length} employé(s) · ${activeCountDisplay} actif(s)`}
+            </p>
+          </div>
+        </div>
+
+        {/* User Profile Card */}
+        <div
+          className={`bg-white rounded-2xl border px-6 py-4 flex items-center gap-4 flex-wrap shadow-[0_1px_2px_rgba(16,33,75,0.03)] ${
+            isVisitorMode ? 'border-[rgba(213,80,83,0.25)]' : 'border-[rgba(16,33,75,0.08)]'
+          }`}
+        >
+          <div className="w-12 h-12 rounded-xl bg-[#356267] text-white flex items-center justify-center font-semibold text-base flex-shrink-0 overflow-hidden">
+            {isVisitorMode ? (
+              <Search size={20} />
+            ) : user?.photo_profil ? (
+              <img src={getPhotoUrl(user.photo_profil)} alt="profil" className="w-full h-full object-cover" />
+            ) : (
+              <span>{initiales}</span>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-[15px] font-semibold text-[#10214b]">
+              {isVisitorMode ? 'Explorateur Démo' : `${user?.prenom} ${user?.nom}`}
+            </h3>
+            <p className="text-xs text-[rgba(53,98,103,0.75)] mt-1 flex items-center gap-1.5">
+              <Building2 size={13} />
+              {isVisitorMode ? 'Mode Exploration' : 'Compte Entreprise'}
+            </p>
+          </div>
+          <div
+            className={`ml-auto flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold border ${
+              isVisitorMode
+                ? 'bg-[rgba(213,80,83,0.08)] text-[#d55053] border-[rgba(213,80,83,0.25)]'
+                : 'bg-[#c2f2f2] text-[#356267] border-[rgba(53,98,103,0.2)]'
+            }`}
+          >
+            <Trophy size={13} />
+            {isVisitorMode ? 'Démo' : 'Plan pro'}
+          </div>
+        </div>
+
+        {/* Invitation Section */}
+        {!isVisitorMode ? (
           <div>
-            <h1>Employés</h1>
-            <p>{employes.length} employé(s) • {activeCount} actif(s)</p>
-          </div>
-        </div>
-      </div>
-
-      {/* User Profile Card - compact */}
-      <div className="profile-card">
-        <div className="profile-avatar">
-          {user?.photo_profil
-            ? <img src={getPhotoUrl(user.photo_profil)} alt="profil" />
-            : <span>{initiales}</span>
-          }
-        </div>
-        <div className="profile-info">
-          <h3>{user?.prenom} {user?.nom}</h3>
-          <p><i className='bx bx-building'></i> Compte Entreprise</p>
-        </div>
-        <div className="profile-badge">
-          <i className='bx bx-trophy'></i> Plan pro
-        </div>
-      </div>
-
-      {/* Invitation Section - réduite et compacte */}
-      <div className="invitation-section">
-        {!showForm ? (
-          <button onClick={() => setShowForm(true)} className="show-invite-btn">
-            <i className='bx bx-user-plus'></i>
-            <span>Inviter un employé</span>
-            <i className='bx bx-chevron-right'></i>
-          </button>
-        ) : (
-          <div className="invitation-card compact">
-            <div className="card-header">
-              <i className='bx bx-mail-send'></i>
-              <div>
-                <h3>Nouvelle invitation</h3>
-              </div>
-              <button onClick={() => { setShowForm(false); setLienManuel(''); }} className="close-form">
-                <i className='bx bx-x'></i>
-              </button>
-            </div>
-
-            <form onSubmit={handleInviter} className="invitation-form">
-              <div className="input-group">
-                <i className='bx bx-envelope'></i>
-                <input
-                  type="email"
-                  value={emailInvit}
-                  onChange={e => setEmailInvit(e.target.value)}
-                  placeholder="email@exemple.com"
-                  required
-                  autoFocus
-                />
-              </div>
+            {!showForm ? (
               <button
-                type="submit"
-                disabled={loadingInvit || !emailInvit.trim()}
-                className="invite-btn"
+                onClick={() => setShowForm(true)}
+                className="w-full min-h-[56px] bg-white border border-dashed border-[rgba(16,33,75,0.16)] rounded-2xl px-6 flex items-center justify-center gap-2.5 text-[#356267] font-semibold text-[15px] transition-colors hover:bg-[#c2f2f2]/30 hover:border-[#356267]"
               >
-                {loadingInvit ? (
-                  <>
-                    <div className="spinner"></div>
-                    Envoi...
-                  </>
-                ) : (
-                  <>
-                    <i className='bx bx-send'></i> Envoyer
-                  </>
-                )}
+                <UserPlus size={18} />
+                <span>Inviter un employé</span>
+                <ChevronRight size={18} />
               </button>
-            </form>
-
-            {lienManuel && (
-              <div className="manual-link-card">
-                <div className="manual-header">
-                  <i className='bx bx-link-alt'></i>
-                  <span>Lien manuel</span>
-                </div>
-                <div className="link-container">
-                  <code>{lienManuel}</code>
-                  <button onClick={() => { navigator.clipboard.writeText(lienManuel); toast.success('Lien copié !'); }}>
-                    <i className='bx bx-copy'></i>
+            ) : (
+              <div className="bg-white rounded-2xl p-6 border border-[rgba(16,33,75,0.08)] shadow-[0_1px_2px_rgba(16,33,75,0.03)]">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-9 h-9 rounded-[10px] bg-[#c2f2f2] text-[#356267] flex items-center justify-center flex-shrink-0">
+                    <Mail size={18} />
+                  </div>
+                  <h3 className="text-[15px] font-semibold text-[#10214b]">Nouvelle invitation</h3>
+                  <button
+                    onClick={() => { setShowForm(false); setLienManuel(''); }}
+                    className="ml-auto w-8 h-8 rounded-lg flex items-center justify-center text-[rgba(53,98,103,0.45)] hover:bg-[#f8fafc] hover:text-[#10214b] transition-colors"
+                  >
+                    <X size={18} />
                   </button>
                 </div>
+
+                <form onSubmit={handleInviter} className="flex gap-3 flex-wrap">
+                  <div className="flex-1 min-w-[200px] flex items-center gap-2.5 bg-[#f8fafc] border border-[rgba(16,33,75,0.08)] rounded-[10px] px-3.5 min-h-[44px]">
+                    <Mail size={16} className="text-[rgba(53,98,103,0.45)] flex-shrink-0" />
+                    <input
+                      type="email"
+                      value={emailInvit}
+                      onChange={e => setEmailInvit(e.target.value)}
+                      placeholder="email@exemple.com"
+                      required
+                      autoFocus
+                      className="flex-1 bg-transparent border-none outline-none text-sm text-[#10214b] py-3"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={loadingInvit || !emailInvit.trim()}
+                    className="bg-[#356267] min-h-[44px] rounded-[10px] px-5 text-white font-semibold text-[13px] flex items-center justify-center gap-2 whitespace-nowrap transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loadingInvit ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" />
+                        Envoi...
+                      </>
+                    ) : (
+                      <>
+                        <Send size={16} /> Envoyer
+                      </>
+                    )}
+                  </button>
+                </form>
+
+                {lienManuel && (
+                  <div className="mt-4 bg-[#f8fafc] border border-[rgba(16,33,75,0.08)] rounded-[10px] px-4 py-3">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-[rgba(53,98,103,0.75)] mb-2">
+                      <LinkIcon size={14} />
+                      <span>Lien manuel</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <code className="flex-1 bg-white border border-[rgba(16,33,75,0.08)] px-3 py-2 rounded-lg text-[11px] break-all text-[rgba(53,98,103,0.75)]">
+                        {lienManuel}
+                      </code>
+                      <button
+                        onClick={() => { navigator.clipboard.writeText(lienManuel); toast.success('Lien copié !'); }}
+                        className="bg-[#356267] rounded-lg px-3.5 text-white min-h-[36px] flex items-center justify-center hover:opacity-90 transition-opacity"
+                      >
+                        <Copy size={15} />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
-        )}
-      </div>
-
-      {/* Employees List Card */}
-      <div className="employes-list-card">
-        <div className="card-header">
-          <i className='bx bx-user-check'></i>
-          <div>
-            <h3>Tous les employés</h3>
+        ) : (
+          // 🆕 Mode visiteur - message d'incitation
+          <div className="bg-white rounded-2xl p-6 border border-[rgba(213,80,83,0.25)]">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-9 h-9 rounded-[10px] bg-[rgba(213,80,83,0.08)] text-[#d55053] flex items-center justify-center flex-shrink-0">
+                <Lock size={18} />
+              </div>
+              <h3 className="text-[15px] font-semibold text-[#10214b]">Mode Exploration</h3>
+            </div>
+            <p className="text-sm text-[#d55053] mb-4 leading-relaxed">
+              La gestion des employés est réservée aux comptes Entreprise. Créez un compte et abonnez-vous pour inviter vos employés.
+            </p>
+            <button
+              onClick={() => ouvrirActionBloquee('subscribe')}
+              className="w-full bg-[#d55053] min-h-[44px] rounded-[10px] px-5 text-white font-semibold text-[13px] flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
+            >
+              <Crown size={16} /> Créer un compte
+            </button>
           </div>
+        )}
+
+        {/* Employees List Card */}
+        <div
+          className={`bg-white rounded-2xl p-6 border shadow-[0_1px_2px_rgba(16,33,75,0.03)] ${
+            isVisitorMode ? 'border-[rgba(213,80,83,0.25)]' : 'border-[rgba(16,33,75,0.08)]'
+          }`}
+        >
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-9 h-9 rounded-[10px] bg-[#c2f2f2] text-[#356267] flex items-center justify-center flex-shrink-0">
+              <UserCheck size={18} />
+            </div>
+            <h3 className="text-[15px] font-semibold text-[#10214b] flex items-center">
+              Tous les employés
+              {isVisitorMode && (
+                <span className="ml-1.5 text-[10px] font-semibold bg-[rgba(213,80,83,0.08)] text-[#d55053] border border-[rgba(213,80,83,0.25)] px-2 py-0.5 rounded-full">
+                  Démo
+                </span>
+              )}
+            </h3>
+          </div>
+
+          {loading ? (
+            <div className="text-center py-10 px-4 text-[rgba(53,98,103,0.45)]">
+              <Loader2 size={24} className="animate-spin mx-auto mb-3 text-[#356267]" />
+              <p>Chargement...</p>
+            </div>
+          ) : employesDisplay.length === 0 ? (
+            <div className="text-center py-10 px-4 text-[rgba(53,98,103,0.45)]">
+              <UserPlus size={36} className="mx-auto mb-2 text-[rgba(16,33,75,0.15)]" />
+              <h4 className="mt-2 mb-1 text-[15px] font-semibold text-[#10214b]">Aucun employé</h4>
+              <p className="text-[13px] mb-4">
+                {isVisitorMode ? 'Créez un compte pour gérer vos employés' : 'Invitez votre premier employé pour commencer'}
+              </p>
+              {isVisitorMode && (
+                <button
+                  onClick={() => ouvrirActionBloquee('subscribe')}
+                  className="bg-[#d55053] min-h-[44px] rounded-[10px] px-5 text-white font-semibold text-[13px] inline-flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
+                >
+                  <Crown size={16} /> Créer un compte
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col">
+              {employesDisplay.map((emp) => {
+                const initEmp = `${(emp.prenom || '')[0] || '?'}${(emp.nom || '')[0] || ''}`.toUpperCase();
+                const isPending = !emp.is_active;
+                return (
+                  <div
+                    key={emp.id}
+                    className={`flex items-center gap-3 py-3.5 border-b border-[#f8fafc] last:border-b-0 flex-wrap sm:flex-nowrap ${
+                      isPending ? 'opacity-65' : ''
+                    }`}
+                  >
+                    <div
+                      className={`w-10 h-10 rounded-[10px] flex items-center justify-center font-semibold flex-shrink-0 overflow-hidden text-[15px] ${
+                        isPending ? 'bg-[#f8fafc] text-[rgba(53,98,103,0.45)]' : 'bg-[#c2f2f2] text-[#356267]'
+                      }`}
+                    >
+                      {emp.photo_profil ? (
+                        <img src={getPhotoUrl(emp.photo_profil)} alt="emp" className="w-full h-full object-cover" />
+                      ) : isPending ? (
+                        <Clock size={17} />
+                      ) : (
+                        <span>{initEmp}</span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-[#10214b] text-sm">
+                        {emp.prenom && emp.nom ? `${emp.prenom} ${emp.nom}` : 'En attente'}
+                      </div>
+                      <div className="text-xs text-[rgba(53,98,103,0.75)] mt-0.5 flex items-center gap-1.5 overflow-hidden text-ellipsis whitespace-nowrap">
+                        <Mail size={13} className="flex-shrink-0" />
+                        {emp.email || emp.invitation_email || 'Invitation en attente'}
+                      </div>
+                    </div>
+                    <div
+                      className={`text-[11px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1 whitespace-nowrap flex-shrink-0 ml-[52px] sm:ml-0 ${
+                        emp.is_active ? 'bg-[#e9f8e7] text-[#459071]' : 'bg-[#fef3c7] text-[#b45309]'
+                      }`}
+                    >
+                      {emp.is_active ? <CheckCircle2 size={13} /> : <Clock size={13} />}
+                      {emp.is_active ? 'Actif' : 'Attente'}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {isVisitorMode && employesDisplay.length > 0 && (
+            <div className="mt-4 px-4 py-3 text-center bg-[rgba(213,80,83,0.08)] border border-[rgba(213,80,83,0.25)] rounded-[10px] text-xs text-[#d55053] font-medium">
+              Données de démonstration — Créez un compte pour gérer vos vrais employés
+            </div>
+          )}
         </div>
 
-        {loading ? (
-          <div className="loading-state">
-            <div className="spinner large"></div>
-            <p>Chargement...</p>
-          </div>
-        ) : employes.length === 0 ? (
-          <div className="empty-state">
-            <i className='bx bx-user-plus'></i>
-            <h4>Aucun employé</h4>
-            <p>Invitez votre premier employé pour commencer</p>
-          </div>
-        ) : (
-          <div className="employes-table">
-            {employes.map((emp, i) => {
-              const initEmp = `${(emp.prenom || '')[0] || '?'}${(emp.nom || '')[0] || ''}`.toUpperCase();
-              return (
-                <div key={emp.id} className="employe-row">
-                  <div className="employe-avatar">
-                    {emp.photo_profil
-                      ? <img src={getPhotoUrl(emp.photo_profil)} alt="emp" />
-                      : <span>{initEmp}</span>
-                    }
-                  </div>
-                  <div className="employe-info">
-                    <div className="employe-name">
-                      {emp.prenom && emp.nom ? `${emp.prenom} ${emp.nom}` : 'En attente'}
-                    </div>
-                    <div className="employe-email">
-                      <i className='bx bx-envelope'></i> {emp.email || emp.invitation_email}
-                    </div>
-                  </div>
-                  <div className={`status-badge ${emp.is_active ? 'active' : 'pending'}`}>
-                    <i className={`bx ${emp.is_active ? 'bx-check-circle' : 'bx-time'}`}></i>
-                    {emp.is_active ? 'Actif' : 'Attente'}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        {/* Info Card */}
+        <div
+          className={`rounded-xl px-4 py-3.5 flex items-center gap-2.5 text-xs border ${
+            isVisitorMode
+              ? 'bg-[rgba(213,80,83,0.08)] text-[#d55053] border-[rgba(213,80,83,0.25)]'
+              : 'bg-[#c2f2f2] text-[#356267] border-[rgba(53,98,103,0.2)]'
+          }`}
+        >
+          <Info size={16} className="flex-shrink-0" />
+          <span>
+            {isVisitorMode
+              ? 'Données de démonstration — les employés affichés sont fictifs'
+              : 'Les transactions des employés sont visibles dans votre tableau de bord'}
+          </span>
+        </div>
       </div>
-
-      {/* Info Card - compact */}
-      <div className="info-card">
-        <i className='bx bx-data'></i>
-        <span>Les transactions des employés sont visibles dans votre tableau de bord</span>
-      </div>
-
-      <style jsx>{`
-        @import url('https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css');
-        
-        .employes-container {
-          max-width: 780px;
-          margin: 0 auto;
-          padding: 20px 16px;
-          font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-        }
-
-        /* Header compact */
-        .employes-header {
-          margin-bottom: 20px;
-        }
-        .header-content {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-        .header-icon {
-          width: 44px;
-          height: 44px;
-          background: linear-gradient(135deg, #0c2e7c 0%, #1a4a9e 100%);
-          border-radius: 18px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          font-size: 24px;
-        }
-        .employes-header h1 {
-          margin: 0;
-          font-size: 1.5rem;
-          font-weight: 700;
-          color: #0c2e7c;
-        }
-        .employes-header p {
-          margin: 2px 0 0;
-          color: #6c7f9c;
-          font-size: 0.8rem;
-        }
-
-        /* Profile Card compact */
-        .profile-card {
-          background: white;
-          border-radius: 20px;
-          padding: 14px 20px;
-          margin-bottom: 16px;
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          flex-wrap: wrap;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-          border: 1px solid #eef2f8;
-        }
-        .profile-avatar {
-          width: 44px;
-          height: 44px;
-          border-radius: 30px;
-          background: linear-gradient(145deg, #0c2e7c, #143d8c);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          font-weight: 700;
-          font-size: 1rem;
-          flex-shrink: 0;
-          overflow: hidden;
-        }
-        .profile-avatar img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-        .profile-info h3 {
-          margin: 0;
-          font-size: 0.95rem;
-          font-weight: 700;
-          color: #1e2a44;
-        }
-        .profile-info p {
-          margin: 2px 0 0;
-          font-size: 0.7rem;
-          color: #6c7f9c;
-          display: flex;
-          align-items: center;
-          gap: 4px;
-        }
-        .profile-badge {
-          margin-left: auto;
-          background: #0c2e7c10;
-          border: 1px solid #0c2e7c20;
-          padding: 4px 12px;
-          border-radius: 30px;
-          font-size: 0.7rem;
-          font-weight: 600;
-          color: #0c2e7c;
-          display: flex;
-          align-items: center;
-          gap: 5px;
-        }
-
-        /* Invitation section réduite */
-        .invitation-section {
-          margin-bottom: 20px;
-        }
-        .show-invite-btn {
-          width: 100%;
-          background: white;
-          border: 1px dashed #cbd5e1;
-          border-radius: 16px;
-          padding: 14px 20px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 10px;
-          color: #0c2e7c;
-          font-weight: 600;
-          font-size: 0.9rem;
-          transition: all 0.2s;
-        }
-        .show-invite-btn:hover {
-          background: #f8fafd;
-          border-color: #0c2e7c;
-          gap: 12px;
-        }
-        .invitation-card.compact {
-          background: white;
-          border-radius: 20px;
-          padding: 16px 20px;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-          border: 1px solid #eef2f8;
-        }
-        .card-header {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          margin-bottom: 14px;
-        }
-        .card-header i:first-child {
-          font-size: 20px;
-          color: #0c2e7c;
-          background: #eef3ff;
-          padding: 6px;
-          border-radius: 12px;
-        }
-        .card-header h3 {
-          margin: 0;
-          font-size: 0.9rem;
-          font-weight: 600;
-          color: #1e2a44;
-        }
-        .close-form {
-          margin-left: auto;
-          background: none;
-          border: none;
-          font-size: 20px;
-          cursor: pointer;
-          color: #94a3b8;
-          display: flex;
-          align-items: center;
-          padding: 4px;
-        }
-        .invitation-form {
-          display: flex;
-          gap: 10px;
-          flex-wrap: wrap;
-        }
-        .input-group {
-          flex: 1;
-          display: flex;
-          align-items: center;
-          background: #f8fafd;
-          border: 1px solid #e2edf5;
-          border-radius: 40px;
-          padding: 0 14px;
-        }
-        .input-group i {
-          color: #8a9bb5;
-          font-size: 1rem;
-        }
-        .input-group input {
-          flex: 1;
-          padding: 12px 8px;
-          border: none;
-          background: transparent;
-          font-size: 0.85rem;
-          outline: none;
-        }
-        .invite-btn {
-          background: #0c2e7c;
-          border: none;
-          border-radius: 40px;
-          padding: 0 20px;
-          color: white;
-          font-weight: 600;
-          font-size: 0.8rem;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          white-space: nowrap;
-        }
-        .invite-btn:disabled {
-          opacity: 0.6;
-        }
-        .manual-link-card {
-          margin-top: 14px;
-          background: #fff9e8;
-          border-radius: 14px;
-          padding: 10px 14px;
-        }
-        .manual-header {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          font-size: 0.7rem;
-          color: #a66400;
-          margin-bottom: 8px;
-        }
-        .link-container {
-          display: flex;
-          gap: 8px;
-        }
-        .link-container code {
-          flex: 1;
-          background: white;
-          padding: 6px 10px;
-          border-radius: 10px;
-          font-size: 0.65rem;
-          word-break: break-all;
-        }
-        .link-container button {
-          background: #0c2e7c;
-          border: none;
-          border-radius: 10px;
-          padding: 0 14px;
-          color: white;
-          cursor: pointer;
-        }
-
-        /* Employes list */
-        .employes-list-card {
-          background: white;
-          border-radius: 20px;
-          padding: 20px;
-          margin-bottom: 16px;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-          border: 1px solid #eef2f8;
-        }
-        .employes-list-card .card-header {
-          margin-bottom: 16px;
-        }
-        .employes-table {
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-        }
-        .employe-row {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 12px 0;
-          border-bottom: 1px solid #f0f4fa;
-        }
-        .employe-row:last-child {
-          border-bottom: none;
-        }
-        .employe-avatar {
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          background: #eef3ff;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: 700;
-          color: #0c2e7c;
-          flex-shrink: 0;
-          overflow: hidden;
-        }
-        .employe-avatar img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-        .employe-info {
-          flex: 1;
-        }
-        .employe-name {
-          font-weight: 600;
-          color: #1e2a44;
-          font-size: 0.85rem;
-        }
-        .employe-email {
-          font-size: 0.7rem;
-          color: #7a8aaa;
-          margin-top: 2px;
-          display: flex;
-          align-items: center;
-          gap: 4px;
-        }
-        .status-badge {
-          font-size: 0.65rem;
-          font-weight: 600;
-          padding: 3px 10px;
-          border-radius: 30px;
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          white-space: nowrap;
-        }
-        .status-badge.active {
-          background: #e0f7ea;
-          color: #1f7840;
-        }
-        .status-badge.pending {
-          background: #fff0db;
-          color: #b45b0a;
-        }
-
-        /* Empty & loading */
-        .empty-state, .loading-state {
-          text-align: center;
-          padding: 32px 16px;
-          color: #8a9bb5;
-        }
-        .empty-state i {
-          font-size: 40px;
-          color: #cbdbe0;
-          margin-bottom: 8px;
-        }
-        .empty-state h4 {
-          margin: 6px 0;
-          font-size: 0.9rem;
-          color: #3a4d6e;
-        }
-        .empty-state p {
-          font-size: 0.75rem;
-        }
-        .spinner {
-          width: 14px;
-          height: 14px;
-          border: 2px solid rgba(255,255,255,0.2);
-          border-top-color: white;
-          border-radius: 50%;
-          animation: spin 0.7s linear infinite;
-        }
-        .spinner.large {
-          width: 28px;
-          height: 28px;
-          margin: 0 auto 8px;
-          border: 2px solid #e2e8f0;
-          border-top-color: #0c2e7c;
-        }
-
-        /* Info card */
-        .info-card {
-          background: #eef3ff;
-          border-radius: 16px;
-          padding: 12px 16px;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          font-size: 0.7rem;
-          color: #1e4880;
-        }
-        .info-card i {
-          font-size: 18px;
-          flex-shrink: 0;
-        }
-
-        /* Responsive */
-        @media (max-width: 560px) {
-          .employes-container {
-            padding: 12px;
-          }
-          .profile-card {
-            flex-direction: column;
-            text-align: center;
-          }
-          .profile-badge {
-            margin-left: 0;
-          }
-          .invitation-form {
-            flex-direction: column;
-          }
-          .invite-btn {
-            justify-content: center;
-            padding: 10px;
-          }
-          .employe-row {
-            flex-wrap: wrap;
-          }
-          .status-badge {
-            margin-left: 52px;
-          }
-        }
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   );
 }

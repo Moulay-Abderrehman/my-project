@@ -1,3 +1,4 @@
+# backend/comptes/views.py
 import secrets
 import string
 import random
@@ -16,7 +17,7 @@ from django.contrib.auth import authenticate
 from django.utils import timezone
 from django.core.mail import send_mail
 from django.conf import settings
-from .models import Utilisateur , KYCVerificationSession
+from .models import Utilisateur, KYCVerificationSession
 from .serializers import UtilisateurSerializer
 from django.contrib.auth.hashers import make_password
 from .serializers import (
@@ -24,6 +25,8 @@ from .serializers import (
     ChangePasswordSerializer, ContactSerializer,
     InvitationEmployeSerializer, ActivationEmployeSerializer,
     MotDePasseOublieSerializer, ReinitialisationMotDePasseSerializer,
+    InitierVisiteurSerializer, ConvertirVisiteurSerializer,
+    StatutVisiteurSerializer, DonneesDemoVisiteurSerializer,
 )
 from .utils import (
     generer_code_reset, sauvegarder_code_reset,
@@ -71,6 +74,68 @@ def envoyer_email_confirmation(user):
     user.code_confirmation_expire = timezone.now() + timedelta(minutes=5)
     user.save(update_fields=['code_confirmation', 'code_confirmation_expire'])
     return envoyer_email_verification_compte(user)
+
+
+# 🆕 Helper pour créer un utilisateur visiteur
+def creer_utilisateur_visiteur(email=None, prenom="Explorateur", nom="Démo"):
+    """
+    Crée un utilisateur en mode visiteur
+    """
+    import uuid
+    visitor_id = str(uuid.uuid4())[:8]
+    telephone = f"+222_visitor_{visitor_id}"
+    
+    if not email:
+        email = f"visitor_{visitor_id}@demo.com"
+    
+    # Vérifier si un visiteur existe déjà avec cet email
+    existing = Utilisateur.objects.filter(email__iexact=email).first()
+    if existing and existing.est_visiteur:
+        return existing
+    
+    # Créer le visiteur
+    user = Utilisateur.objects.create(
+        telephone=telephone,
+        email=email.lower(),
+        nom=nom,
+        prenom=prenom,
+        role='visiteur',
+        est_visiteur=True,
+        is_active=True,
+        is_kyc_verified=False,
+        session_visiteur_expire=timezone.now() + timedelta(days=7),  # Session de 7 jours
+    )
+    user.set_unusable_password()
+    user.save()
+    
+    # Créer l'abonnement de démonstration
+    try:
+        from abonnements.models import Abonnement, Plan
+        plan_demo, _ = Plan.objects.get_or_create(
+            nom='demo',
+            defaults={
+                'prix_mensuel': 0,
+                'prix_annuel': 0,
+                'nb_categories_max': 0,
+                'description': 'Mode Exploration - Visualisation uniquement',
+                'est_demo': True,
+                'ordre_affichage': 0,
+            }
+        )
+        Abonnement.objects.create(
+            utilisateur=user,
+            plan=plan_demo,
+            type='demo',
+            statut='demo',
+            date_debut=timezone.now(),
+            date_fin=None,
+            montant=0,
+            est_demo=True,
+        )
+    except Exception as e:
+        print(f"Erreur création abonnement demo: {e}")
+    
+    return user
 
 
 # ─── INSCRIPTION ──────────────────────────────────────────────────────────────
@@ -248,6 +313,15 @@ class ConnexionView(APIView):
                     "error": "email_not_found",
                     "message": "Cette adresse email n'existe pas. Veuillez vérifier votre saisie ou créer un compte."
                 }, status=status.HTTP_404_NOT_FOUND)
+            
+            # 🆕 Vérification pour le mode visiteur
+            if user.est_visiteur:
+                return Response({
+                    "error": "visitor_mode",
+                    "message": "🔍 Vous êtes en mode Exploration. Créez un compte pour accéder à toutes les fonctionnalités.",
+                    "redirect_to": "/inscription",
+                    "est_visiteur": True
+                }, status=status.HTTP_403_FORBIDDEN)
             
             # ── Vérification 2 : Le mot de passe est-il correct ? ────────────
             if not user.check_password(password):
@@ -753,3 +827,223 @@ class GoogleSetPasswordView(APIView):
             
         except Utilisateur.DoesNotExist:
             return Response({'error': 'Utilisateur non trouvé.'}, status=404)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 🆕 NOUVELLES VUES POUR LE MODE VISITEUR
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ─── INITIER LE MODE VISITEUR ──────────────────────────────────────────────
+class InitierVisiteurView(APIView):
+    """
+    Crée un utilisateur en mode visiteur et retourne un token d'accès
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = InitierVisiteurSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        email = serializer.validated_data.get('email', '')
+        prenom = serializer.validated_data.get('prenom', 'Explorateur')
+        nom = serializer.validated_data.get('nom', 'Démo')
+        
+        # Vérifier si un utilisateur existe déjà avec cet email
+        if email:
+            existing_user = Utilisateur.objects.filter(email__iexact=email).first()
+            if existing_user:
+                if existing_user.est_visiteur:
+                    # Réactiver le visiteur existant
+                    user = existing_user
+                    user.session_visiteur_expire = timezone.now() + timedelta(days=7)
+                    user.save(update_fields=['session_visiteur_expire'])
+                else:
+                    return Response({
+                        "error": "email_exists",
+                        "message": "Cet email est déjà utilisé. Veuillez vous connecter."
+                    }, status=status.HTTP_409_CONFLICT)
+            else:
+                # Créer un nouveau visiteur
+                user = creer_utilisateur_visiteur(email, prenom, nom)
+        else:
+            # Créer un visiteur sans email
+            user = creer_utilisateur_visiteur(None, prenom, nom)
+        
+        # Générer un token d'accès
+        refresh = RefreshToken.for_user(user)
+        
+        enregistrer_log(user, "VISITEUR", "Mode exploration activé", request)
+        
+        return Response({
+            "success": True,
+            "message": "🔍 Mode Exploration activé",
+            "refresh": str(refresh),
+            "access": str(refresh.access_token),
+            "user": UtilisateurSerializer(user).data,
+            "est_visiteur": True,
+            "est_lecture_seule": True,
+            "session_expire": user.session_visiteur_expire,
+        }, status=status.HTTP_201_CREATED)
+
+
+# ─── STATUT DU MODE VISITEUR ──────────────────────────────────────────────
+class StatutVisiteurView(APIView):
+    """
+    Vérifie le statut du mode visiteur pour l'utilisateur courant
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        
+        # Vérifier si l'utilisateur est en mode visiteur
+        if not user.est_visiteur:
+            # Vérifier via l'abonnement
+            try:
+                abo = user.abonnement
+                if abo and abo.est_demo_mode():
+                    return Response({
+                        "est_visiteur": True,
+                        "est_lecture_seule": True,
+                        "session_valide": True,
+                        "est_expire": False,
+                        "message": "🔍 Mode Exploration - Visualisation uniquement",
+                        "redirect_to": "/inscription",
+                        "temps_restant": "Illimité"
+                    })
+            except:
+                pass
+            
+            return Response({
+                "est_visiteur": False,
+                "est_lecture_seule": False,
+                "session_valide": True,
+                "est_expire": False,
+                "message": "Vous êtes en mode normal",
+                "redirect_to": None,
+                "temps_restant": None
+            })
+        
+        # Vérifier si la session est valide
+        if not user.session_visiteur_valide:
+            return Response({
+                "est_visiteur": True,
+                "est_lecture_seule": True,
+                "session_valide": False,
+                "est_expire": True,
+                "message": "Votre session visiteur a expiré. Veuillez créer un compte.",
+                "redirect_to": "/",
+                "temps_restant": "Expiré"
+            })
+        
+        # Calculer le temps restant
+        temps_restant = "Illimité"
+        if user.session_visiteur_expire:
+            delta = user.session_visiteur_expire - timezone.now()
+            jours = delta.days
+            if jours > 0:
+                temps_restant = f"{jours} jour(s)"
+            else:
+                heures = delta.seconds // 3600
+                if heures > 0:
+                    temps_restant = f"{heures} heure(s)"
+                else:
+                    minutes = delta.seconds // 60
+                    temps_restant = f"{minutes} minute(s)"
+        
+        return Response({
+            "est_visiteur": True,
+            "est_lecture_seule": True,
+            "session_valide": True,
+            "est_expire": False,
+            "message": "🔍 Mode Exploration - Visualisation uniquement",
+            "redirect_to": "/inscription",
+            "temps_restant": temps_restant,
+            "session_expire": user.session_visiteur_expire,
+        })
+
+
+# ─── CONVERTIR VISITEUR → UTILISATEUR ─────────────────────────────────────
+class ConvertirVisiteurView(APIView):
+    """
+    Convertit un utilisateur visiteur en utilisateur réel
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        
+        # Vérifier que l'utilisateur est bien en mode visiteur
+        if not user.est_visiteur:
+            try:
+                abo = user.abonnement
+                if not (abo and abo.est_demo_mode()):
+                    return Response({
+                        "error": "not_visitor",
+                        "message": "Vous n'êtes pas en mode visiteur."
+                    }, status=status.HTTP_403_FORBIDDEN)
+            except:
+                return Response({
+                    "error": "not_visitor",
+                    "message": "Vous n'êtes pas en mode visiteur."
+                }, status=status.HTTP_403_FORBIDDEN)
+        
+        serializer = ConvertirVisiteurSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        validated_data = serializer.validated_data
+        
+        # Mettre à jour l'utilisateur
+        user.email = validated_data['email']
+        user.prenom = validated_data['prenom']
+        user.nom = validated_data['nom']
+        user.telephone = validated_data['telephone']
+        user.est_visiteur = False
+        user.is_active = True
+        user.role = 'binome'
+        user.session_visiteur_expire = None
+        
+        # Définir le mot de passe
+        user.set_password(validated_data['password'])
+        user.save()
+        
+        # Supprimer l'abonnement de démonstration
+        try:
+            from abonnements.models import Abonnement
+            abo = user.abonnement
+            if abo and abo.est_demo_mode():
+                abo.delete()
+        except:
+            pass
+        
+        # Créer un abonnement essai
+        try:
+            from abonnements.models import Plan
+            from .utils import creer_abonnement_essai
+            creer_abonnement_essai(user)
+        except Exception as e:
+            print(f"Erreur création abonnement essai: {e}")
+        
+        # Créer une notification de bienvenue
+        try:
+            from notifications.models import Notification
+            Notification.objects.create(
+                utilisateur=user,
+                type='bienvenue',
+                message=f"BIENVENUE|Bienvenue {user.prenom} ! Votre essai gratuit de 30 jours commence maintenant."
+            )
+        except:
+            pass
+        
+        enregistrer_log(user, "CONVERSION", f"Visiteur converti en utilisateur: {user.email}", request)
+        
+        # Générer un nouveau token
+        refresh = RefreshToken.for_user(user)
+        
+        return Response({
+            "success": True,
+            "message": "🎉 Votre compte a été créé avec succès ! Profitez de votre essai gratuit de 30 jours.",
+            "refresh": str(refresh),
+            "access": str(refresh.access_token),
+            "user": UtilisateurSerializer(user).data,
+        }, status=status.HTTP_201_CREATED)
