@@ -15,3 +15,5 @@ urllib3
 certifi 
 google-auth
 Pillow
+cloudinary
+django-cloudinary-storage
