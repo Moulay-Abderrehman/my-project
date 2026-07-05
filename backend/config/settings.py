@@ -56,13 +56,6 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# Ajouter SecurityMiddleware uniquement si le fichier existe
-try:
-    from comptes import security_middleware
-    MIDDLEWARE.insert(0, 'comptes.security_middleware.SecurityMiddleware')
-except ImportError:
-    pass
-
 ROOT_URLCONF = 'config.urls'
 AUTH_USER_MODEL = 'comptes.Utilisateur'
 
@@ -156,9 +149,15 @@ MEDIA_ROOT = BASE_DIR / 'media'
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# ========== FIX IMPORTANT POUR WHITENOISE ==========
-# Désactiver le mode strict de WhiteNoise pour éviter les erreurs de fichiers manquants
-WHITENOISE_MANIFEST_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
+# ========== CONFIGURATION STORAGE - IMPORTANT ==========
+# Pour les fichiers statiques (CSS, JS, images de l'admin)
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
+
+# Pour les fichiers média (uploadés par les utilisateurs)
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+
+# Configuration WhiteNoise
+WHITENOISE_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 WHITENOISE_MANIFEST_STRICT = False
 
 # ========== DEFAULT AUTO FIELD ==========
@@ -202,10 +201,7 @@ FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 # ========== TRACKPAY ==========
 TRACKPAY_API_KEY = os.environ.get('TRACKPAY_API_KEY', '')
 TRACKPAY_WEBHOOK_SECRET = os.environ.get('TRACKPAY_WEBHOOK_SECRET', '')
-TRACKPAY_API_URL = os.environ.get(
-    'TRACKPAY_API_URL',
-    'https://config-ap28-1mhk.onrender.com/api/payments/create/'
-)
+TRACKPAY_API_URL = os.environ.get('TRACKPAY_API_URL', 'https://config-ap28-1mhk.onrender.com/api/payments/create/')
 
 TRACKPAY_PLAN_ID_STANDARD_MENSUEL = os.environ.get('TRACKPAY_PLAN_ID_STANDARD_MENSUEL', '')
 TRACKPAY_PLAN_ID_STANDARD_2_MOIS = os.environ.get('TRACKPAY_PLAN_ID_STANDARD_2_MOIS', '')
@@ -218,10 +214,7 @@ TRACKPAY_PLAN_ID_ENTREPRISE_3_MOIS = os.environ.get('TRACKPAY_PLAN_ID_ENTREPRISE
 TRACKPAY_PLAN_ID_ENTREPRISE_6_MOIS = os.environ.get('TRACKPAY_PLAN_ID_ENTREPRISE_6_MOIS', '')
 TRACKPAY_PLAN_ID_ENTREPRISE_ANNUEL = os.environ.get('TRACKPAY_PLAN_ID_ENTREPRISE_ANNUEL', '')
 
-TRACKPAY_CALLBACK_BASE_URL = os.environ.get(
-    'TRACKPAY_CALLBACK_BASE_URL',
-    'https://PLACEHOLDER-A-REMPLACER.exemple.mr'
-)
+TRACKPAY_CALLBACK_BASE_URL = os.environ.get('TRACKPAY_CALLBACK_BASE_URL', 'https://PLACEHOLDER-A-REMPLACER.exemple.mr')
 
 # ========== KYC / OCR / FACE CONFIG ==========
 OCR_API_URL = os.getenv("OCR_API_URL", '')
@@ -245,4 +238,5 @@ cloudinary.config(
     secure=True
 )
 
-DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+# IMPORTANT: DEFAULT_FILE_STORAGE est déjà défini plus haut
+# Ne pas le redéfinir ici
