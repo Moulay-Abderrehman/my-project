@@ -78,22 +78,20 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# ========== BASE DE DONNÉES - CORRECTION IMPORTANTE ==========
-# Récupérer l'URL de la base de données
+# ========== BASE DE DONNÉES - CORRECTION FINALE ==========
+import dj_database_url
+
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
 if DATABASE_URL:
-    # Pour Render - utiliser l'URL interne sans le suffixe -a.frankfurt-postgres.render.com
-    # Render fournit automatiquement la bonne URL via DATABASE_URL
     DATABASES = {
         'default': dj_database_url.config(
             default=DATABASE_URL,
             conn_max_age=600,
-            ssl_require=True  # IMPORTANT: Render PostgreSQL nécessite SSL
+            ssl_require=True  
         )
     }
 else:
-    # Configuration pour le développement local
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',

@@ -20,6 +20,11 @@ class UtilisateurManager(BaseUserManager):
         extra_fields.setdefault('role', 'entreprise')
         return self.create_user(telephone, password, **extra_fields)
 
+    def create_superuser_with_username(self, username, password=None, **extra_fields):
+        # Utiliser le username comme telephone si telephone n'est pas fourni
+        telephone = extra_fields.pop('telephone', username)
+        return self.create_superuser(telephone, password, **extra_fields)
+
     def create_google_user(self, email, google_id, nom, prenom, **extra_fields):
         """Crée un utilisateur via Google OAuth sans mot de passe."""
         # Générer un téléphone temporaire unique pour les comptes Google

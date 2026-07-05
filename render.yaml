@@ -1,4 +1,5 @@
 services:
+  # ── Backend Django ───────────────────────────────────────────────────────────
   - type: web
     name: financeapp-backend
     runtime: python
