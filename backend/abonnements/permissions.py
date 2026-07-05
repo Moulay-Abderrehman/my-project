@@ -91,13 +91,13 @@ class LimiteEssaiQuotidienne(BasePermission):
     """
     Limite les actions quotidiennes pour les utilisateurs en essai.
     Lecture toujours autorisée.
-    🆕 Gère maintenant le mode visiteur
+    Gère maintenant le mode visiteur
     """
     LIMITE_TRANSACTIONS = 5
     LIMITE_BUDGETS = 2
 
     def has_permission(self, request, view):
-        # ✅ Méthodes de lecture toujours autorisées
+        #  Méthodes de lecture toujours autorisées
         if request.method in ('GET', 'HEAD', 'OPTIONS'):
             return True
 
@@ -105,7 +105,7 @@ class LimiteEssaiQuotidienne(BasePermission):
         if not user or not user.is_authenticated:
             return False
 
-        # 🆕 Vérifier si l'utilisateur est en mode visiteur
+        #  Vérifier si l'utilisateur est en mode visiteur
         if hasattr(user, 'est_visiteur') and user.est_visiteur:
             raise PermissionDenied({
                 'error': 'mode_visiteur',
@@ -124,7 +124,7 @@ class LimiteEssaiQuotidienne(BasePermission):
                     'redirect_to': '/abonnement'
                 })
             
-            # 🆕 Vérifier si c'est un abonnement de démonstration
+            #  Vérifier si c'est un abonnement de démonstration
             if abo.est_demo_mode():
                 raise PermissionDenied({
                     'error': 'mode_visiteur',
@@ -203,7 +203,7 @@ class PeutCreerCategorie(BasePermission):
     """
     Permet la création de catégories uniquement pour les abonnés Standard ou Entreprise.
     Lecture autorisée pour tous.
-    🆕 Gère maintenant le mode visiteur
+    Gère maintenant le mode visiteur
     """
     message = "La création de catégories personnalisées nécessite un abonnement Standard ou Entreprise."
 
@@ -212,11 +212,11 @@ class PeutCreerCategorie(BasePermission):
         if not user or not user.is_authenticated:
             return False
         
-        # ✅ Lecture autorisée pour tous
+        # Lecture autorisée pour tous
         if request.method in ('GET', 'HEAD', 'OPTIONS'):
             return True
         
-        # 🆕 Vérifier si l'utilisateur est en mode visiteur
+        # Vérifier si l'utilisateur est en mode visiteur
         if hasattr(user, 'est_visiteur') and user.est_visiteur:
             raise PermissionDenied({
                 'error': 'mode_visiteur',
@@ -235,7 +235,7 @@ class PeutCreerCategorie(BasePermission):
                     'redirect_to': '/abonnement'
                 })
             
-            # 🆕 Vérifier si c'est un abonnement de démonstration
+            # Vérifier si c'est un abonnement de démonstration
             if abo.est_demo_mode():
                 raise PermissionDenied({
                     'error': 'mode_visiteur',
@@ -271,13 +271,13 @@ class PeutCreerCategorie(BasePermission):
             })
 
 
-# 🆕 NOUVELLE PERMISSION : Mode Visiteur / Lecture Seule
+# NOUVELLE PERMISSION : Mode Visiteur / Lecture Seule
 class EstVisiteur(BasePermission):
     """
     Permission spéciale pour le mode visiteur.
     Autorise la lecture seule sur toutes les ressources.
     """
-    message = "🔍 Mode Exploration : Visualisation uniquement."
+    message = " Mode Exploration : Visualisation uniquement."
 
     def has_permission(self, request, view):
         user = request.user
@@ -294,7 +294,7 @@ class EstVisiteur(BasePermission):
                 return True
             raise PermissionDenied({
                 'error': 'mode_visiteur',
-                'message': '🔍 Mode Exploration : Créez un compte pour effectuer cette action.',
+                'message': ' Mode Exploration : Créez un compte pour effectuer cette action.',
                 'redirect_to': '/inscription',
                 'visitor_mode': True
             })
@@ -307,19 +307,16 @@ class EstVisiteur(BasePermission):
                     return True
                 raise PermissionDenied({
                     'error': 'mode_visiteur',
-                    'message': '🔍 Mode Exploration : Créez un compte pour effectuer cette action.',
+                    'message': ' Mode Exploration : Créez un compte pour effectuer cette action.',
                     'redirect_to': '/inscription',
                     'visitor_mode': True
                 })
         except:
             pass
         
-        # Si l'utilisateur est authentifié normalement, laisser passer
-        # (les autres permissions s'en chargeront)
         return True
 
 
-# 🆕 NOUVELLE PERMISSION : Vérification du mode lecture seule
 class LectureSeuleUniquement(BasePermission):
     """
     Permission qui vérifie que l'utilisateur est en mode lecture seule.
@@ -355,7 +352,7 @@ class LectureSeuleUniquement(BasePermission):
         return False
 
 
-# 🆕 NOUVELLE PERMISSION : Accès complet (hors mode visiteur)
+# NOUVELLE PERMISSION : Accès complet (hors mode visiteur)
 class AccesComplet(BasePermission):
     """
     Permission qui vérifie que l'utilisateur a un accès complet.
@@ -371,7 +368,7 @@ class AccesComplet(BasePermission):
         if hasattr(user, 'est_visiteur') and user.est_visiteur:
             raise PermissionDenied({
                 'error': 'mode_visiteur',
-                'message': '🔍 Mode Exploration : Créez un compte pour effectuer cette action.',
+                'message': ' Mode Exploration : Créez un compte pour effectuer cette action.',
                 'redirect_to': '/inscription',
                 'visitor_mode': True
             })
@@ -384,7 +381,7 @@ class AccesComplet(BasePermission):
             if abo and abo.est_demo_mode():
                 raise PermissionDenied({
                     'error': 'mode_visiteur',
-                    'message': '🔍 Mode Exploration : Créez un compte pour effectuer cette action.',
+                    'message': ' Mode Exploration : Créez un compte pour effectuer cette action.',
                     'redirect_to': '/inscription',
                     'visitor_mode': True
                 })

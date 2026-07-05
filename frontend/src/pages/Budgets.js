@@ -1,4 +1,3 @@
-// frontend/src/pages/Budgets.js
 import React, { useEffect, useState, useCallback } from 'react';
 import api from '../api/axios';
 import { categorieService } from '../api/categorieService';
@@ -38,13 +37,11 @@ function incrementDailyCount(storageKey) {
       if (parsed.date === today) data = parsed;
     }
   } catch {
-    // stockage illisible : on repart de zéro sans bloquer l'utilisateur
   }
   data.count += 1;
   try {
     localStorage.setItem(storageKey, JSON.stringify(data));
   } catch {
-    // stockage indisponible : on ignore silencieusement
   }
   return data.count;
 }
@@ -466,7 +463,6 @@ function BudgetModal({ budget, categories, onClose, onSuccess, canCreate, onLimi
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // 🆕 Vérification du mode visiteur
     if (isVisitorMode) {
       if (onMessage) onMessage('visitor_mode');
       return;
@@ -719,14 +715,11 @@ export default function Budgets() {
   const [limitMessage, setLimitMessage] = useState(null);
   const [filterType, setFilterType] = useState('all');
 
-  // 🆕 Modal d'action bloquée
   const [actionBlockedModal, setActionBlockedModal] = useState({ isOpen: false, message: null });
 
-  // États pour l'abonnement
   const [abonnementExpire, setAbonnementExpire] = useState(false);
   const [abonnementCharge, setAbonnementCharge] = useState(true);
 
-  // État pour les messages de la page
   const [pageMessage, setPageMessage] = useState(null);
 
   const isVisitorMode = isVisitor; // 🆕
@@ -737,7 +730,6 @@ export default function Budgets() {
   const peutCreerBudget = () => getDailyCount(BUDGET_COUNT_KEY) < BUDGET_DAILY_LIMIT;
   const peutAjouterDepense = () => getDailyCount(DEPENSE_COUNT_KEY) < DEPENSE_DAILY_LIMIT;
 
-  // 🆕 Fonction pour ouvrir le modal d'action bloquée
   const ouvrirActionBloquee = (actionType = 'signup') => {
     const messages = {
       signup: {
@@ -775,7 +767,7 @@ export default function Budgets() {
     }
   }, [isVisitorMode]);
 
-  // 🆕 Données mock pour le mode visiteur
+  //  Données mock pour le mode visiteur
   const mockBudgets = [
     { id: 1, categorie_nom: 'Alimentation', montant_prevu: 100000, montant_depense: 45000, couleur: '#d55053', date_debut: '2026-06-01', date_fin: '2026-06-30', pourcentage_utilise: 45 },
     { id: 2, categorie_nom: 'Transport', montant_prevu: 50000, montant_depense: 20000, couleur: '#356267', date_debut: '2026-06-01', date_fin: '2026-06-30', pourcentage_utilise: 40 },
@@ -787,7 +779,7 @@ export default function Budgets() {
     setLoading(true);
     setPageMessage(null);
 
-    // 🆕 Si mode visiteur, utiliser les données mock
+    //  Si mode visiteur, utiliser les données mock
     if (isVisitorMode) {
       setBudgets(mockBudgets);
       setCategories([
@@ -799,7 +791,7 @@ export default function Budgets() {
       ]);
       setPageMessage({
         type: 'info',
-        text: '🔍 Mode Exploration - Visualisation des budgets de démonstration. Créez un compte pour vos vrais budgets.'
+        text: ' Mode Exploration - Visualisation des budgets de démonstration. Créez un compte pour vos vrais budgets.'
       });
       setLoading(false);
       return;
@@ -855,7 +847,6 @@ export default function Budgets() {
   }, [verifierAbonnement, chargerDonnees]);
 
   const handleModalMessage = (type, text) => {
-    // 🆕 Gestion du mode visiteur
     if (type === 'visitor_mode') {
       ouvrirActionBloquee('signup');
       return;
@@ -1478,7 +1469,7 @@ export default function Budgets() {
           })}
           {isVisitorMode && budgetsFiltres.length > 0 && (
             <div className="px-4 py-3 text-center bg-[#fdf6e8] rounded-2xl text-xs text-[#7a5410] font-medium border border-[#e8c27a] col-span-full">
-              🔍 Données de démonstration - Créez un compte pour gérer vos vrais budgets
+               Données de démonstration - Créez un compte pour gérer vos vrais budgets
             </div>
           )}
         </div>

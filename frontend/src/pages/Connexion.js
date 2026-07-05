@@ -4,6 +4,31 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
 
+// ─── Carrés décoratifs (mêmes tons que AuthChoix.js, dominante verte/mint,
+//     un peu plus visibles pour rester lisibles sur un fond clair) ──────────
+const CARRES_FOND = [
+  { top: '6%', left: '8%', size: 70, color: 'var(--mint)', rotate: 12 },
+  { top: '14%', left: '82%', size: 46, color: 'var(--mint)', rotate: -8 },
+  { top: '28%', left: '22%', size: 34, color: 'var(--mint)', rotate: 20 },
+  { top: '38%', left: '68%', size: 90, color: 'var(--mint)', rotate: -14 },
+  { top: '52%', left: '4%', size: 52, color: 'var(--mint)', rotate: 6 },
+  { top: '62%', left: '90%', size: 40, color: 'var(--mint)', rotate: -20 },
+  { top: '74%', left: '35%', size: 64, color: 'var(--mint)', rotate: 10 },
+  { top: '86%', left: '60%', size: 48, color: 'var(--mint)', rotate: -6 },
+  { top: '92%', left: '15%', size: 36, color: 'var(--mint)', rotate: 18 },
+  { top: '18%', left: '48%', size: 30, color: 'var(--mint)', rotate: -10 },
+  { top: '10%', left: '32%', size: 42, color: 'var(--mint)', rotate: 22 },
+  { top: '24%', left: '92%', size: 34, color: 'var(--mint)', rotate: -16 },
+  { top: '34%', left: '12%', size: 56, color: 'var(--mint)', rotate: 8 },
+  { top: '46%', left: '58%', size: 38, color: 'var(--mint)', rotate: -12 },
+  { top: '58%', left: '24%', size: 46, color: 'var(--mint)', rotate: 15 },
+  { top: '68%', left: '76%', size: 60, color: 'var(--mint)', rotate: -18 },
+  { top: '80%', left: '42%', size: 32, color: 'var(--mint)', rotate: 24 },
+  { top: '96%', left: '78%', size: 44, color: 'var(--mint)', rotate: -9 },
+  { top: '4%', left: '58%', size: 28, color: 'var(--mint)', rotate: 14 },
+  { top: '44%', left: '2%', size: 36, color: 'var(--mint)', rotate: -22 },
+];
+
 export default function Connexion() {
   const navigate = useNavigate();
   const { connexion, isVisitor, exitVisitorMode } = useAuth(); // 🆕
@@ -219,7 +244,7 @@ export default function Connexion() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: 'linear-gradient(135deg, #0c2e7c, #1e4db7, #3b82f6)',
+      background: '#ffffff',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -230,6 +255,15 @@ export default function Connexion() {
     }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&display=swap');
+        :root {
+          --navy: #003152;
+          --teal: #003333;
+          --mint: #02F5A1;
+          --black: #07191E;
+          --gold: #FDBF20;
+          --primary: #356267;
+          --border: #E4E9EC;
+        }
         .inp-cx:focus { border-color: #0c2e7c !important; box-shadow: 0 0 0 3px rgba(12,46,124,0.12) !important; }
         .inp-cx-error:focus { border-color: #ef4444 !important; box-shadow: 0 0 0 3px rgba(239,68,68,0.12) !important; }
         .btn-cx:hover:not(:disabled) { transform: translateY(-2px); background: #163e96 !important; box-shadow: 0 8px 28px rgba(12,46,124,0.5) !important; }
@@ -255,6 +289,40 @@ export default function Connexion() {
           animation: shake 0.4s ease;
         }
       `}</style>
+
+      {/* ── Fond décoratif : identique à AuthChoix.js (cercles + carrés verts) ── */}
+      <div className="pointer-events-none" style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 0 }}>
+        <div style={{
+          position: 'absolute', top: '-10rem', left: '-8rem', width: 560, height: 560,
+          borderRadius: '50%', background: 'var(--navy)', opacity: 0.08, filter: 'blur(90px)',
+        }} />
+        <div style={{
+          position: 'absolute', top: '33%', right: '-10rem', width: 620, height: 620,
+          borderRadius: '50%', background: 'var(--gold)', opacity: 0.07, filter: 'blur(90px)',
+        }} />
+        <div style={{
+          position: 'absolute', bottom: 0, left: '25%', width: 480, height: 480,
+          borderRadius: '50%', background: 'var(--primary)', opacity: 0.06, filter: 'blur(90px)',
+        }} />
+
+        {/* Carrés verts décoratifs, un peu plus visibles pour rester lisibles */}
+        {CARRES_FOND.map((c, i) => (
+          <div
+            key={i}
+            style={{
+              position: 'absolute',
+              top: c.top,
+              left: c.left,
+              width: c.size,
+              height: c.size,
+              background: c.color,
+              opacity: 0.09,
+              borderRadius: 10,
+              transform: `rotate(${c.rotate}deg)`,
+            }}
+          />
+        ))}
+      </div>
 
       {/* ── Message personnalisé ──────────────────────────────────────────── */}
       {showMessage && (
@@ -305,29 +373,14 @@ export default function Connexion() {
         </div>
       )}
 
-      {/* ── Fond décoratif ──────────────────────────────────────────────── */}
-      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
-        <div style={{
-          position: 'absolute', width: 600, height: 600,
-          borderRadius: '50%', top: -200, left: '50%', transform: 'translateX(-50%)',
-          background: 'radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%)',
-          filter: 'blur(40px)',
-        }} />
-        <div style={{
-          position: 'absolute', inset: 0,
-          backgroundImage: `linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-                            linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)`,
-          backgroundSize: '44px 44px',
-        }} />
-      </div>
-
       {/* ── Card BLANC ────────────────────────────────────────────────────── */}
       <div style={{
         width: '100%', maxWidth: 420, position: 'relative', zIndex: 1,
         background: 'rgba(255,255,255,0.98)',
         borderRadius: 24,
         padding: '40px 36px',
-        boxShadow: '0 24px 80px rgba(0,0,0,0.25)',
+        border: '1px solid var(--border)',
+        boxShadow: '0 24px 80px rgba(0,49,82,0.14)',
       }}>
 
         {/* Retour */}

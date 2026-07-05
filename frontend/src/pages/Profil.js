@@ -1213,7 +1213,7 @@ export default function Profil() {
 
                 {!successAbo && etapePaiement !== 'retour_trackpay' && !demandeEnCours && (
                   <>
-                    {dernierRefus && (
+                    {/*dernierRefus && (
                       <div className="prof-fade" style={{ ...card, background: T.dangerSoft, border: `1px solid ${T.dangerBorder}`, padding: isMobile ? '12px 14px' : '16px 20px', marginBottom: 16 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                           <div style={{ width: 32, height: 32, borderRadius: 9, background: 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1223,7 +1223,7 @@ export default function Profil() {
                         </div>
                         <p style={{ margin: 0, fontSize: isMobile ? 11 : 12, color: '#b3393c' }}>{dernierRefus.raison_refus || "Aucune raison n'a été fournie."}</p>
                       </div>
-                    )}
+                    )*/}
 
                     {etapePaiement !== 'renouveler' && (
                       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
@@ -1310,7 +1310,7 @@ export default function Profil() {
                                 Vous avez un abonnement <strong style={{ textTransform: 'capitalize' }}>{planNom}</strong> actif avec <strong>{joursRest} jour(s)</strong> restant(s).
                                 {joursRest > 5 ? (
                                   <span style={{ display: 'block', marginTop: 4, color: T.navy }}>
-                                    Le changement vers un autre plan n'est possible que lorsqu'il reste 5 jours ou moins. Vous pouvez cependant <strong>renouveler votre abonnement actuel</strong> pour prolonger sa durée.
+                                    Le changement vers un autre plan n'est possible que lorsqu'il reste 5 jours ou moins. Vous pouvez cependant <strong>renouveler votre abonnement actuel</strong> .
                                   </span>
                                 ) : (
                                   <span style={{ display: 'block', marginTop: 4, color: T.navy }}>Vous pouvez changer de plan ou renouveler votre abonnement.</span>
@@ -1351,7 +1351,7 @@ export default function Profil() {
                             </div>
                             {aboActif && abonnement && planNom !== 'essai' && (
                               <p style={{ marginTop: 8, fontSize: isMobile ? 10 : 11, color: T.textLight, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <Info size={12} /> Le changement de plan est disponible lorsque votre abonnement arrive à échéance (5 jours ou moins restants).
+                                <Info size={12} /> Si vous choisissez de payer via TrackPay, veuillez noter que seuls les abonnements aux formules mensuelle et annuelle sont disponibles pour ce mode de paiement.
                               </p>
                             )}
                           </div>
@@ -1398,7 +1398,7 @@ export default function Profil() {
                             </div>
                           )}
 
-                          {aboActif && abonnement && planNom !== 'essai' && abonnement.type_utilisateur !== typeUser && joursRest > 5 && (
+                          {aboActif && abonnement && planNom !== 'essai' && abonnement.type_utilisateur !== typeUser && joursRest > 30 && (
                             <div style={{ background: 'rgba(194,242,242,0.4)', border: '1px solid rgba(53,98,103,0.2)', borderRadius: 12, padding: isMobile ? '10px 14px' : '12px 18px', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                               <AlertCircle size={16} color={T.primary} style={{ marginTop: 1, flexShrink: 0 }} />
                               <div style={{ fontSize: isMobile ? 11 : 12, color: T.primary, fontWeight: 500 }}>

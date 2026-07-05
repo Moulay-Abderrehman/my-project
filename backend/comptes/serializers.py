@@ -1,4 +1,3 @@
-# backend/comptes/serializers.py
 import re
 import secrets
 from django.utils import timezone
@@ -120,7 +119,7 @@ class UtilisateurSerializer(serializers.ModelSerializer):
             'id', 'nom', 'prenom', 'telephone', 'email', 'email_verifie',
             'photo_profil', 'date_inscription', 'initiales', 'supprimer_photo',
             'role', 'plan', 'limite_categories', 'est_compte_google',
-            # 🆕 Nouveaux champs
+            #  Nouveaux champs
             'est_visiteur', 'est_lecture_seule', 'nom_affichage', 'avatar_text',
             'session_valide', 'session_visiteur_expire',
             # ── Champs KYC ajoutés ───────────────────────────────────────
@@ -156,7 +155,7 @@ class UtilisateurSerializer(serializers.ModelSerializer):
     def get_limite_categories(self, obj):
         return obj.limite_categories()
     
-    # 🆕 Nouvelles méthodes
+    # Nouvelles méthodes
     def get_est_lecture_seule(self, obj):
         """Indique si l'utilisateur est en lecture seule"""
         return obj.est_lecture_seule
@@ -251,7 +250,7 @@ class ReinitialisationMotDePasseSerializer(serializers.Serializer):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 🆕 NOUVEAUX SÉRIALISEURS POUR LE MODE VISITEUR
+# NOUVEAUX SÉRIALISEURS POUR LE MODE VISITEUR
 # ══════════════════════════════════════════════════════════════════════════════
 
 # ─── INITIATION MODE VISITEUR ──────────────────────────────────────────────

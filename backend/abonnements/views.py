@@ -1,4 +1,3 @@
-# backend/abonnements/views.py
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -35,26 +34,16 @@ TARIFS = {
     },
 }
 
-# ── Définitions de plans par défaut, réutilisées par SouscriptionView,
-# PaiementAdmin.accepter_paiements et activer_abonnement() ──────────────────
 PLANS_DEFAULTS = {
     'standard':   {'prix_mensuel': 500,  'prix_annuel': 5000,  'nb_categories_max': 50,  'description': 'Plan Standard'},
     'entreprise': {'prix_mensuel': 2000, 'prix_annuel': 20000, 'nb_categories_max': 200, 'description': 'Plan Entreprise'},
-    # 🆕 Plan de démonstration
     'demo':       {'prix_mensuel': 0,    'prix_annuel': 0,     'nb_categories_max': 0,   'description': 'Mode Exploration - Visualisation uniquement'},
 }
 
-# Méthodes de paiement manuelles (capture d'écran + validation admin)
 METHODES_MANUELLES = ('rssbank', 'sedad', 'bankily', 'masrivi')
-
-# NOUVEAU — types d'abonnement (durées) valides pour une demande de paiement.
 TYPES_ABONNEMENT_VALIDES = ('mensuel', '2_mois', '3_mois', '6_mois', 'annuel')
-
-# NOUVEAU — nombre de jours restants en-dessous duquel un changement de plan
 SEUIL_JOURS_CHANGEMENT_PLAN = 5
-
-# NOUVEAU — nombre maximum de renouvellements autorisés pendant une même
-MAX_RENOUVELLEMENTS = 3
+MAX_RENOUVELLEMENTS = 5
 
 
 def _get_or_create_plan(nom_plan: str, defaults: dict) -> Plan:
@@ -78,11 +67,9 @@ def verifier_et_mettre_a_jour_abonnement_expire(user):
     try:
         abo = user.abonnement
         if abo and abo.statut == 'actif' and abo.date_fin < timezone.now():
-            # Marquer l'abonnement actuel comme expiré
             abo.statut = 'expire'
             abo.save(update_fields=['statut'])
-            
-            # Récupérer l'abonnement essai existant (créé à l'inscription)
+
             abo_essai = get_abonnement_essai_utilisateur(user)
             
             if abo_essai:
@@ -117,20 +104,15 @@ def verifier_et_mettre_a_jour_abonnement_expire(user):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# NOUVEAU — Règles de renouvellement / changement de plan.
+# Règles de renouvellement / changement de plan.
 # ══════════════════════════════════════════════════════════════════════════════
 def verifier_regles_renouvellement(user, nouveau_type_utilisateur: str, nouvelle_duree: str) -> str:
-    """
-    Vérifie les règles de renouvellement / changement de plan pour `user`.
-    Retourne le mode à appliquer : 'nouveau', 'prolongation' ou 'changement'.
-    Lève ValueError(message) si la demande doit être refusée.
-    """
+
     try:
         abo = user.abonnement
     except Abonnement.DoesNotExist:
         abo = None
 
-    # 🆕 Si l'utilisateur est en mode visiteur, on autorise la souscription normale
     if abo and abo.est_demo_mode():
         return 'nouveau'
 
@@ -145,10 +127,9 @@ def verifier_regles_renouvellement(user, nouveau_type_utilisateur: str, nouvelle
     else:
         if jours_restants > SEUIL_JOURS_CHANGEMENT_PLAN:
             raise ValueError(
-                f"Vous avez déjà un abonnement {ancien_type_utilisateur} actif avec "
-                f"{jours_restants} jour(s) restant(s). Le changement vers "
-                f"{nouveau_type_utilisateur} n'est possible que lorsqu'il reste "
-                f"{SEUIL_JOURS_CHANGEMENT_PLAN} jour(s) ou moins."
+                f"Vous ne pouvez plus renouveler votre abonnement, car "
+                f"limite de renouvellement est terminé. "
+                f"Attendez la fin de votre abonnement."
             )
         mode = 'changement'
 
@@ -163,11 +144,7 @@ def verifier_regles_renouvellement(user, nouveau_type_utilisateur: str, nouvelle
 
 
 def activer_abonnement(user, type_utilisateur: str, type_abonnement: str, montant, mode: str = None) -> Abonnement:
-    """
-    Active (crée ou met à jour) l'Abonnement de `user` pour le plan
-    `type_utilisateur` / `type_abonnement`, met à jour son rôle, et envoie
-    la notification ABONNEMENT_ACTIVE. Retourne l'Abonnement mis à jour.
-    """
+
     maintenant = timezone.now()
     duree_jours = Abonnement.DUREE_JOURS_MAP.get(type_abonnement, 30)
 
@@ -176,7 +153,7 @@ def activer_abonnement(user, type_utilisateur: str, type_abonnement: str, montan
     except Abonnement.DoesNotExist:
         abo_existant = None
 
-    # 🆕 Si l'utilisateur est en mode visiteur, on crée un nouvel abonnement normal
+    # Si l'utilisateur est en mode visiteur, on crée un nouvel abonnement normal
     if abo_existant and abo_existant.est_demo_mode():
         abo_existant = None
 
@@ -207,7 +184,7 @@ def activer_abonnement(user, type_utilisateur: str, type_abonnement: str, montan
             'statut':              'actif',
             'montant':             montant,
             'nb_renouvellements':  nouveau_compteur,
-            # 🆕 S'assurer que le mode démo est désactivé
+            # S'assurer que le mode démo est désactivé
             'est_demo':            False,
             'date_expiration_demo': None,
         }
@@ -244,7 +221,7 @@ def activer_abonnement(user, type_utilisateur: str, type_abonnement: str, montan
     return abo
 
 
-# 🆕 NOUVELLE FONCTION : Créer un abonnement de démonstration
+# NOUVELLE FONCTION : Créer un abonnement de démonstration
 def creer_abonnement_demo(user) -> Abonnement:
     """
     Crée un abonnement de démonstration pour un utilisateur visiteur
@@ -285,7 +262,7 @@ class PlanListView(generics.ListAPIView):
     pagination_class   = None
 
 
-# 🆕 NOUVELLE VUE : Liste des plans pour les visiteurs
+# NOUVELLE VUE : Liste des plans pour les visiteurs
 class PlanPublicListView(generics.ListAPIView):
     """
     Liste publique des plans (pour le mode visiteur)
@@ -326,10 +303,8 @@ class DemanderCodeSouscriptionView(APIView):
 
         user = request.user
         
-        # 🆕 Vérifier si l'utilisateur est en mode visiteur
+        # Vérifier si l'utilisateur est en mode visiteur
         if hasattr(user, 'est_visiteur') and user.est_visiteur:
-            # Pour le mode visiteur, l'email n'est pas encore associé à un compte
-            # On va quand même envoyer le code à l'email fourni
             pass
         else:
             # Vérifier que l'email correspond au compte
@@ -377,8 +352,6 @@ class SouscriptionView(APIView):
         if not all([email, code, type_abonnement, type_utilisateur]):
             return Response({'error': 'Tous les champs sont obligatoires.'}, status=400)
 
-        # NOUVEAU — validation des durées étendues, cohérente avec
-        # DemanderCodeSouscriptionView.
         if type_abonnement not in TYPES_ABONNEMENT_VALIDES:
             return Response({'error': "Type d'abonnement invalide (mensuel, 2_mois, 3_mois, 6_mois ou annuel)."}, status=400)
         if type_utilisateur not in ('standard', 'entreprise'):
@@ -391,7 +364,7 @@ class SouscriptionView(APIView):
 
         user = request.user
 
-        # 🆕 Si l'utilisateur est en mode visiteur, on le convertit en utilisateur réel
+        # Si l'utilisateur est en mode visiteur, on le convertit en utilisateur réel
         if hasattr(user, 'est_visiteur') and user.est_visiteur:
             # Mettre à jour l'email de l'utilisateur
             user.email = email
@@ -402,8 +375,7 @@ class SouscriptionView(APIView):
                 user.est_visiteur = False
                 user.save(update_fields=['est_visiteur'])
 
-        # NOUVEAU — vérification des règles de renouvellement / changement de
-        # plan avant toute activation.
+        # vérification des règles de renouvellement / changement de
         try:
             mode = verifier_regles_renouvellement(user, type_utilisateur, type_abonnement)
         except ValueError as exc:
@@ -479,7 +451,7 @@ class AbonnementStatutView(APIView):
     def get(self, request):
         user = request.user
         
-        # 🆕 Vérifier si l'utilisateur est en mode visiteur
+        # Vérifier si l'utilisateur est en mode visiteur
         if hasattr(user, 'est_visiteur') and user.est_visiteur:
             return Response({
                 'statut': 'visiteur',
@@ -506,7 +478,7 @@ class AbonnementStatutView(APIView):
                     'redirect_to': '/abonnement'
                 })
             
-            # 🆕 Vérifier si c'est un abonnement de démonstration
+            # Vérifier si c'est un abonnement de démonstration
             if abonnement.est_demo_mode():
                 return Response({
                     'statut': 'visiteur',

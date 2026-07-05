@@ -26,8 +26,6 @@ NOVA_API_KEY  = "nova_key_3aa656e2bac2ea102ec2c56c196bcf6d"
 FACE_ENROLL_URL = f"{NOVA_API_BASE}/face/enroll"   # POST /face/enroll
 FACE_VERIFY_URL = f"{NOVA_API_BASE}/face/verify"   # POST /face/verify
 
-# ── Seuil de similarité (Nova retourne 0.0–1.0, on compare direct) ────────────
-# Nova utilise son propre seuil interne (0.75), on se fie à decision: "allow"
 FACE_SIMILARITY_SEUIL = 40.0  # pour affichage seulement
 
 
@@ -44,7 +42,7 @@ def nova_enroll(user_id: str, image_bytes: bytes, filename: str = "face.jpg") ->
         if not image_bytes or len(image_bytes) < 100:
             raise Exception("L'image est trop petite ou vide")
         
-        # ✅ Utiliser le même format que curl qui a fonctionné
+        #  Utiliser le même format que curl qui a fonctionné
         files = {
             'file': (filename, image_bytes, 'image/jpeg')
         }
@@ -87,11 +85,11 @@ def nova_verify(user_id: str, selfie_bytes: bytes, filename: str = "selfie.jpg")
     Vérifie un selfie contre le visage enrôlé.
     """
     try:
-        # ✅ Vérifier que l'image n'est pas vide
+        # Vérifier que l'image n'est pas vide
         if not selfie_bytes or len(selfie_bytes) < 100:
             raise Exception("L'image du selfie est trop petite ou vide")
         
-        # ✅ Formater correctement l'image
+        #  Formater correctement l'image
         from PIL import Image
         import io
         
@@ -231,13 +229,13 @@ class KYCOCRExtractView(APIView):
     def get_confidence_message(self, score):
         """Retourne un message adapté au score de confiance"""
         if score >= 85:
-            return "✅ Document parfaitement reconnu"
+            return " Document parfaitement reconnu"
         elif score >= 60:
-            return "⚠️ Document correctement reconnu, vérifiez les données"
+            return " Document correctement reconnu, vérifiez les données"
         elif score >= self.CONFIDENCE_MIN:
-            return "⚠️ Lecture partielle, veuillez vérifier et corriger"
+            return " Lecture partielle, veuillez vérifier et corriger"
         else:
-            return "❌ Document illisible, veuillez prendre une meilleure photo"
+            return " Document illisible, veuillez prendre une meilleure photo"
 
     def post(self, request):
         # Récupérer l'image
@@ -313,7 +311,7 @@ class KYCOCRExtractView(APIView):
         print(f"[Nova OCR] Visage extrait: {'OUI' if face_b64 else 'NON'}")
         
         # ═══════════════════════════════════════════════════════════════════
-        # ❌ SI CONFIDENCE ≤ 25% → BLOQUER ET DEMANDER UNE MEILLEURE PHOTO
+        #  SI CONFIDENCE ≤ 25% → BLOQUER ET DEMANDER UNE MEILLEURE PHOTO
         # ═══════════════════════════════════════════════════════════════════
         if confidence_score <= self.CONFIDENCE_MIN:
             return Response({
@@ -321,13 +319,13 @@ class KYCOCRExtractView(APIView):
                 'confidence_score': confidence_score,
                 'confidence_message': confidence_message,
                 'error': 'DOCUMENT_ILLISIBLE',
-                'message': '❌ La qualité de l\'image est insuffisante. Veuillez prendre une photo plus claire et mieux éclairée.',
+                'message': ' La qualité de l\'image est insuffisante. Veuillez prendre une photo plus claire et mieux éclairée.',
                 'suggestion': 'Assurez-vous que le document est bien cadré, sans reflets ni ombres, et que le texte est net.',
                 'can_retry': True
             }, status=422)
         
         # ═══════════════════════════════════════════════════════════════════
-        # ✅ SI CONFIDENCE > 25% → CONTINUER NORMALEMENT
+        #  SI CONFIDENCE > 25% → CONTINUER NORMALEMENT
         # ═══════════════════════════════════════════════════════════════════
         return Response({
             'status': 'success',
@@ -424,16 +422,7 @@ class KYCConfirmDataView(APIView):
 # VUE 3 : Vérification Face ID (selfie)
 # ══════════════════════════════════════════════════════════════════════════════
 class KYCFaceVerifyView(APIView):
-    """
-    Reçoit le selfie de l'utilisateur.
-    
-    Logique complète:
-    1. Si Nova n'a pas le visage → l'enrôler (/face/enroll)
-    2. Si Nova a déjà le visage (User already enrolled) → continuer directement
-    3. Vérifier le selfie contre le visage enrôlé (/face/verify)
-    4. Si decision == "allow" → activer le compte
-    5. Sinon → rejeter et demander un nouveau selfie
-    """
+  
     permission_classes = [AllowAny]
 
     def extract_and_enhance_face_from_image(self, document_image_bytes, face_bbox=None):
@@ -580,9 +569,9 @@ class KYCFaceVerifyView(APIView):
             error_msg = str(e)
             print(f"[KYC] Erreur Nova enroll: {error_msg}")
             
-            # ✅ NOUVEAU: Vérifier si l'utilisateur est déjà enrôlé
+            # NOUVEAU: Vérifier si l'utilisateur est déjà enrôlé
             if "User already enrolled" in error_msg or "already enrolled" in error_msg.lower():
-                print(f"[KYC] ✅ Utilisateur {user_id} déjà enrôlé dans Nova - continuer")
+                print(f"[KYC] Utilisateur {user_id} déjà enrôlé dans Nova - continuer")
                 already_enrolled = True
                 enroll_success = True  # On considère que c'est un succès
             elif "failed to extract features" in error_msg.lower():
@@ -693,7 +682,7 @@ class KYCFaceVerifyView(APIView):
                 'similarity_score': similarity_pct,
                 'liveness_score':   round(liveness * 100, 1),
                 'nova_decision':    nova_decision,
-                'message':          '✅ Identité vérifiée ! Votre compte est maintenant actif.',
+                'message':          'Identité vérifiée ! Votre compte est maintenant actif.',
                 'access_token':     str(refresh.access_token),
                 'refresh_token':    str(refresh),
                 'redirect_to':      '/dashboard',
@@ -722,7 +711,7 @@ class KYCFaceVerifyView(APIView):
                 'liveness_score':   round(liveness * 100, 1),
                 'nova_decision':    nova_decision,
                 'risk_flags':       risk_flags,
-                'message':          f'❌ {reason}',
+                'message':          f' {reason}',
                 'suggestion':       'Prenez un selfie bien éclairé, de face, sans lunettes ni masque.',
                 'can_retry':        True,
             }, status=400)

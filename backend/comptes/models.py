@@ -1,4 +1,3 @@
-# backend/comptes/models.py
 import re
 import uuid
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager

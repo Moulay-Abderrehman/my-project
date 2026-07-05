@@ -1,18 +1,3 @@
-// frontend/src/pages/AuthChoix.js
-//
-// ─────────────────────────────────────────────────────────────────────────────
-// LANDING PAGE FINANCEAPP — Page d'accueil / choix d'authentification
-// ─────────────────────────────────────────────────────────────────────────────
-// Version redesignée : nouvelle palette de couleurs, nouveau logo, aperçu de
-// tableau de bord repensé, sélecteur de langue supprimé, section "Comment ça
-// marche" renforcée, nouveau message de clôture, liens du footer fonctionnels
-// et bloc "Entreprise" supprimé du footer.
-//
-// TOUTE la logique métier (hooks, appels API, navigation, mode visiteur, SSO,
-// Google, messages personnalisés) est conservée à l'identique — seule la
-// couche visuelle change.
-// ─────────────────────────────────────────────────────────────────────────────
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -62,10 +47,6 @@ import {
 // ─── Google OAuth helper (inchangé) ──────────────────────────────────────────
 const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
 
-// ─── Logo FinanceApp — identique dans la navbar et dans le footer ────────────
-// Le pictogramme (icône + dégradé + effet de brillance) reste strictement
-// inchangé. Seule la couleur du texte s'adapte pour rester très lisible que
-// l'on soit en thème clair ou en mode sombre (fond noir).
 function LogoMark({ dark = false, small = false }) {
   const size = small ? 32 : 38;
   return (
@@ -1206,9 +1187,9 @@ export default function AuthChoix() {
             {
               titre: 'Ressources',
               liens: [
-                { label: "Centre d'aide", id: 'contact' },
-                { label: 'Documentation', id: 'contact' },
-                { label: 'Statut du service', id: 'contact' },
+                { label: "financeapp_service@gmail.com", id: 'contact' },
+                { label: '+222 26320097', id: 'contact' },
+                { label: 'Plateforme mauritanienne', id: 'contact' },
               ],
             },
           ].map((col) => (
@@ -1239,6 +1220,19 @@ export default function AuthChoix() {
           </div>
         </div>
       </footer>
+
+      {/* ── Signature — style d'écriture différent (police cursive) ── */}
+      <div className={`relative z-10 text-center py-5 border-t ${darkMode ? 'border-white/10' : 'border-[var(--border)]'}`}>
+        <span
+          style={{
+            fontFamily: "'Brush Script MT', 'Segoe Script', cursive",
+            fontSize: 15,
+            color: darkMode ? 'rgba(255,255,255,0.55)' : 'var(--textSecondary)',
+          }}
+        >
+          Développé par Moulay Abderrahman 
+        </span>
+      </div>
 
       {/* ═══════════════════════════════════════════════════════════════════
           MODALE D'AUTHENTIFICATION

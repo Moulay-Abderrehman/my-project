@@ -11,7 +11,7 @@ class Plan(models.Model):
         ('essai',      'Essai Gratuit'),
         ('standard',   'Standard'),
         ('entreprise', 'Entreprise'),
-        ('demo',       'Démo / Visiteur'),  # 🆕 Nouveau plan pour le mode visiteur
+        ('demo',       'Démo / Visiteur'),  
     ]
     id                = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     nom               = models.CharField(max_length=20, choices=NOM_CHOICES, unique=True)
@@ -20,7 +20,6 @@ class Plan(models.Model):
     nb_categories_max = models.IntegerField(default=2)   # -1 = illimité
     description       = models.TextField(blank=True)
     
-    # 🆕 Nouveaux champs pour le mode visiteur
     est_demo          = models.BooleanField(default=False, help_text="Plan réservé à la démonstration")
     ordre_affichage   = models.PositiveIntegerField(default=0, help_text="Ordre d'affichage dans l'interface")
 
@@ -67,13 +66,13 @@ class Abonnement(models.Model):
         ('3_mois',  '3 Mois'),
         ('6_mois',  '6 Mois'),
         ('annuel',  'Annuel'),
-        ('demo',    'Démo / Visiteur'),  # 🆕 Nouveau type pour la démo
+        ('demo',    'Démo / Visiteur'),  
     ]
     STATUT_CHOICES = [
         ('actif',      'Actif'),
         ('expire',     'Expiré'),
         ('en_attente', 'En attente'),
-        ('demo',       'Démo / Visiteur'),  # 🆕 Statut pour le mode visiteur
+        ('demo',       'Démo / Visiteur'), 
     ]
 
 
@@ -84,7 +83,7 @@ class Abonnement(models.Model):
         '3_mois':  90,
         '6_mois':  180,
         'annuel':  365,
-        'demo':    0,  # 🆕 La démo n'a pas de durée (permanente)
+        'demo':    0,  
     }
 
     id          = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -101,7 +100,7 @@ class Abonnement(models.Model):
     montant     = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     nb_renouvellements = models.PositiveIntegerField(default=0)
     
-    # 🆕 Nouveaux champs pour le mode visiteur
+    # Nouveaux champs pour le mode visiteur
     est_demo    = models.BooleanField(default=False, help_text="Indique si c'est un abonnement de démonstration")
     date_expiration_demo = models.DateTimeField(null=True, blank=True, help_text="Date d'expiration de la démo (si limitée dans le temps)")
 

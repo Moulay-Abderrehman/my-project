@@ -55,8 +55,8 @@ const injectAssets = () => {
     style.textContent = `
       @keyframes kycFadeUp { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:translateY(0); } }
       @keyframes kycPulse { 0%,100%{box-shadow:0 0 0 0 rgba(53,98,103,.18)} 50%{box-shadow:0 0 0 14px rgba(53,98,103,0)} }
-      @keyframes kycBannerSlide { from { opacity:0; transform:translateY(-16px); } to { opacity:1; transform:translateY(0); } }
-      @keyframes kycBannerFade { 0%,80%{opacity:1;transform:translateY(0);} 100%{opacity:0;transform:translateY(-16px);} }
+      @keyframes kycBannerSlide { from { opacity:0; transform:translate(-50%,-16px); } to { opacity:1; transform:translate(-50%,0); } }
+      @keyframes kycBannerFade { 0%,80%{opacity:1;transform:translate(-50%,0);} 100%{opacity:0;transform:translate(-50%,-16px);} }
       .kyc-card { animation: kycFadeUp .35s cubic-bezier(.16,1,.3,1) both; font-family: 'Sora', sans-serif; }
       .kyc-pulse { animation: kycPulse 2.5s ease infinite; }
       .kyc-banner-slide { animation: kycBannerSlide .35s ease; }
@@ -66,9 +66,35 @@ const injectAssets = () => {
   }
 };
 
+// ─── Carrés décoratifs (mêmes tons que AuthChoix.js, dominante verte/mint,
+//     un peu plus visibles pour rester lisibles sur un fond clair) ──────────
+const CARRES_FOND = [
+  { top: '6%', left: '8%', size: 70, rotate: 12 },
+  { top: '14%', left: '82%', size: 46, rotate: -8 },
+  { top: '28%', left: '22%', size: 34, rotate: 20 },
+  { top: '38%', left: '68%', size: 90, rotate: -14 },
+  { top: '52%', left: '4%', size: 52, rotate: 6 },
+  { top: '62%', left: '90%', size: 40, rotate: -20 },
+  { top: '74%', left: '35%', size: 64, rotate: 10 },
+  { top: '86%', left: '60%', size: 48, rotate: -6 },
+  { top: '92%', left: '15%', size: 36, rotate: 18 },
+  { top: '18%', left: '48%', size: 30, rotate: -10 },
+  { top: '10%', left: '32%', size: 42, rotate: 22 },
+  { top: '24%', left: '92%', size: 34, rotate: -16 },
+  { top: '34%', left: '12%', size: 56, rotate: 8 },
+  { top: '46%', left: '58%', size: 38, rotate: -12 },
+  { top: '58%', left: '24%', size: 46, rotate: 15 },
+  { top: '68%', left: '76%', size: 60, rotate: -18 },
+  { top: '80%', left: '42%', size: 32, rotate: 24 },
+  { top: '96%', left: '78%', size: 44, rotate: -9 },
+  { top: '4%', left: '58%', size: 28, rotate: 14 },
+  { top: '44%', left: '2%', size: 36, rotate: -22 },
+];
+
 // ─── Classes Tailwind partagées (thème FinanceApp) ───────────────────────────
-const pageWrap = 'min-h-screen flex items-center justify-center px-4 py-8 relative overflow-hidden bg-[linear-gradient(135deg,#0c2e7c,#1e4db7,#3b82f6)]';
-const cardBase = 'kyc-card relative w-full bg-white border border-[rgba(16,33,75,0.08)] rounded-2xl p-6 sm:p-8 shadow-[0_24px_70px_rgba(10,20,60,0.28)] overflow-hidden';
+// Fond de page harmonisé avec AuthChoix.js : blanc + carrés verts (au lieu du dégradé bleu)
+const pageWrap = 'min-h-screen flex items-center justify-center px-4 py-8 relative overflow-hidden bg-white';
+const cardBase = 'kyc-card relative w-full bg-white border border-[rgba(16,33,75,0.08)] rounded-2xl p-6 sm:p-8 shadow-[0_24px_70px_rgba(0,49,82,0.16)] overflow-hidden z-10';
 const cardLine = 'absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-[#356267] to-[#4ea674]';
 const btnPrimary = 'w-full min-h-[48px] px-5 py-3.5 bg-[#356267] text-white rounded-[10px] font-bold text-[15px] flex items-center justify-center gap-2 shadow-[0_4px_16px_rgba(53,98,103,0.3)] transition-all hover:enabled:-translate-y-0.5 hover:enabled:bg-[#2a4f53] disabled:opacity-60 disabled:cursor-not-allowed';
 const btnSecondary = 'w-full min-h-[46px] px-5 py-3 bg-transparent text-[#356267]/75 border border-[rgba(16,33,75,0.08)] rounded-[10px] font-semibold text-sm flex items-center justify-center gap-2 transition-colors hover:bg-[#f8fafc]';
@@ -78,7 +104,34 @@ const infoBox = 'bg-[#f8fafc] rounded-[10px] border border-[rgba(16,33,75,0.08)]
 const infoRow = 'flex justify-between items-center gap-3 px-4 py-3';
 const progressTrack = 'bg-[rgba(16,33,75,0.08)] rounded h-1.5 overflow-hidden mt-1.5';
 
-// ─── Banner ────────────────────────────────────────────────────────────────
+// ─── Fond décoratif de page : cercles dégradés flous + carrés verts ─────────
+function PageGlow() {
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+      <div className="absolute -top-40 -left-32 h-[560px] w-[560px] rounded-full bg-[#003152] opacity-[0.08] blur-3xl" />
+      <div className="absolute top-1/3 -right-40 h-[620px] w-[620px] rounded-full bg-[#FDBF20] opacity-[0.07] blur-3xl" />
+      <div className="absolute bottom-0 left-1/4 h-[480px] w-[480px] rounded-full bg-[#356267] opacity-[0.06] blur-3xl" />
+
+      {CARRES_FOND.map((c, i) => (
+        <div
+          key={i}
+          className="absolute rounded-lg"
+          style={{
+            top: c.top,
+            left: c.left,
+            width: c.size,
+            height: c.size,
+            background: '#02F5A1',
+            opacity: 0.09,
+            transform: `rotate(${c.rotate}deg)`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ─── Banner — pop-up professionnel avec badge icône et bouton X ─────────────
 function Banner({ type = 'info', message, onDismiss, autoDismiss = false }) {
   const [visible, setVisible] = useState(true);
 
@@ -95,32 +148,45 @@ function Banner({ type = 'info', message, onDismiss, autoDismiss = false }) {
   if (!visible || !message) return null;
 
   const themes = {
-    success: { bg: '#e9f8e7', border: 'rgba(78,166,116,0.3)', color: '#459071', Icon: CheckCircle2 },
-    error:   { bg: 'rgba(213,80,83,0.08)', border: 'rgba(213,80,83,0.25)', color: '#d55053', Icon: AlertCircle },
-    warning: { bg: '#fdf3e3', border: 'rgba(194,135,46,0.3)', color: '#b4791f', Icon: AlertTriangle },
-    info:    { bg: '#c2f2f2', border: 'rgba(53,98,103,0.25)', color: '#356267', Icon: Info },
+    success: { border: '#bbf0cf', badgeBg: '#e9f8e7', iconColor: '#2f9e5b', title: 'Succès',    Icon: CheckCircle2 },
+    error:   { border: '#fecaca', badgeBg: '#fee2e2', iconColor: '#d55053', title: 'Erreur',     Icon: AlertCircle },
+    warning: { border: '#fde3b8', badgeBg: '#fef3e2', iconColor: '#c2872e', title: 'Attention',  Icon: AlertTriangle },
+    info:    { border: '#c2e0e2', badgeBg: '#e7f4f4', iconColor: '#356267', title: 'Information', Icon: Info },
   };
   const theme = themes[type] || themes.info;
   const { Icon } = theme;
 
   return (
     <div
-      className="kyc-banner-slide mb-4 flex items-start gap-2.5 rounded-lg border px-4 py-3"
-      style={{ background: theme.bg, borderColor: theme.border }}
+      className="kyc-banner-slide fixed top-5 left-1/2 z-[9999] w-[calc(100%-32px)] max-w-sm -translate-x-1/2"
+      role="alert"
     >
-      <Icon size={19} style={{ color: theme.color }} className="mt-0.5 flex-shrink-0" />
-      <div className="flex-1 text-[13px] leading-relaxed" style={{ color: theme.color }}>
-        {message}
-      </div>
-      {!autoDismiss && (
+      <div
+        className="flex items-start gap-3 rounded-2xl border bg-white px-4 py-4 shadow-[0_18px_45px_rgba(16,33,75,0.18)]"
+        style={{ borderColor: theme.border }}
+      >
+        <div
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full"
+          style={{ background: theme.badgeBg }}
+        >
+          <Icon size={18} style={{ color: theme.iconColor }} />
+        </div>
+        <div className="flex-1 pt-0.5">
+          <p className="text-[13px] font-bold leading-none text-[#10214b]">
+            {theme.title}
+          </p>
+          <p className="mt-1.5 text-[13px] leading-snug text-[#356267]/85">
+            {message}
+          </p>
+        </div>
         <button
           onClick={() => { setVisible(false); if (onDismiss) onDismiss(); }}
-          className="flex-shrink-0 rounded p-0.5 transition-opacity hover:opacity-70"
-          style={{ color: theme.color }}
+          aria-label="Fermer le message"
+          className="flex-shrink-0 rounded-full p-1 text-[#94a3b8] transition-colors hover:bg-[#f1f5f9] hover:text-[#10214b]"
         >
-          <X size={17} />
+          <X size={16} />
         </button>
-      )}
+      </div>
     </div>
   );
 }
@@ -270,9 +336,10 @@ export default function KYCFlow() {
   if (isLoading) {
     return (
       <div className={pageWrap}>
-        <div className="text-center" style={{ fontFamily: "'Sora', sans-serif" }}>
-          <div className="mx-auto mb-4 h-11 w-11 animate-spin rounded-full border-[3px] border-white/30 border-t-white" />
-          <p className="text-[14px] text-white/85">Chargement de votre session…</p>
+        <PageGlow />
+        <div className="relative z-10 text-center" style={{ fontFamily: "'Sora', sans-serif" }}>
+          <div className="mx-auto mb-4 h-11 w-11 animate-spin rounded-full border-[3px] border-[#356267]/20 border-t-[#356267]" />
+          <p className="text-[14px] text-[#356267]/75">Chargement de votre session…</p>
         </div>
       </div>
     );
@@ -282,6 +349,7 @@ export default function KYCFlow() {
   if (!userId) {
     return (
       <div className={pageWrap}>
+        <PageGlow />
         <div className={`${cardBase} max-w-[480px] p-10 text-center`}>
           <div className={cardLine} />
           <AlertTriangle size={52} className="mx-auto mb-4 text-[#c2872e]" />
@@ -440,6 +508,7 @@ export default function KYCFlow() {
   if (step === 0) {
     return (
       <div className={pageWrap}>
+        <PageGlow />
         <div className={`${cardBase} max-w-[500px]`}>
           <div className={cardLine} />
 
@@ -452,7 +521,7 @@ export default function KYCFlow() {
               <Fingerprint size={34} className="text-[#356267]" />
             </div>
             <h2 className="text-[22px] font-extrabold text-[#10214b]">
-              Vérification d'identité
+              Vérification de KYC
             </h2>
             <p className="mt-2 text-[14px] leading-relaxed text-[#356267]/75">
               Complétez ces étapes pour activer votre compte.
@@ -512,6 +581,7 @@ export default function KYCFlow() {
     ];
     return (
       <div className={pageWrap}>
+        <PageGlow />
         <div className={`${cardBase} max-w-[520px]`}>
           <div className={cardLine} />
 
@@ -578,6 +648,7 @@ export default function KYCFlow() {
     const docLabel = docType === 'passport' ? 'passeport' : docType === 'cni' ? "carte d'identité" : 'carte de séjour';
     return (
       <div className={pageWrap}>
+        <PageGlow />
         <div className={`${cardBase} max-w-[520px]`}>
           <div className={cardLine} />
 
@@ -684,6 +755,7 @@ export default function KYCFlow() {
       ? Math.round(extractedData.confidence_score) : null;
     return (
       <div className={pageWrap}>
+        <PageGlow />
         <div className={`${cardBase} max-w-[520px]`}>
           <div className={cardLine} />
 
@@ -791,6 +863,7 @@ export default function KYCFlow() {
   if (step === 4) {
     return (
       <div className={pageWrap}>
+        <PageGlow />
         <div className={`${cardBase} max-w-[520px]`}>
           <div className={cardLine} />
 
@@ -992,6 +1065,7 @@ export default function KYCFlow() {
   if (step === 5) {
     return (
       <div className={pageWrap}>
+        <PageGlow />
         <div className={`${cardBase} max-w-[480px] text-center`}>
           <div className={cardLine} />
 

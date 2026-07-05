@@ -56,6 +56,32 @@ const toastErrorStyle = {
   },
 };
 
+// ─── Carrés décoratifs discrets pour le fond (identique à l'esprit d'AuthChoix.js) ──
+// Davantage de carrés verts (mint) pour plus de lisibilité et de cohérence
+// avec la page d'accueil, sans jamais gêner la lecture de la carte centrale.
+const CARRES_FOND = [
+  { top: '6%', left: '8%', size: 70, color: '#02F5A1', rotate: 12 },
+  { top: '14%', left: '82%', size: 46, color: '#FDBF20', rotate: -8 },
+  { top: '28%', left: '22%', size: 34, color: '#356267', rotate: 20 },
+  { top: '38%', left: '68%', size: 90, color: '#02F5A1', rotate: -14 },
+  { top: '52%', left: '4%', size: 52, color: '#02F5A1', rotate: 6 },
+  { top: '62%', left: '90%', size: 40, color: '#02F5A1', rotate: -20 },
+  { top: '74%', left: '35%', size: 64, color: '#02F5A1', rotate: 10 },
+  { top: '86%', left: '60%', size: 48, color: '#0c2e7c', rotate: -6 },
+  { top: '92%', left: '15%', size: 36, color: '#02F5A1', rotate: 18 },
+  { top: '18%', left: '48%', size: 30, color: '#02F5A1', rotate: -10 },
+  { top: '10%', left: '32%', size: 42, color: '#02F5A1', rotate: 22 },
+  { top: '24%', left: '92%', size: 34, color: '#02F5A1', rotate: -16 },
+  { top: '34%', left: '12%', size: 56, color: '#02F5A1', rotate: 8 },
+  { top: '46%', left: '58%', size: 38, color: '#02F5A1', rotate: -12 },
+  { top: '58%', left: '24%', size: 46, color: '#02F5A1', rotate: 15 },
+  { top: '68%', left: '76%', size: 60, color: '#02F5A1', rotate: -18 },
+  { top: '80%', left: '42%', size: 32, color: '#02F5A1', rotate: 24 },
+  { top: '96%', left: '78%', size: 44, color: '#02F5A1', rotate: -9 },
+  { top: '4%', left: '58%', size: 28, color: '#02F5A1', rotate: 14 },
+  { top: '44%', left: '2%', size: 36, color: '#02F5A1', rotate: -22 },
+];
+
 export default function MotDePasseOublie() {
   const navigate = useNavigate();
   const [etape, setEtape] = useState('email'); // 'email' | 'code'
@@ -119,28 +145,51 @@ export default function MotDePasseOublie() {
   };
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center px-4 py-10 sm:py-16 relative overflow-hidden"
-      style={{ background: 'linear-gradient(135deg, #0c2e7c, #1e4db7, #3b82f6)' }}
-    >
-      {/* Fond décoratif discret */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div
-          className="absolute -top-40 left-1/2 -translate-x-1/2 w-[560px] h-[560px] rounded-full blur-3xl"
-          style={{ background: 'radial-gradient(circle, rgba(194,242,242,0.12) 0%, transparent 70%)' }}
-        />
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage:
-              'linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)',
-            backgroundSize: '44px 44px',
-          }}
-        />
+    <div className="min-h-screen flex items-center justify-center px-4 py-10 sm:py-16 relative overflow-hidden bg-white">
+      {/* Polices + variables de design (mêmes que AuthChoix.js) */}
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap');
+        :root {
+          --navy: #003152;
+          --teal: #003333;
+          --mint: #02F5A1;
+          --black: #07191E;
+          --gold: #FDBF20;
+          --bg: #F5F7F8;
+          --border: #E4E9EC;
+          --textSecondary: #5B6E76;
+          --textMuted: #93A3A9;
+        }
+        .fp-display { font-family: 'Outfit', sans-serif; }
+        .fp-body { font-family: 'DM Sans', sans-serif; }
+      `}</style>
+
+      {/* Fond décoratif : dégradés circulaires flous, identique à AuthChoix.js */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden z-0">
+        <div className="absolute -top-40 -left-32 w-[560px] h-[560px] rounded-full blur-3xl opacity-[0.08]" style={{ background: '#003152' }} />
+        <div className="absolute top-1/3 -right-40 w-[620px] h-[620px] rounded-full blur-3xl opacity-[0.07]" style={{ background: '#FDBF20' }} />
+        <div className="absolute bottom-0 left-1/4 w-[480px] h-[480px] rounded-full blur-3xl opacity-[0.06]" style={{ background: '#356267' }} />
+
+        {/* Carrés discrets, avec davantage de verts (mint) pour la lisibilité */}
+        {CARRES_FOND.map((c, i) => (
+          <div
+            key={i}
+            className="absolute rounded-lg"
+            style={{
+              top: c.top,
+              left: c.left,
+              width: c.size,
+              height: c.size,
+              background: c.color,
+              opacity: 0.06,
+              transform: `rotate(${c.rotate}deg)`,
+            }}
+          />
+        ))}
       </div>
 
       {/* Carte */}
-      <div className="relative z-10 w-full max-w-[440px] bg-white rounded-3xl px-6 py-10 sm:px-9 sm:py-10 shadow-[0_24px_80px_rgba(0,0,0,0.25)]">
+      <div className="relative z-10 w-full max-w-[440px] bg-white rounded-3xl px-6 py-10 sm:px-9 sm:py-10 shadow-[0_24px_80px_rgba(0,0,0,0.15)] border border-[var(--border)]">
 
         {/* Back link */}
         <Link

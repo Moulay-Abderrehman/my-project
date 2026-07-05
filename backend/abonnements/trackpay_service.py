@@ -1,5 +1,3 @@
-# backend/abonnements/trackpay_service.py
-
 import requests
 from django.conf import settings
 

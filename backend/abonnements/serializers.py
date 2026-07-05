@@ -1,4 +1,3 @@
-# backend/abonnements/serializers.py
 from rest_framework import serializers
 from .models import Plan, Feature, PlanFeature, Abonnement, Paiement, CompteEncaissement
 from django.utils import timezone
@@ -6,11 +5,11 @@ from django.utils import timezone
 
 class PlanSerializer(serializers.ModelSerializer):
     features = serializers.SerializerMethodField()
-    # 🆕 Nouveau champ pour indiquer si c'est un plan de démo
+    #  Nouveau champ pour indiquer si c'est un plan de démo
     est_demo = serializers.BooleanField(read_only=True)
-    # 🆕 Nouveau champ pour l'affichage
+    #  Nouveau champ pour l'affichage
     est_plan_demo = serializers.SerializerMethodField()
-    # 🆕 Nouveau champ pour le libellé formaté
+    #  Nouveau champ pour le libellé formaté
     libelle = serializers.SerializerMethodField()
 
     class Meta:
@@ -43,7 +42,7 @@ class AbonnementSerializer(serializers.ModelSerializer):
     plan_detail             = PlanSerializer(source='plan', read_only=True)
     duree_jours              = serializers.ReadOnlyField()
     
-    # 🆕 Nouveaux champs pour le mode visiteur
+    # Nouveaux champs pour le mode visiteur
     est_demo_mode           = serializers.SerializerMethodField()
     est_visiteur            = serializers.SerializerMethodField()
     est_lecture_seule       = serializers.SerializerMethodField()
@@ -64,12 +63,12 @@ class AbonnementSerializer(serializers.ModelSerializer):
             'type', 'statut', 'date_debut', 'date_fin', 'montant',
             'est_actif', 'jours_restants', 'nb_categories_autorisees',
             'duree_jours', 'nb_renouvellements',
-            # 🆕 Nouveaux champs
+            # Nouveaux champs
             'est_demo_mode', 'est_visiteur', 'est_lecture_seule',
             'est_expire', 'est_abonne', 'peut_creer_transaction',
             'peut_creer_budget', 'peut_modifier_profil', 'est_entreprise',
             'type_display', 'statut_display', 'plan_display',
-            # 🆕 Champs de démonstration
+            # Champs de démonstration
             'est_demo', 'date_expiration_demo'
         ]
         read_only_fields = [
@@ -90,7 +89,7 @@ class AbonnementSerializer(serializers.ModelSerializer):
     def get_nb_categories_autorisees(self, obj):
         return obj.nb_categories_autorisees()
     
-    # 🆕 Nouvelles méthodes pour le mode visiteur
+    # Nouvelles méthodes pour le mode visiteur
     def get_est_demo_mode(self, obj):
         """Vérifie si c'est un mode démo/visiteur"""
         return obj.est_demo_mode()
@@ -152,7 +151,7 @@ class SouscriptionSerializer(serializers.Serializer):
     type_utilisateur   = serializers.ChoiceField(choices=['standard', 'entreprise'])
     code_confirmation  = serializers.CharField(required=False, allow_blank=True)
     
-    # 🆕 Nouveaux champs pour la souscription depuis le mode visiteur
+    # Nouveaux champs pour la souscription depuis le mode visiteur
     from_visitor_mode  = serializers.BooleanField(required=False, default=False)
     visitor_data       = serializers.JSONField(required=False, allow_null=True)
 
@@ -160,7 +159,7 @@ class SouscriptionSerializer(serializers.Serializer):
 class PaiementSerializer(serializers.ModelSerializer):
     capture_ecran_url = serializers.SerializerMethodField()
     
-    # 🆕 Nouveaux champs pour le suivi des paiements en mode visiteur
+    # Nouveaux champs pour le suivi des paiements en mode visiteur
     est_paiement_demo = serializers.SerializerMethodField()
     statut_display    = serializers.SerializerMethodField()
     methode_display   = serializers.SerializerMethodField()
@@ -207,7 +206,7 @@ class CompteEncaissementSerializer(serializers.ModelSerializer):
         return obj.get_methode_display()
 
 
-# 🆕 NOUVEAU SERIALIZER : Données de démonstration pour le mode visiteur
+# NOUVEAU SERIALIZER : Données de démonstration pour le mode visiteur
 class VisitorDemoDataSerializer(serializers.Serializer):
     """
     Serializer pour les données de démonstration en mode visiteur
@@ -244,7 +243,7 @@ class VisitorDemoDataSerializer(serializers.Serializer):
     mode_lecture_seule = serializers.BooleanField(default=True)
 
 
-# 🆕 NOUVEAU SERIALIZER : Statistiques de démonstration
+# NOUVEAU SERIALIZER : Statistiques de démonstration
 class VisitorStatsSerializer(serializers.Serializer):
     """
     Serializer pour les statistiques de démonstration en mode visiteur
@@ -270,7 +269,7 @@ class VisitorStatsSerializer(serializers.Serializer):
     mode = serializers.CharField(default="visiteur")
 
 
-# 🆕 NOUVEAU SERIALIZER : Conversion visiteur -> utilisateur réel
+# NOUVEAU SERIALIZER : Conversion visiteur -> utilisateur réel
 class VisitorToUserSerializer(serializers.Serializer):
     """
     Serializer pour la conversion d'un visiteur en utilisateur réel
@@ -296,7 +295,7 @@ class VisitorToUserSerializer(serializers.Serializer):
     )
 
 
-# 🆕 NOUVEAU SERIALIZER : Message d'incitation personnalisé
+# NOUVEAU SERIALIZER : Message d'incitation personnalisé
 class VisitorInvitationSerializer(serializers.Serializer):
     """
     Serializer pour les messages d'incitation à s'inscrire

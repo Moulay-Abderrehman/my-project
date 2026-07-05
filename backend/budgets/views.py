@@ -31,10 +31,13 @@ class BudgetListCreateView(generics.ListCreateAPIView):
             from abonnements.mock_data import MOCK_BUDGETS
             return MOCK_BUDGETS
         
-        """Retourne les budgets actifs de l'utilisateur."""
+        # 🆕 Retourne TOUS les budgets non supprimés (actifs, terminés, dépassés).
+        # est_actif n'est plus utilisé comme filtre ici : un budget terminé/dépassé
+        # doit rester visible et filtrable côté frontend (onglet "Terminé").
+        # Seul est_supprime=True fait disparaître un budget de la liste.
         return Budget.objects.filter(
-            utilisateur=user, 
-            est_actif=True
+            utilisateur=user,
+            est_supprime=False
         ).order_by('-date_creation')
 
     def perform_create(self, serializer):
@@ -161,7 +164,8 @@ class BudgetDetailView(generics.RetrieveUpdateDestroyAPIView):
             from abonnements.mock_data import MOCK_BUDGETS
             return MOCK_BUDGETS
         
-        return Budget.objects.filter(utilisateur=user)
+        # 🆕 Exclure les budgets supprimés logiquement
+        return Budget.objects.filter(utilisateur=user, est_supprime=False)
 
     def retrieve(self, request, *args, **kwargs):
         """Récupère un budget avec toutes ses informations."""
@@ -325,8 +329,19 @@ class BudgetDetailView(generics.RetrieveUpdateDestroyAPIView):
             })
         
         budget = self.get_object()
-        budget.est_actif = False
-        budget.save(update_fields=['est_actif'])
+
+        # 🆕 Un budget terminé (100% utilisé) ne doit JAMAIS être supprimé.
+        # Il doit rester consultable et filtrable dans l'onglet "Terminé".
+        if budget.pourcentage_utilise >= 100:
+            raise ValidationError({
+                'error': 'budget_termine',
+                'message': 'Ce budget est terminé et ne peut pas être supprimé. Il reste visible dans l\'onglet "Terminé".'
+            })
+
+        # 🆕 Suppression logique dédiée : n'affecte plus est_actif,
+        # qui reste réservé au statut "en cours / clôturé".
+        budget.est_supprime = True
+        budget.save(update_fields=['est_supprime'])
         enregistrer_log(user, "BUDGET", f"Budget supprimé: {budget.categorie.nom}", request)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -349,7 +364,8 @@ class BudgetTransactionsView(generics.ListAPIView):
             from abonnements.mock_data import MOCK_TRANSACTIONS
             return MOCK_TRANSACTIONS[:5]
         
-        budget = Budget.objects.get(id=pk, utilisateur=user)
+        # 🆕 est_supprime=False : un budget supprimé ne doit plus exposer ses transactions
+        budget = Budget.objects.get(id=pk, utilisateur=user, est_supprime=False)
         return Transaction.objects.filter(
             utilisateur=user,
             budget=budget,
@@ -376,7 +392,8 @@ class BudgetDepensesView(generics.ListAPIView):
             from abonnements.mock_data import MOCK_BUDGETS
             return []
         
-        budget = Budget.objects.get(id=pk, utilisateur=user)
+        # 🆕 est_supprime=False : un budget supprimé ne doit plus exposer ses dépenses
+        budget = Budget.objects.get(id=pk, utilisateur=user, est_supprime=False)
         return BudgetDepense.objects.filter(budget=budget).order_by('-date_creation')
 
 
@@ -401,7 +418,8 @@ class DepenseBudgetView(APIView):
             }, status=403)
 
         try:
-            budget = Budget.objects.get(id=pk, utilisateur=user)
+            # 🆕 est_supprime=False : impossible d'ajouter une dépense sur un budget supprimé
+            budget = Budget.objects.get(id=pk, utilisateur=user, est_supprime=False)
         except Budget.DoesNotExist:
             return Response({
                 'error': 'budget_introuvable',
@@ -540,9 +558,11 @@ class VerifierBudgetsExpires(APIView):
             })
         
         today = timezone.now().date()
+        # 🆕 est_supprime=False : ne pas ré-agir sur des budgets déjà supprimés
         budgets_expires = Budget.objects.filter(
             utilisateur=user,
             est_actif=True,
+            est_supprime=False,
             date_fin__lt=today,
         )
         count = 0
@@ -592,9 +612,9 @@ class BudgetStatsView(APIView):
                 'est_lecture_seule': True,
             })
         
-        # Budgets actifs
-        budgets_actifs = Budget.objects.filter(utilisateur=user, est_actif=True)
-        budgets_total = Budget.objects.filter(utilisateur=user)
+        # 🆕 Budgets actifs et total : exclure les budgets supprimés logiquement
+        budgets_actifs = Budget.objects.filter(utilisateur=user, est_actif=True, est_supprime=False)
+        budgets_total = Budget.objects.filter(utilisateur=user, est_supprime=False)
         
         # Calculs
         total_prevu = sum(b.montant_prevu for b in budgets_actifs)

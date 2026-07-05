@@ -466,3 +466,5 @@
 {"ts": "2026-07-03T03:07:13Z", "event": "UNAUTHORIZED", "ip": "127.0.0.1", "path": "/api/comptes/connexion/", "app": "financeapp-moulay"}
 {"ts": "2026-07-03T03:07:18Z", "event": "UNAUTHORIZED", "ip": "127.0.0.1", "path": "/api/comptes/connexion/", "app": "financeapp-moulay"}
 {"ts": "2026-07-03T03:07:18Z", "event": "UNAUTHORIZED", "ip": "127.0.0.1", "path": "/api/comptes/connexion/", "app": "financeapp-moulay"}
+{"ts": "2026-07-05T00:57:35Z", "event": "UNAUTHORIZED", "ip": "127.0.0.1", "path": "/api/comptes/connexion/", "app": "financeapp-moulay"}
+{"ts": "2026-07-05T00:57:35Z", "event": "UNAUTHORIZED", "ip": "127.0.0.1", "path": "/api/comptes/connexion/", "app": "financeapp-moulay"}

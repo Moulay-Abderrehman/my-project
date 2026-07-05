@@ -1,7 +1,5 @@
-// frontend/src/pages/Categories.js
 import React, { useEffect, useState, useRef } from 'react';
 import api from '../api/axios';
-import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import ActionBlockedModal from '../components/ActionBlockedModal';
@@ -37,11 +35,10 @@ import {
   Dumbbell,
   Laptop,
   Users,
+  AlertTriangle,
+  Info,
 } from 'lucide-react';
 
-// ============================================
-// COMPOSANT ICÔNES (lucide-react — bibliothèque standard, cohérente, moderne)
-// ============================================
 const IconCategory = () => <Tag size={18} strokeWidth={2} />;
 const IconBuilding = () => <Building2 size={18} strokeWidth={2} />;
 const IconUser = () => <User size={18} strokeWidth={2} />;
@@ -156,9 +153,6 @@ const Icon = ({ name, size = 18, color = 'currentColor', isSystem = false, categ
   );
 };
 
-// ============================================
-// COMPOSANT MODAL DE CONFIRMATION PERSONNALISÉ
-// ============================================
 function ConfirmModal({ isOpen, onClose, onConfirm, title, message, confirmText = 'Confirmer', cancelText = 'Annuler' }) {
   if (!isOpen) return null;
 
@@ -199,6 +193,52 @@ function ConfirmModal({ isOpen, onClose, onConfirm, title, message, confirmText 
   );
 }
 
+function ToastMessage({ notification, onClose }) {
+  if (!notification) return null;
+
+  const { type, message } = notification;
+  const isSuccess = type === 'success';
+  const isError = type === 'error';
+
+  const iconWrapClasses = isSuccess
+    ? 'bg-[#356267]/10 text-[#356267]'
+    : isError
+    ? 'bg-[rgba(213,80,83,0.1)] text-[#d55053]'
+    : 'bg-[#c98a1f]/10 text-[#c98a1f]';
+
+  const borderClasses = isSuccess
+    ? 'border-[#356267]/15'
+    : isError
+    ? 'border-[#d55053]/20'
+    : 'border-[#c98a1f]/20';
+
+  return (
+    <div className="fixed top-3 sm:top-5 right-3 left-3 sm:left-auto sm:right-5 z-[100000] sm:max-w-[380px] animate-[fadeIn_0.25s_ease]">
+      <div className={`flex items-start gap-3 px-4 py-3.5 rounded-2xl shadow-[0_10px_30px_rgba(16,33,75,0.18)] border bg-white ${borderClasses}`}>
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${iconWrapClasses}`}>
+          {isSuccess ? (
+            <Check size={16} strokeWidth={2.5} />
+          ) : isError ? (
+            <AlertTriangle size={16} strokeWidth={2} />
+          ) : (
+            <Info size={16} strokeWidth={2} />
+          )}
+        </div>
+        <p className="flex-1 text-[13px] font-medium text-[#10214b] leading-relaxed m-0 pt-0.5">
+          {message}
+        </p>
+        <button
+          onClick={onClose}
+          className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[#356267]/40 hover:text-[#356267] hover:bg-[#356267]/5 transition-colors"
+          aria-label="Fermer"
+        >
+          <X size={14} strokeWidth={2} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ============================================
 // COMPOSANT PRINCIPAL
 // ============================================
@@ -216,12 +256,25 @@ export default function Categories() {
   const [actionBlockedModal, setActionBlockedModal] = useState({ isOpen: false, message: null });
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, categoryId: null, categoryName: '' });
 
+  const [notification, setNotification] = useState(null); 
+  const notifTimeoutRef = useRef(null);
+
   const [showIconDropdown, setShowIconDropdown] = useState(false);
   const [showColorDropdown, setShowColorDropdown] = useState(false);
   const iconDropdownRef = useRef(null);
   const colorDropdownRef = useRef(null);
 
   const isVisitorMode = isVisitor;
+
+  const afficherMessage = (type, message, duree = 3500) => {
+    if (notifTimeoutRef.current) {
+      clearTimeout(notifTimeoutRef.current);
+    }
+    setNotification({ type, message });
+    notifTimeoutRef.current = setTimeout(() => {
+      setNotification(null);
+    }, duree);
+  };
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth <= 640);
@@ -241,6 +294,7 @@ export default function Categories() {
     return () => {
       window.removeEventListener('resize', checkMobile);
       document.removeEventListener('mousedown', handleClickOutside);
+      if (notifTimeoutRef.current) clearTimeout(notifTimeoutRef.current);
     };
   }, []);
 
@@ -260,7 +314,7 @@ export default function Categories() {
       setCategories(res.data.results || res.data);
     } catch (err) {
       console.error('Erreur chargement:', err);
-      toast.error('Erreur lors du chargement');
+      afficherMessage('error', 'Erreur lors du chargement des catégories.');
     } finally {
       setLoading(false);
     }
@@ -270,7 +324,7 @@ export default function Categories() {
     setActionBlockedModal({
       isOpen: true,
       message: {
-        title: '🔒 Créez un compte',
+        title: ' Créez un compte',
         message: 'Pour créer ou modifier des catégories, créez un compte en 30 secondes.',
         action: 'Créer un compte',
         actionType: 'signup'
@@ -315,14 +369,14 @@ export default function Categories() {
 
     try {
       await api.delete(`/transactions/categories/${categoryId}/`);
-      toast.success('✅ Catégorie supprimée avec succès !');
+      afficherMessage('success', ' Catégorie supprimée avec succès !');
       chargerCategories();
     } catch (err) {
       if (err.response?.status === 403 && err.response?.data?.visitor_mode) {
         ouvrirActionBloquee();
         return;
       }
-      toast.error('❌ Impossible de supprimer la catégorie.');
+      afficherMessage('error', ' Impossible de supprimer la catégorie.');
     }
   };
 
@@ -333,15 +387,15 @@ export default function Categories() {
       return;
     }
     if (!peutCreer) {
-      toast.error("📢 Abonnez-vous pour créer des catégories.");
+      afficherMessage('error', ' Abonnez-vous pour créer des catégories.');
       return;
     }
     if (limitAtteinte) {
-      toast.error(`📊 Limite de ${nbMax} catégories atteinte.`);
+      afficherMessage('error', ` Limite de ${nbMax} catégories atteinte.`);
       return;
     }
     if (!form.nom.trim()) {
-      toast.error('✏️ Veuillez entrer un nom pour la catégorie.');
+      afficherMessage('error', ' Veuillez entrer un nom pour la catégorie.');
       return;
     }
     setSubmitting(true);
@@ -352,7 +406,7 @@ export default function Categories() {
         couleur: form.couleur,
         type: form.type,
       });
-      toast.success('🎉 Catégorie créée avec succès !');
+      afficherMessage('success', '🎉 Catégorie créée avec succès !');
       setForm({ nom: '', icone: 'default', couleur: '#3b82f6', type: 'les_deux' });
       setShowForm(false);
       chargerCategories();
@@ -361,7 +415,7 @@ export default function Categories() {
         ouvrirActionBloquee();
         return;
       }
-      toast.error(err.response?.data?.detail || '❌ Erreur lors de la création');
+      afficherMessage('error', err.response?.data?.detail || ' Erreur lors de la création');
     } finally {
       setSubmitting(false);
     }
@@ -372,7 +426,7 @@ export default function Categories() {
       ouvrirActionBloquee();
       return;
     }
-    // ✅ Remplacer window.confirm par le modal de confirmation
+    // ✅ Confirmation via modal personnalisé (pas de window.confirm)
     ouvrirConfirmSuppression(id, categories.find(c => c.id === id)?.nom || '');
   };
 
@@ -386,6 +440,9 @@ export default function Categories() {
 
   return (
     <div className="max-w-[1000px] mx-auto p-3 sm:p-5 font-sans bg-[#f8fafc] min-h-screen">
+      {/*  Notification personnalisée remplaçant react-hot-toast */}
+      <ToastMessage notification={notification} onClose={() => setNotification(null)} />
+
       <ActionBlockedModal
         isOpen={actionBlockedModal.isOpen}
         onClose={() => setActionBlockedModal({ isOpen: false, message: null })}
@@ -415,7 +472,7 @@ export default function Categories() {
             <h1 className="text-xl sm:text-2xl font-bold text-[#10214b] flex items-center">
               Catégories
               {isVisitorMode && (
-                <span className="text-xs sm:text-sm bg-[#fdf6e8] text-[#7a5410] px-2.5 py-0.5 rounded-full font-semibold ml-2">🔍 Démo</span>
+                <span className="text-xs sm:text-sm bg-[#fdf6e8] text-[#7a5410] px-2.5 py-0.5 rounded-full font-semibold ml-2"> Démo</span>
               )}
             </h1>
           </div>
@@ -457,7 +514,7 @@ export default function Categories() {
             </div>
             {isVisitorMode && (
               <div className="text-[8px] text-[#c98a1f] font-semibold mt-px">
-                🔍 Démo
+                 Démo
               </div>
             )}
           </div>
@@ -745,7 +802,7 @@ export default function Categories() {
           })}
           {isVisitorMode && (
             <div className="px-4 py-3 text-center bg-[#fdf6e8] rounded-xl text-xs text-[#7a5410] font-medium border border-[#e8c27a] mt-2 col-span-full">
-              🔍 Données de démonstration - Créez un compte pour gérer vos vraies catégories
+               Données de démonstration - Créez un compte pour gérer vos vraies catégories
             </div>
           )}
         </div>

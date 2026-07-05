@@ -26,6 +26,31 @@ import {
   LockKeyhole,
 } from 'lucide-react';
 
+// ─── Carrés décoratifs (mêmes tons que AuthChoix.js, dominante verte/mint,
+//     un peu plus visibles pour rester lisibles sur un fond clair) ──────────
+const CARRES_FOND = [
+  { top: '6%', left: '8%', size: 70, rotate: 12 },
+  { top: '14%', left: '82%', size: 46, rotate: -8 },
+  { top: '28%', left: '22%', size: 34, rotate: 20 },
+  { top: '38%', left: '68%', size: 90, rotate: -14 },
+  { top: '52%', left: '4%', size: 52, rotate: 6 },
+  { top: '62%', left: '90%', size: 40, rotate: -20 },
+  { top: '74%', left: '35%', size: 64, rotate: 10 },
+  { top: '86%', left: '60%', size: 48, rotate: -6 },
+  { top: '92%', left: '15%', size: 36, rotate: 18 },
+  { top: '18%', left: '48%', size: 30, rotate: -10 },
+  { top: '10%', left: '32%', size: 42, rotate: 22 },
+  { top: '24%', left: '92%', size: 34, rotate: -16 },
+  { top: '34%', left: '12%', size: 56, rotate: 8 },
+  { top: '46%', left: '58%', size: 38, rotate: -12 },
+  { top: '58%', left: '24%', size: 46, rotate: 15 },
+  { top: '68%', left: '76%', size: 60, rotate: -18 },
+  { top: '80%', left: '42%', size: 32, rotate: 24 },
+  { top: '96%', left: '78%', size: 44, rotate: -9 },
+  { top: '4%', left: '58%', size: 28, rotate: 14 },
+  { top: '44%', left: '2%', size: 36, rotate: -22 },
+];
+
 export default function Inscription() {
   const navigate = useNavigate();
   const [etape, setEtape] = useState(1); // 1: formulaire | 2: code email | 3: invitation KYC
@@ -390,16 +415,41 @@ export default function Inscription() {
         @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes slideDown { from { opacity: 0; transform: translate(-50%, -16px); } to { opacity: 1; transform: translate(-50%, 0); } }
         .card-anim { animation: fadeUp 0.4s cubic-bezier(.16,1,.3,1) both; font-family: 'Sora', sans-serif; }
-        .toast-anim { animation: slideDown 0.25s ease-out; }
+        .toast-anim { animation: slideDown 0.3s cubic-bezier(.16,1,.3,1) both; }
       `}</style>
     </>
   );
 
+  // ── Thème des toasts : pop-up carte professionnelle avec badge icône ───────
   const toastTheme = {
-    error: { bg: '#ffffff', border: '#d55053', text: '#10214b', icon: AlertCircle, iconColor: '#d55053' },
-    success: { bg: '#ffffff', border: '#4ea674', text: '#10214b', icon: CheckCircle2, iconColor: '#4ea674' },
-    warning: { bg: '#ffffff', border: '#c2872e', text: '#10214b', icon: AlertTriangle, iconColor: '#c2872e' },
-    info: { bg: '#ffffff', border: '#356267', text: '#10214b', icon: Info, iconColor: '#356267' },
+    error: {
+      border: '#fecaca',
+      badgeBg: '#fee2e2',
+      iconColor: '#d55053',
+      title: 'Erreur',
+      icon: AlertCircle,
+    },
+    success: {
+      border: '#bbf0cf',
+      badgeBg: '#e9f8e7',
+      iconColor: '#2f9e5b',
+      title: 'Succès',
+      icon: CheckCircle2,
+    },
+    warning: {
+      border: '#fde3b8',
+      badgeBg: '#fef3e2',
+      iconColor: '#c2872e',
+      title: 'Attention',
+      icon: AlertTriangle,
+    },
+    info: {
+      border: '#c2e0e2',
+      badgeBg: '#e7f4f4',
+      iconColor: '#356267',
+      title: 'Information',
+      icon: Info,
+    },
   };
 
   const renderToast = () => {
@@ -408,19 +458,35 @@ export default function Inscription() {
     const Icon = theme.icon;
     return (
       <div
-        className="toast-anim fixed top-5 left-1/2 z-[9999] flex w-[calc(100%-32px)] max-w-md items-center gap-3 rounded-xl border bg-white px-4 py-3.5 shadow-[0_16px_40px_rgba(16,33,75,0.18)]"
-        style={{ borderColor: theme.border }}
+        className="toast-anim fixed top-5 left-1/2 z-[9999] w-[calc(100%-32px)] max-w-sm -translate-x-1/2"
+        role="alert"
       >
-        <Icon size={19} style={{ color: theme.iconColor }} className="flex-shrink-0" />
-        <span className="flex-1 text-[13px] font-semibold leading-snug text-[#10214b]">
-          {message.text}
-        </span>
-        <button
-          onClick={() => setShowMessage(false)}
-          className="flex-shrink-0 rounded-md p-1 text-[#94a3b8] transition-colors hover:bg-[#f8fafc] hover:text-[#10214b]"
+        <div
+          className="flex items-start gap-3 rounded-2xl border bg-white px-4 py-4 shadow-[0_18px_45px_rgba(16,33,75,0.16)]"
+          style={{ borderColor: theme.border }}
         >
-          <X size={16} />
-        </button>
+          <div
+            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full"
+            style={{ background: theme.badgeBg }}
+          >
+            <Icon size={18} style={{ color: theme.iconColor }} />
+          </div>
+          <div className="flex-1 pt-0.5">
+            <p className="text-[13px] font-bold leading-none text-[#10214b]">
+              {theme.title}
+            </p>
+            <p className="mt-1.5 text-[13px] leading-snug text-[#356267]/85">
+              {message.text}
+            </p>
+          </div>
+          <button
+            onClick={() => setShowMessage(false)}
+            aria-label="Fermer le message"
+            className="flex-shrink-0 rounded-full p-1 text-[#94a3b8] transition-colors hover:bg-[#f1f5f9] hover:text-[#10214b]"
+          >
+            <X size={16} />
+          </button>
+        </div>
       </div>
     );
   };
@@ -461,12 +527,32 @@ export default function Inscription() {
     </div>
   );
 
-  const pageWrap = 'min-h-screen flex items-center justify-center px-4 py-10 sm:py-16 relative overflow-hidden bg-[linear-gradient(135deg,#0c2e7c,#1e4db7,#3b82f6)]';
+  // ── Fond de page harmonisé avec AuthChoix.js : blanc + carrés verts ────────
+  const pageWrap = 'min-h-screen flex items-center justify-center px-4 py-10 sm:py-16 relative overflow-hidden bg-white';
 
   const renderGlow = () => (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      <div className="absolute -top-40 left-1/2 h-[560px] w-[560px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.10)_0%,transparent_70%)] blur-3xl" />
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[length:44px_44px]" />
+      {/* Cercles dégradés flous, identiques dans l'esprit à AuthChoix.js */}
+      <div className="absolute -top-40 -left-32 h-[560px] w-[560px] rounded-full bg-[#003152] opacity-[0.08] blur-3xl" />
+      <div className="absolute top-1/3 -right-40 h-[620px] w-[620px] rounded-full bg-[#FDBF20] opacity-[0.07] blur-3xl" />
+      <div className="absolute bottom-0 left-1/4 h-[480px] w-[480px] rounded-full bg-[#356267] opacity-[0.06] blur-3xl" />
+
+      {/* Carrés verts décoratifs, un peu plus visibles pour rester lisibles */}
+      {CARRES_FOND.map((c, i) => (
+        <div
+          key={i}
+          className="absolute rounded-lg"
+          style={{
+            top: c.top,
+            left: c.left,
+            width: c.size,
+            height: c.size,
+            background: '#02F5A1',
+            opacity: 0.09,
+            transform: `rotate(${c.rotate}deg)`,
+          }}
+        />
+      ))}
     </div>
   );
 
@@ -478,7 +564,7 @@ export default function Inscription() {
         {renderToast()}
         {renderGlow()}
 
-        <div className="card-anim relative z-10 w-full max-w-[440px] rounded-3xl bg-white px-6 py-10 text-center shadow-[0_24px_80px_rgba(0,0,0,0.25)] sm:px-9">
+        <div className="card-anim relative z-10 w-full max-w-[440px] rounded-3xl bg-white px-6 py-10 text-center shadow-[0_24px_80px_rgba(0,49,82,0.16)] border border-[#E4E9EC] sm:px-9">
           <div className="flex justify-center">{renderSteps(3)}</div>
 
           <div className="mx-auto my-6 flex h-[76px] w-[76px] items-center justify-center rounded-full bg-[#356267] shadow-[0_10px_26px_rgba(53,98,103,0.32)]">
@@ -528,7 +614,7 @@ export default function Inscription() {
         {renderToast()}
         {renderGlow()}
 
-        <div className="card-anim relative z-10 w-full max-w-[420px] rounded-3xl bg-white px-6 py-10 shadow-[0_24px_80px_rgba(0,0,0,0.25)] sm:px-9">
+        <div className="card-anim relative z-10 w-full max-w-[420px] rounded-3xl bg-white px-6 py-10 shadow-[0_24px_80px_rgba(0,49,82,0.16)] border border-[#E4E9EC] sm:px-9">
           <Link
             to="/"
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#94a3b8] transition-colors hover:text-[#356267]"
@@ -620,7 +706,7 @@ export default function Inscription() {
       {renderToast()}
       {renderGlow()}
 
-      <div className="card-anim relative z-10 w-full max-w-[480px] rounded-3xl bg-white px-6 py-9 shadow-[0_24px_80px_rgba(0,0,0,0.25)] sm:px-8">
+      <div className="card-anim relative z-10 w-full max-w-[480px] rounded-3xl bg-white px-6 py-9 shadow-[0_24px_80px_rgba(0,49,82,0.16)] border border-[#E4E9EC] sm:px-8">
 
         <Link
           to="/"
