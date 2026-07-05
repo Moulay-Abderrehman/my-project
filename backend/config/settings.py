@@ -307,6 +307,7 @@ cloudinary.config(
     api_secret=os.environ.get('CLOUDINARY_API_SECRET'),
     secure=True
 )
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 STORAGES = {
     "default": {
