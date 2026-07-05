@@ -174,14 +174,11 @@ CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
 # ========== MEDIA & STATIC ==========
 MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 STATIC_URL = '/static/'
-#STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'static'),
-]
-WHITENOISE_MANIFEST_STRICT = False
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+ 
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # ========== INTERNATIONALISATION ==========
@@ -298,6 +295,7 @@ def _patched_open(self):
 django_smtp.EmailBackend.open = _patched_open
 
 '''
+
 import cloudinary
 
 CLOUDINARY_STORAGE = {
@@ -312,14 +310,6 @@ cloudinary.config(
     api_secret=os.environ.get('CLOUDINARY_API_SECRET'),
     secure=True
 )
-#STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
-STORAGES = {
-    "default": {
-        "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
-    },
-    "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-    },
-}
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+
