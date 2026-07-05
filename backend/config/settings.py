@@ -1,6 +1,5 @@
 import os
 import re
-import smtplib
 from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
@@ -16,6 +15,8 @@ if os.path.exists(BASE_DIR / '.env'):
 # ========== SÉCURITÉ ==========
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-default-key-for-render')
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
+
+# ALLOWED_HOSTS - CORRECTION
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,.onrender.com,.render.com').split(',')
 
 # ========== APPLICATIONS ==========
@@ -77,15 +78,22 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# ========== BASE DE DONNÉES ==========
-if 'DATABASE_URL' in os.environ:
+# ========== BASE DE DONNÉES - CORRECTION IMPORTANTE ==========
+# Récupérer l'URL de la base de données
+DATABASE_URL = os.environ.get('DATABASE_URL')
+
+if DATABASE_URL:
+    # Pour Render - utiliser l'URL interne sans le suffixe -a.frankfurt-postgres.render.com
+    # Render fournit automatiquement la bonne URL via DATABASE_URL
     DATABASES = {
         'default': dj_database_url.config(
+            default=DATABASE_URL,
             conn_max_age=600,
-            ssl_require=True
+            ssl_require=True  # IMPORTANT: Render PostgreSQL nécessite SSL
         )
     }
 else:
+    # Configuration pour le développement local
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
@@ -129,6 +137,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "https://tresorery-finance-app.netlify.app",
+    "https://financeapp-frontend.onrender.com",
 ]
 CORS_ALLOWED_ORIGIN_REGEXES = [r"^https://.*\.onrender\.com$"]
 CORS_ALLOW_CREDENTIALS = True
@@ -149,16 +158,12 @@ MEDIA_ROOT = BASE_DIR / 'media'
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# ========== CONFIGURATION STORAGE - IMPORTANT ==========
-# Pour les fichiers statiques (CSS, JS, images de l'admin)
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
-
-# Pour les fichiers média (uploadés par les utilisateurs)
-DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
-
-# Configuration WhiteNoise
-WHITENOISE_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
+# Configuration des fichiers statiques
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 WHITENOISE_MANIFEST_STRICT = False
+
+# Cloudinary pour les médias
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 
 # ========== DEFAULT AUTO FIELD ==========
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -237,6 +242,3 @@ cloudinary.config(
     api_secret=os.environ.get('CLOUDINARY_API_SECRET'),
     secure=True
 )
-
-# IMPORTANT: DEFAULT_FILE_STORAGE est déjà défini plus haut
-# Ne pas le redéfinir ici
