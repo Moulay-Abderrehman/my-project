@@ -92,7 +92,6 @@ const CARRES_FOND = [
 ];
 
 // ─── Classes Tailwind partagées (thème FinanceApp) ───────────────────────────
-// Fond de page harmonisé avec AuthChoix.js : blanc + carrés verts (au lieu du dégradé bleu)
 const pageWrap = 'min-h-screen flex items-center justify-center px-4 py-8 relative overflow-hidden bg-white';
 const cardBase = 'kyc-card relative w-full bg-white border border-[rgba(16,33,75,0.08)] rounded-2xl p-6 sm:p-8 shadow-[0_24px_70px_rgba(0,49,82,0.16)] overflow-hidden z-10';
 const cardLine = 'absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-[#356267] to-[#4ea674]';
@@ -103,6 +102,10 @@ const sectionLabel = 'text-[10px] font-bold text-[#356267]/45 uppercase tracking
 const infoBox = 'bg-[#f8fafc] rounded-[10px] border border-[rgba(16,33,75,0.08)] overflow-hidden';
 const infoRow = 'flex justify-between items-center gap-3 px-4 py-3';
 const progressTrack = 'bg-[rgba(16,33,75,0.08)] rounded h-1.5 overflow-hidden mt-1.5';
+
+// ─── Mapping entre les types de documents affichés au client (step 1)
+//     et le paramètre document_type attendu par l'API Nova ('carte' | 'passeport') ─
+const toNovaDocType = (docType) => (docType === 'passport' ? 'passeport' : 'carte');
 
 // ─── Fond décoratif de page : cercles dégradés flous + carrés verts ─────────
 function PageGlow() {
@@ -242,7 +245,7 @@ export default function KYCFlow() {
   const [userId,           setUserId]           = useState(null);
   const [isLoading,        setIsLoading]        = useState(true);
   const [step,             setStep]             = useState(0);
-  const [docType,          setDocType]          = useState('cni');
+  const [docType,          setDocType]          = useState('cni'); // 'passport' | 'cni' | 'sejour'
   const [extractedData,    setExtractedData]    = useState(null);
   const [capturedImage,    setCapturedImage]    = useState(null);
   const [capturedFile,     setCapturedFile]     = useState(null);
@@ -381,7 +384,9 @@ export default function KYCFlow() {
     setLoading(true);
     clearBanner();
     try {
-      const result = await kycService.extractDocument(capturedFile);
+      // On transmet le type de document choisi aux étapes 1 & 2 ('carte' | 'passeport')
+      const novaDocType = toNovaDocType(docType);
+      const result = await kycService.extractDocument(capturedFile, novaDocType);
 
       if (result.status === 'success') {
         if (result.confidence_score <= 25) {
@@ -389,7 +394,7 @@ export default function KYCFlow() {
           setLoading(false);
           return;
         }
-        setExtractedData({ ...result, document_type: docType });
+        setExtractedData({ ...result, document_type: novaDocType });
         setStep(3);
         showBanner(`Document analysé avec succès ! (Confiance: ${result.confidence_score}%)`, 'success');
       } else {
@@ -419,18 +424,20 @@ export default function KYCFlow() {
       const confirmPayload = {
         user_id: userId,
         nni: extractedData?.nni || '',
+        numero_passeport: extractedData?.numero_passeport || '',
         nom_fr: extractedData?.nom_fr || '',
         prenom_fr: extractedData?.prenom_fr || '',
         birth_date: extractedData?.birth_date || '',
         birth_place: extractedData?.birth_place || '',
         gender: extractedData?.gender || '',
         nationality: extractedData?.nationality || 'MRT',
-        document_type: extractedData?.document_type || 'cni',
+        document_type: extractedData?.document_type || 'carte',
         face_image_base64: extractedData?.face_image_base64 || '',
         document_full_image_base64: extractedData?.document_full_image_base64 || '',
       };
 
       console.log("[KYC] Envoi confirmation avec:", {
+        document_type: confirmPayload.document_type,
         has_full_image: !!confirmPayload.document_full_image_base64,
         full_image_length: confirmPayload.document_full_image_base64?.length || 0
       });
@@ -453,7 +460,6 @@ export default function KYCFlow() {
     try {
       const result = await kycService.verifyFace(userId, selfieBlob);
 
-      // ✅ FIX: Vérifier que result existe avant de lui assigner une propriété
       if (result && typeof result === 'object') {
         result.document_type = docType;
         setFaceResult(result);
@@ -473,7 +479,6 @@ export default function KYCFlow() {
           showBanner('✅ Identité vérifiée avec succès !', 'success');
         }
       } else {
-        // Cas où result est undefined ou null
         console.warn('[KYC] Résultat de vérification invalide:', result);
         showBanner('Erreur de vérification: réponse invalide du serveur', 'error');
         setFaceResult({
@@ -484,7 +489,6 @@ export default function KYCFlow() {
       }
     } catch (err) {
       const errData = err.response?.data || {};
-      // ✅ FIX: Vérifier que errData existe avant de lui assigner une propriété
       if (errData && typeof errData === 'object') {
         errData.document_type = docType;
       }
@@ -753,6 +757,24 @@ export default function KYCFlow() {
   if (step === 3) {
     const confidence = extractedData?.confidence_score
       ? Math.round(extractedData.confidence_score) : null;
+    const isPasseport = extractedData?.document_type === 'passeport';
+
+    // Lignes d'identité affichées dynamiquement selon le type de document :
+    // - 'carte'     -> uniquement NNI
+    // - 'passeport' -> Numéro de Passeport + NNI
+    const identiteRows = isPasseport
+      ? [
+          ['Numéro de Passeport', extractedData?.numero_passeport],
+          ['NNI',                 extractedData?.nni],
+          ['Nom',                 extractedData?.nom_fr],
+          ['Prénom',              extractedData?.prenom_fr],
+        ]
+      : [
+          ['NNI',    extractedData?.nni],
+          ['Nom',    extractedData?.nom_fr],
+          ['Prénom', extractedData?.prenom_fr],
+        ];
+
     return (
       <div className={pageWrap}>
         <PageGlow />
@@ -811,12 +833,7 @@ export default function KYCFlow() {
           <div className="mb-3.5">
             <p className={sectionLabel}>IDENTITÉ</p>
             <div className={infoBox}>
-              {[
-                ['NNI',         extractedData?.nni],
-                ['Nom ',     extractedData?.nom_fr],
-                ['Prénom ', extractedData?.prenom_fr],
-                ['Nom du père', extractedData?.father_name]
-              ].map(([label, value], i, arr) => (
+              {identiteRows.map(([label, value], i, arr) => (
                 <div key={label} className={`${infoRow} ${i < arr.length - 1 ? 'border-b border-[rgba(16,33,75,0.08)]' : ''}`}>
                   <span className="text-[14px] text-[#356267]/60">{label}</span>
                   <span className={`text-[14px] font-semibold ${value ? 'text-[#10214b]' : 'text-[#356267]/40'}`}>
@@ -1152,7 +1169,8 @@ export default function KYCFlow() {
           <button
             onClick={() => {
               clearBanner();
-              navigate('/authchoix');
+              // 🆕 Redirection vers le tableau de bord au lieu de /authchoix
+              navigate('/dashboard');
             }}
             className={`${btnPrimary} bg-gradient-to-br from-[#356267] to-[#4ea674] hover:enabled:bg-none hover:enabled:bg-[#2a4f53]`}
           >

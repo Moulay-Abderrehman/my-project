@@ -1,8 +1,7 @@
 // frontend/src/pages/Employes.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
-import toast from 'react-hot-toast';
 import ActionBlockedModal from '../components/ActionBlockedModal';
 import {
   Users,
@@ -14,8 +13,6 @@ import {
   Mail,
   X,
   Send,
-  Link as LinkIcon,
-  Copy,
   UserCheck,
   Clock,
   CheckCircle2,
@@ -23,7 +20,56 @@ import {
   Lock,
   Info,
   Loader2,
+  AlertTriangle,
 } from 'lucide-react';
+
+/* ------------------------------------------------------------------ */
+/* 🆕 Composant de notification personnalisé (remplace react-hot-toast) */
+/* ------------------------------------------------------------------ */
+function Notification({ notification, onClose }) {
+  useEffect(() => {
+    if (!notification) return;
+    const duration = notification.duration || 4000;
+    const timer = setTimeout(onClose, duration);
+    return () => clearTimeout(timer);
+  }, [notification, onClose]);
+
+  if (!notification) return null;
+
+  const styles = {
+    success: {
+      bg: 'bg-[#e9f8e7]',
+      border: 'border-[rgba(69,144,113,0.35)]',
+      text: 'text-[#459071]',
+      icon: <CheckCircle2 size={18} className="flex-shrink-0" />,
+    },
+    error: {
+      bg: 'bg-[rgba(213,80,83,0.08)]',
+      border: 'border-[rgba(213,80,83,0.3)]',
+      text: 'text-[#d55053]',
+      icon: <AlertTriangle size={18} className="flex-shrink-0" />,
+    },
+  };
+
+  const s = styles[notification.type] || styles.success;
+
+  return (
+    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-[calc(100%-2rem)] max-w-md animate-[fadeIn_0.2s_ease-out]">
+      <div
+        className={`flex items-start gap-2.5 px-4 py-3 rounded-xl border shadow-lg ${s.bg} ${s.border} ${s.text}`}
+      >
+        {s.icon}
+        <p className="text-sm font-medium leading-snug flex-1">{notification.message}</p>
+        <button
+          onClick={onClose}
+          className="flex-shrink-0 opacity-60 hover:opacity-100 transition-opacity"
+        >
+          <X size={16} />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function Employes() {
   const { user, isVisitor, exitVisitorMode } = useAuth(); // 🆕
@@ -32,12 +78,20 @@ export default function Employes() {
   const [loading, setLoading] = useState(true);
   const [loadingInvit, setLoadingInvit] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [lienManuel, setLienManuel] = useState('');
+
+  // 🆕 Notification personnalisée (remplace toast)
+  const [notification, setNotification] = useState(null);
 
   // 🆕 Modal d'action bloquée
   const [actionBlockedModal, setActionBlockedModal] = useState({ isOpen: false, message: null });
 
   const isVisitorMode = isVisitor; // 🆕
+
+  const showNotification = useCallback((type, message, duration) => {
+    setNotification({ type, message, duration });
+  }, []);
+
+  const closeNotification = useCallback(() => setNotification(null), []);
 
   const chargerEmployes = async () => {
     // 🆕 Si mode visiteur, ne pas charger les employés réels
@@ -92,26 +146,20 @@ export default function Employes() {
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(emailInvit)) {
-      toast.error("Format d'email invalide.");
+      showNotification('error', "Format d'email invalide.");
       return;
     }
 
     setLoadingInvit(true);
-    setLienManuel('');
     try {
+      // ℹ️ L'envoi de l'email est désormais délégué au microservice d'envoi
+      // (le backend n'utilise plus SMTP directement) : plus besoin de gérer
+      // ici un "lien manuel" de secours ni un warning de repli SMTP.
       const res = await api.post('/comptes/inviter-employe/', {
         email_employe: emailInvit.trim().toLowerCase(),
       });
 
-      if (res.data.lien || res.data.warning) {
-        setLienManuel(res.data.lien || '');
-        toast.success(res.data.message || 'Invitation créée !', { duration: 5000 });
-        if (res.data.warning) {
-          toast(res.data.warning, { icon: '⚠️', duration: 8000 });
-        }
-      } else {
-        toast.success(res.data.message || `Invitation envoyée à ${emailInvit} !`);
-      }
+      showNotification('success', res.data.message || `Invitation envoyée à ${emailInvit} !`);
 
       setEmailInvit('');
       setShowForm(false);
@@ -127,7 +175,7 @@ export default function Employes() {
         err.response?.data?.email_employe?.[0] ||
         err.response?.data?.detail ||
         'Erreur lors de l\'invitation.';
-      toast.error(errMsg, { duration: 6000 });
+      showNotification('error', errMsg, 6000);
     } finally {
       setLoadingInvit(false);
     }
@@ -159,6 +207,9 @@ export default function Employes() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc]">
+      {/* 🆕 NOTIFICATION PERSONNALISÉE (remplace react-hot-toast) */}
+      <Notification notification={notification} onClose={closeNotification} />
+
       {/* 🆕 MODAL ACTION BLOQUÉE */}
       <ActionBlockedModal
         isOpen={actionBlockedModal.isOpen}
@@ -250,7 +301,7 @@ export default function Employes() {
                   </div>
                   <h3 className="text-[15px] font-semibold text-[#10214b]">Nouvelle invitation</h3>
                   <button
-                    onClick={() => { setShowForm(false); setLienManuel(''); }}
+                    onClick={() => setShowForm(false)}
                     className="ml-auto w-8 h-8 rounded-lg flex items-center justify-center text-[rgba(53,98,103,0.45)] hover:bg-[#f8fafc] hover:text-[#10214b] transition-colors"
                   >
                     <X size={18} />
@@ -287,26 +338,6 @@ export default function Employes() {
                     )}
                   </button>
                 </form>
-
-                {lienManuel && (
-                  <div className="mt-4 bg-[#f8fafc] border border-[rgba(16,33,75,0.08)] rounded-[10px] px-4 py-3">
-                    <div className="flex items-center gap-1.5 text-xs font-semibold text-[rgba(53,98,103,0.75)] mb-2">
-                      <LinkIcon size={14} />
-                      <span>Lien manuel</span>
-                    </div>
-                    <div className="flex gap-2">
-                      <code className="flex-1 bg-white border border-[rgba(16,33,75,0.08)] px-3 py-2 rounded-lg text-[11px] break-all text-[rgba(53,98,103,0.75)]">
-                        {lienManuel}
-                      </code>
-                      <button
-                        onClick={() => { navigator.clipboard.writeText(lienManuel); toast.success('Lien copié !'); }}
-                        className="bg-[#356267] rounded-lg px-3.5 text-white min-h-[36px] flex items-center justify-center hover:opacity-90 transition-opacity"
-                      >
-                        <Copy size={15} />
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
           </div>

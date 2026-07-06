@@ -229,7 +229,14 @@ export default function Profil() {
 
   const peutSouscrire = () => true;
 
-  const getIdLabel = () => (user?.document_type === 'passport' ? 'Numéro de passeport' : 'NNI');
+  // ── Détection du type de document KYC (carte d'identité vs passeport) ─────
+  // On tolère les deux conventions possibles ('passeport'/'carte' ou 'passport'/'cni')
+  // pour rester compatible avec les données déjà enregistrées.
+  const estPasseport = ['passeport', 'passport'].includes(
+    (user?.kyc_document_type || user?.document_type || '').toLowerCase()
+  );
+
+  const getIdLabel = () => (estPasseport ? 'Numéro de passeport' : 'NNI');
 
   const initiales = user
     ? `${(user.prenom || '')[0] || ''}${(user.nom || '')[0] || ''}`.toUpperCase()
@@ -973,7 +980,15 @@ export default function Profil() {
                     </div>
                     <div style={{ padding: isMobile ? '12px' : '16px' }}>
                       <div className="grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: isMobile ? 10 : 16 }}>
-                        <div><div style={{ fontSize: 9, color: T.textLight, fontWeight: 600, marginBottom: 3 }}>{getIdLabel()}</div><div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: T.navy }}>{user?.nni || '—'}</div></div>
+                        {/* Carte d'identité -> uniquement NNI. Passeport -> Numéro de Passeport ET NNI. */}
+                        {estPasseport ? (
+                          <>
+                            <div><div style={{ fontSize: 9, color: T.textLight, fontWeight: 600, marginBottom: 3 }}>Numéro de Passeport</div><div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: T.navy }}>{user?.numero_passeport || '—'}</div></div>
+                            <div><div style={{ fontSize: 9, color: T.textLight, fontWeight: 600, marginBottom: 3 }}>NNI</div><div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: T.navy }}>{user?.nni || '—'}</div></div>
+                          </>
+                        ) : (
+                          <div><div style={{ fontSize: 9, color: T.textLight, fontWeight: 600, marginBottom: 3 }}>NNI</div><div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: T.navy }}>{user?.nni || '—'}</div></div>
+                        )}
                         <div><div style={{ fontSize: 9, color: T.textLight, fontWeight: 600, marginBottom: 3 }}>Nom</div><div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: T.navy }}>{user?.prenom_fr || user?.prenom || '—'}</div></div>
                         <div><div style={{ fontSize: 9, color: T.textLight, fontWeight: 600, marginBottom: 3 }}>Prénom</div><div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: T.navy }}>{user?.nom_fr || user?.nom || '—'}</div></div>
                         <div><div style={{ fontSize: 9, color: T.textLight, fontWeight: 600, marginBottom: 3 }}>Nom du père</div><div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: T.navy }}>{user?.father_name || '—'}</div></div>
@@ -1213,18 +1228,6 @@ export default function Profil() {
 
                 {!successAbo && etapePaiement !== 'retour_trackpay' && !demandeEnCours && (
                   <>
-                    {/*dernierRefus && (
-                      <div className="prof-fade" style={{ ...card, background: T.dangerSoft, border: `1px solid ${T.dangerBorder}`, padding: isMobile ? '12px 14px' : '16px 20px', marginBottom: 16 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                          <div style={{ width: 32, height: 32, borderRadius: 9, background: 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <XCircle size={16} color={T.danger} />
-                          </div>
-                          <div style={{ fontWeight: 800, color: '#b3393c', fontSize: isMobile ? 12 : 14 }}>Demande précédente refusée</div>
-                        </div>
-                        <p style={{ margin: 0, fontSize: isMobile ? 11 : 12, color: '#b3393c' }}>{dernierRefus.raison_refus || "Aucune raison n'a été fournie."}</p>
-                      </div>
-                    )*/}
-
                     {etapePaiement !== 'renouveler' && (
                       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
                         {etapesPaiement.map((e, idx) => {

@@ -1,6 +1,6 @@
 # backend/comptes/views_kyc.py
 # ══════════════════════════════════════════════════════════════════════════════
-# Vues KYC — OCR + Face ID (avec vraie Nova Face API)
+# Vues KYC — OCR (Nova) + Vérification de document (Nova) + Face ID (Nova)
 # ══════════════════════════════════════════════════════════════════════════════
 
 import io
@@ -17,11 +17,12 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # ── Clés et URLs des APIs ─────────────────────────────────────────────────────
-OCR_API_URL = "https://ocr-id-verifier-production.up.railway.app/api/v1/extract"
-OCR_API_KEY = "wwlktweksjnfwkjekljsdjgkhkjfhgoierojnerosoreirnnkjfwopiwerutyubvawjoienejfn"
-
 NOVA_API_BASE = "http://51.20.136.48:8000"
 NOVA_API_KEY  = "nova_key_3aa656e2bac2ea102ec2c56c196bcf6d"
+NOVA_HEADERS  = {"Secure-Nova-Key": NOVA_API_KEY}
+
+NOVA_OCR_URL             = f"{NOVA_API_BASE}/api/ocr"
+NOVA_DOCUMENT_VERIFY_URL = f"{NOVA_API_BASE}/api/kyc/document/verify"
 
 FACE_ENROLL_URL = f"{NOVA_API_BASE}/face/enroll"   # POST /face/enroll
 FACE_VERIFY_URL = f"{NOVA_API_BASE}/face/verify"   # POST /face/verify
@@ -30,7 +31,7 @@ FACE_SIMILARITY_SEUIL = 40.0  # pour affichage seulement
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# FONCTIONS UTILITAIRES NOVA FACE API
+# FONCTIONS UTILITAIRES NOVA FACE API (inchangées)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def nova_enroll(user_id: str, image_bytes: bytes, filename: str = "face.jpg") -> dict:
@@ -41,24 +42,15 @@ def nova_enroll(user_id: str, image_bytes: bytes, filename: str = "face.jpg") ->
     try:
         if not image_bytes or len(image_bytes) < 100:
             raise Exception("L'image est trop petite ou vide")
-        
-        #  Utiliser le même format que curl qui a fonctionné
-        files = {
-            'file': (filename, image_bytes, 'image/jpeg')
-        }
-        
-        headers = {
-            'Secure-Nova-Key': NOVA_API_KEY
-        }
-        
-        data = {
-            'user_id': str(user_id)
-        }
-        
+
+        files = {'file': (filename, image_bytes, 'image/jpeg')}
+        headers = {'Secure-Nova-Key': NOVA_API_KEY}
+        data = {'user_id': str(user_id)}
+
         print(f"[KYC] Envoi à Nova: {FACE_ENROLL_URL}")
         print(f"[KYC] user_id: {user_id}")
         print(f"[KYC] taille image: {len(image_bytes)} bytes")
-        
+
         resp = req_lib.post(
             FACE_ENROLL_URL,
             headers=headers,
@@ -66,18 +58,17 @@ def nova_enroll(user_id: str, image_bytes: bytes, filename: str = "face.jpg") ->
             data=data,
             timeout=30,
         )
-        
+
         print(f"[KYC] Nova response status: {resp.status_code}")
         print(f"[KYC] Nova response: {resp.text[:500]}")
-        
+
         resp.raise_for_status()
         return resp.json()
-        
+
     except req_lib.exceptions.Timeout:
         raise Exception("Nova Face API timeout lors de l'enrôlement")
     except req_lib.exceptions.RequestException as e:
         raise Exception(f"Erreur Nova enroll: {str(e)}")
-
 
 
 def nova_verify(user_id: str, selfie_bytes: bytes, filename: str = "selfie.jpg") -> dict:
@@ -85,41 +76,30 @@ def nova_verify(user_id: str, selfie_bytes: bytes, filename: str = "selfie.jpg")
     Vérifie un selfie contre le visage enrôlé.
     """
     try:
-        # Vérifier que l'image n'est pas vide
         if not selfie_bytes or len(selfie_bytes) < 100:
             raise Exception("L'image du selfie est trop petite ou vide")
-        
-        #  Formater correctement l'image
+
         from PIL import Image
         import io
-        
+
         image = Image.open(io.BytesIO(selfie_bytes))
         if image.mode in ('RGBA', 'P'):
             image = image.convert('RGB')
-        
-        # Redimensionner si trop grande
+
         max_size = 1024
         if image.width > max_size or image.height > max_size:
             image.thumbnail((max_size, max_size), Image.LANCZOS)
-        
+
         img_byte_arr = io.BytesIO()
         image.save(img_byte_arr, format='JPEG', quality=85)
         img_byte_arr.seek(0)
-        
-        files = {
-            'file': (filename, img_byte_arr, 'image/jpeg') 
-        }
-        
-        headers = {
-            'Secure-Nova-Key': NOVA_API_KEY
-        }
-        
-        data = {
-            'user_id': user_id
-        }
-        
+
+        files = {'file': (filename, img_byte_arr, 'image/jpeg')}
+        headers = {'Secure-Nova-Key': NOVA_API_KEY}
+        data = {'user_id': user_id}
+
         print(f"[KYC] Vérification Nova pour user_id: {user_id}")
-        
+
         resp = req_lib.post(
             FACE_VERIFY_URL,
             headers=headers,
@@ -127,16 +107,51 @@ def nova_verify(user_id: str, selfie_bytes: bytes, filename: str = "selfie.jpg")
             data=data,
             timeout=30,
         )
-        
+
         print(f"[KYC] Nova verify status: {resp.status_code}")
-        
+
         resp.raise_for_status()
         return resp.json()
-        
+
     except req_lib.exceptions.Timeout:
         raise Exception("Nova Face API timeout lors de la vérification")
     except req_lib.exceptions.RequestException as e:
         raise Exception(f"Erreur Nova verify: {str(e)}")
+
+
+def nova_document_verify(tenant_id: str, document_image_bytes: bytes, filename: str = "selfie.jpg") -> dict:
+    """
+    Appelle l'endpoint officiel de vérification de document Nova :
+    POST /api/kyc/document/verify (multipart/form-data)
+      - tenant_id : texte
+      - document_image : fichier (selfie capturé en direct côté webcam)
+    """
+    try:
+        if not document_image_bytes or len(document_image_bytes) < 100:
+            raise Exception("L'image transmise est trop petite ou vide")
+
+        files = {'document_image': (filename, document_image_bytes, 'image/jpeg')}
+        data = {'tenant_id': str(tenant_id)}
+
+        print(f"[KYC] Appel document/verify -> {NOVA_DOCUMENT_VERIFY_URL} (tenant_id={tenant_id})")
+
+        resp = req_lib.post(
+            NOVA_DOCUMENT_VERIFY_URL,
+            headers=NOVA_HEADERS,
+            files=files,
+            data=data,
+            timeout=30,
+        )
+
+        print(f"[KYC] document/verify status: {resp.status_code} — {resp.text[:400]}")
+        resp.raise_for_status()
+        return resp.json()
+
+    except req_lib.exceptions.Timeout:
+        raise Exception("Nova document/verify timeout")
+    except req_lib.exceptions.RequestException as e:
+        raise Exception(f"Erreur Nova document/verify: {str(e)}")
+
 
 def base64_to_bytes(b64_string: str) -> bytes | None:
     """
@@ -146,7 +161,6 @@ def base64_to_bytes(b64_string: str) -> bytes | None:
     if not b64_string:
         return None
     try:
-        # Supprimer le header data URI si présent
         if "," in b64_string:
             b64_string = b64_string.split(",", 1)[1]
         return base64.b64decode(b64_string)
@@ -155,199 +169,196 @@ def base64_to_bytes(b64_string: str) -> bytes | None:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# VUE 1 : Extraction OCR du document
+# VUE 1 : Extraction OCR du document (API Nova)
 # ══════════════════════════════════════════════════════════════════════════════
 class KYCOCRExtractView(APIView):
+    """
+    Envoie le document (carte d'identité ou passeport) à l'API Nova pour extraction OCR.
+    Le frontend doit envoyer :
+      - file            : le fichier image du document
+      - document_type   : 'carte' ou 'passeport'
+    """
     permission_classes = [AllowAny]
-    
-    # Seuil minimum de confiance pour accepter le document
+
     CONFIDENCE_MIN = 25
 
-    def calculate_confidence_score(self, ocr_data, face_b64):
-        """Calcule le score de confiance (0-100) basé sur les données extraites"""
+    def calculate_confidence_score(self, data, face_b64):
+        """Calcule le score de confiance (0-100) basé sur les données Nova extraites."""
         score = 0
-        
-        # 1. NNI (30 pts - le plus important)
-        nni = ocr_data.get('nni', '')
-        if nni and len(nni) >= 10:
+
+        identifier = data.get('identifier', '')
+        if identifier and len(str(identifier)) >= 6:
             score += 30
-        elif nni and len(nni) >= 8:
-            score += 20
-        elif nni:
-            score += 10
-        
-        # 2. Nom (15 pts)
-        nom = ocr_data.get('last_name_fl', '')
+        elif identifier:
+            score += 15
+
+        nom = data.get('last_name_fl', '')
         if nom and len(nom) >= 3 and not any(c.isdigit() for c in nom):
             score += 15
         elif nom and len(nom) >= 2:
             score += 8
-        
-        # 3. Prénom (15 pts)
-        prenom = ocr_data.get('first_name_fl', '')
+
+        prenom = data.get('first_name_fl', '')
         if prenom and len(prenom) >= 3 and not any(c.isdigit() for c in prenom):
             score += 15
         elif prenom and len(prenom) >= 2:
             score += 8
-        
-        # 4. Nom du père (10 pts) ← NOUVEAU
-        father_name = ocr_data.get('father_name', '') or ocr_data.get('father_given_name', '')
-        if father_name and len(father_name) >= 3:
+
+        middle_name = data.get('middle_name_fl', '')
+        if middle_name and len(middle_name) >= 3:
             score += 10
-        elif father_name:
+        elif middle_name:
             score += 5
-        
-        # 5. Date de naissance (10 pts)
-        birth_date = ocr_data.get('birth_date', '')
+
+        birth_date = data.get('birth_date', '')
         if birth_date:
             import re
-            if re.match(r'\d{4}-\d{2}-\d{2}', birth_date):
+            if re.match(r'\d{2}/\d{2}/\d{4}', birth_date) or re.match(r'\d{4}-\d{2}-\d{2}', birth_date):
                 score += 10
-            elif re.match(r'\d{2}/\d{2}/\d{4}', birth_date):
-                score += 7
             else:
                 score += 3
-        
-        # 6. Lieu de naissance (8 pts)
-        birth_place = ocr_data.get('birth_place_fl', '')
+
+        birth_place = data.get('birth_place_fl', '')
         if birth_place and len(birth_place) >= 3:
             score += 8
         elif birth_place:
             score += 4
-        
-        # 7. Sexe (4 pts)
-        gender = ocr_data.get('gender', '')
+
+        gender = data.get('gender', '')
         if gender in ['M', 'F', 'Masculin', 'Féminin', 'Male', 'Female']:
             score += 4
-        
-        # 8. Visage extrait (3 pts)
+
         if face_b64:
-            score += 3
-        
+            score += 8
+
         return min(score, 100)
 
     def get_confidence_message(self, score):
-        """Retourne un message adapté au score de confiance"""
         if score >= 85:
-            return " Document parfaitement reconnu"
+            return "Document parfaitement reconnu"
         elif score >= 60:
-            return " Document correctement reconnu, vérifiez les données"
+            return "Document correctement reconnu, vérifiez les données"
         elif score >= self.CONFIDENCE_MIN:
-            return " Lecture partielle, veuillez vérifier et corriger"
+            return "Lecture partielle, veuillez vérifier et corriger"
         else:
-            return " Document illisible, veuillez prendre une meilleure photo"
+            return "Document illisible, veuillez prendre une meilleure photo"
 
     def post(self, request):
-        # Récupérer l'image
         image_file = request.FILES.get('file')
-        
+        document_type = (request.data.get('document_type') or 'carte').strip().lower()
+
+        if document_type not in ('carte', 'passeport'):
+            document_type = 'carte'
+
         if not image_file:
             return Response({'error': 'Aucune image fournie.'}, status=400)
-        
+
         if image_file.size > 10 * 1024 * 1024:
-            return Response({'error': 'L\'image ne doit pas dépasser 10 Mo.'}, status=400)
-        
-        NOVA_OCR_URL = "https://cheikhabdelkader.pythonanywhere.com/ocr"
-        
+            return Response({'error': "L'image ne doit pas dépasser 10 Mo."}, status=400)
+
         try:
             image_data = image_file.read()
             files = {'id_card': (image_file.name, image_data, image_file.content_type)}
-            
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': '*/*',
-                'Accept-Language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7',
-                'Origin': 'https://cheikhabdelkader.pythonanywhere.com',
-                'Referer': 'https://cheikhabdelkader.pythonanywhere.com/'
-            }
-            
-            resp = req_lib.post(NOVA_OCR_URL, files=files, headers=headers, timeout=60, verify=False)
-            
+
+            resp = req_lib.post(
+                NOVA_OCR_URL,
+                files=files,
+                headers=NOVA_HEADERS,
+                timeout=60,
+                verify=False,
+            )
+
             if resp.status_code != 200:
-                return Response({'error': f"L'API OCR a refusé l'image: {resp.text}"}, status=resp.status_code)
-            
-            data = resp.json()
-            
+                return Response(
+                    {'error': f"L'API Nova a refusé l'image: {resp.text}"},
+                    status=resp.status_code,
+                )
+
+            payload = resp.json()
+
         except req_lib.exceptions.Timeout:
-            return Response({'error': "L'API OCR ne répond pas. Réessayez."}, status=504)
+            return Response({'error': "L'API Nova ne répond pas. Réessayez."}, status=504)
         except req_lib.exceptions.ConnectionError as e:
-            return Response({'error': f"Impossible de contacter l'API OCR: {str(e)}"}, status=502)
+            return Response({'error': f"Impossible de contacter l'API Nova: {str(e)}"}, status=502)
         except Exception as e:
             return Response({'error': f'Erreur OCR: {str(e)}'}, status=500)
-        
-        # Extraire les données
-        ocr_data = data.get('data', {})
-        images_data = data.get('images', {})
-        
+
+        # L'API Nova encapsule ses données dans "data"
+        data = payload.get('data', {})
+        images = data.get('images', {})
+
         def clean(value):
             return str(value).strip() if value else ''
-        
-        nni         = clean(ocr_data.get('nni'))
-        nom         = clean(ocr_data.get('last_name_fl'))
-        prenom      = clean(ocr_data.get('first_name_fl'))
-        birth_date  = clean(ocr_data.get('birth_date'))
-        birth_place = clean(ocr_data.get('birth_place_fl'))
-        gender      = clean(ocr_data.get('gender'))
-        nationality = clean(ocr_data.get('nationality_iso', 'MRT'))
-        face_b64    = images_data.get('base64', '')
-        father_name = clean(ocr_data.get('father_name')) or clean(ocr_data.get('father_given_name'))
-        father_name_ar = clean(ocr_data.get('father_name_ar')) or clean(ocr_data.get('father_given_name_ar'))
-        
-        # Stocker l'image complète du document pour la vérification faciale
-        document_full_image_b64 = base64.b64encode(image_data).decode()
-        
-        # Normaliser le sexe
+
+        identifier   = clean(data.get('identifier'))
+        nom          = clean(data.get('last_name_fl'))
+        prenom       = clean(data.get('first_name_fl'))
+        nom_ar       = clean(data.get('last_name_ll'))
+        prenom_ar    = clean(data.get('first_name_ll'))
+        middle_name  = clean(data.get('middle_name_fl'))
+        middle_name_ar = clean(data.get('middle_name_ll'))
+        birth_date   = clean(data.get('birth_date'))
+        birth_place  = clean(data.get('birth_place_fl'))
+        gender       = clean(data.get('gender'))
+        nationality  = clean(data.get('nationality_iso', 'MRT'))
+        face_b64     = images.get('face_base64', '')
+
         if gender:
             gender = 'M' if gender.upper() == 'M' else 'F' if gender.upper() == 'F' else gender
-        
-        # ═══════════════════════════════════════════════════════════════════
-        # CALCUL ET VÉRIFICATION DU SCORE DE CONFIANCE
-        # ═══════════════════════════════════════════════════════════════════
-        confidence_score = self.calculate_confidence_score(ocr_data, face_b64)
+
+        document_full_image_b64 = base64.b64encode(image_data).decode()
+
+        confidence_score = self.calculate_confidence_score(data, face_b64)
         confidence_message = self.get_confidence_message(confidence_score)
-        
-        print(f"[Nova OCR] Score de confiance: {confidence_score}%")
-        print(f"[Nova OCR] NNI={nni}, Nom={nom}, Prénom={prenom}")
-        print(f"[Nova OCR] Visage extrait: {'OUI' if face_b64 else 'NON'}")
-        
-        # ═══════════════════════════════════════════════════════════════════
-        #  SI CONFIDENCE ≤ 25% → BLOQUER ET DEMANDER UNE MEILLEURE PHOTO
-        # ═══════════════════════════════════════════════════════════════════
+
+        print(f"[Nova OCR] type={document_type} score={confidence_score}% identifier={identifier}")
+
         if confidence_score <= self.CONFIDENCE_MIN:
             return Response({
                 'status': 'error',
                 'confidence_score': confidence_score,
                 'confidence_message': confidence_message,
                 'error': 'DOCUMENT_ILLISIBLE',
-                'message': ' La qualité de l\'image est insuffisante. Veuillez prendre une photo plus claire et mieux éclairée.',
+                'message': "La qualité de l'image est insuffisante. Veuillez prendre une photo plus claire et mieux éclairée.",
                 'suggestion': 'Assurez-vous que le document est bien cadré, sans reflets ni ombres, et que le texte est net.',
-                'can_retry': True
+                'can_retry': True,
             }, status=422)
-        
-        # ═══════════════════════════════════════════════════════════════════
-        #  SI CONFIDENCE > 25% → CONTINUER NORMALEMENT
-        # ═══════════════════════════════════════════════════════════════════
+
+        # ── Répartition NNI / Numéro de passeport selon document_type ────────
+        nni = ''
+        numero_passeport = ''
+        if document_type == 'passeport':
+            numero_passeport = identifier
+            # Le champ NNI est géré (laissé vide) pour un passeport
+            nni = ''
+        else:  # carte
+            nni = identifier
+            # Le champ passeport n'est pas touché ici (reste vide côté extraction)
+            numero_passeport = ''
+
         return Response({
             'status': 'success',
             'confidence_score': confidence_score,
             'confidence_message': confidence_message,
-            'document_type': 'cni',
+            'document_type': document_type,
             'nni': nni,
+            'numero_passeport': numero_passeport,
             'nom_fr': nom,
             'prenom_fr': prenom,
-            'nom_ar': '',
-            'prenom_ar': '',
-            'father_name': father_name,           
-            'father_name_ar': father_name_ar, 
+            'nom_ar': nom_ar,
+            'prenom_ar': prenom_ar,
+            'middle_name_fr': middle_name,
+            'middle_name_ar': middle_name_ar,
             'birth_date': birth_date,
             'birth_place': birth_place,
             'gender': gender,
             'nationality': nationality,
             'face_image_base64': face_b64,
-            'document_full_image_base64': document_full_image_b64,  
+            'document_full_image_base64': document_full_image_b64,
             'has_face_image': bool(face_b64),
-            'raw_data': ocr_data,
+            'raw_data': data,
         })
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # VUE 2 : Confirmation des données OCR
@@ -356,7 +367,6 @@ class KYCConfirmDataView(APIView):
     """
     Enregistre les données OCR sur le profil utilisateur.
     Appelé après que l'utilisateur a confirmé ses informations.
-
     """
     permission_classes = [AllowAny]
 
@@ -372,24 +382,33 @@ class KYCConfirmDataView(APIView):
         except Utilisateur.DoesNotExist:
             return Response({'error': 'Utilisateur introuvable.'}, status=404)
 
-        # Enregistrer les données OCR
-        user.nni               = request.data.get('nni', '') or ''
-        user.nom_fr            = request.data.get('nom_fr', '') or ''
-        user.prenom_fr         = request.data.get('prenom_fr', '') or ''
-        user.father_name       = request.data.get('father_name', '') or ''
-        user.father_name_ar    = request.data.get('father_name_ar', '') or ''
-        user.gender            = request.data.get('gender', '') or ''
-        user.nationality       = request.data.get('nationality', 'MRT') or 'MRT'
-        user.birth_place       = request.data.get('birth_place', '') or ''
-        user.kyc_document_type = request.data.get('document_type', 'cni') or 'cni'
+        document_type = request.data.get('document_type', 'carte') or 'carte'
 
-        # Stocker le visage base64 (référence pour Nova enroll)
+        user.nni         = request.data.get('nni', '') or ''
+        user.nom_fr      = request.data.get('nom_fr', '') or ''
+        user.prenom_fr   = request.data.get('prenom_fr', '') or ''
+        user.father_name = request.data.get('father_name', '') or ''
+        if hasattr(user, 'father_name_ar'):
+            user.father_name_ar = request.data.get('father_name_ar', '') or ''
+        user.gender      = request.data.get('gender', '') or ''
+        user.nationality = request.data.get('nationality', 'MRT') or 'MRT'
+        user.birth_place = request.data.get('birth_place', '') or ''
+        user.kyc_document_type = document_type
+
+        # NOTE: le champ `numero_passeport` doit exister sur le modèle Utilisateur.
+        # S'il n'existe pas encore, ajoutez : numero_passeport = models.CharField(max_length=30, blank=True, default='')
+        if hasattr(user, 'numero_passeport'):
+            user.numero_passeport = request.data.get('numero_passeport', '') or ''
+        else:
+            print("[KYC] ATTENTION: le champ 'numero_passeport' n'existe pas sur le modèle Utilisateur. "
+                  "Ajoutez-le puis lancez une migration pour stocker le numéro de passeport.")
+
         face_b64 = (
             request.data.get('face_image_base64', '') or
             request.data.get('fallback_crop_base64', '') or ''
         )
         user.face_image_document = face_b64
-        # Stocker l'image complète du document
+
         document_full_b64 = request.data.get('document_full_image_base64', '')
         if document_full_b64:
             user.document_full_image = document_full_b64
@@ -397,7 +416,6 @@ class KYCConfirmDataView(APIView):
         else:
             print("[KYC] Aucune image complète du document reçue")
 
-        # Date de naissance
         birth_date_str = request.data.get('birth_date', '') or ''
         if birth_date_str:
             from datetime import datetime
@@ -412,17 +430,54 @@ class KYCConfirmDataView(APIView):
         user.save()
 
         return Response({
-            'status':  'success',
+            'status': 'success',
             'message': 'Données KYC confirmées. Passez à la vérification faciale.',
             'has_face_reference': bool(face_b64),
         })
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# VUE 3 : Vérification Face ID (selfie)
+# VUE 3 : Vérification de document Nova (POST /api/kyc/document/verify)
+# ══════════════════════════════════════════════════════════════════════════════
+class KYCDocumentVerifyView(APIView):
+    """
+    Appelle l'endpoint officiel de production Nova pour la vérification de document :
+    http://51.20.136.48:8000/api/kyc/document/verify
+
+    Requête attendue depuis le frontend :
+      - tenant_id       : ignoré si présent côté client, forcé à "1" côté serveur
+      - document_image  : fichier (selfie capturé en direct par la webcam)
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        document_image = request.FILES.get('document_image')
+
+        if not document_image:
+            return Response({'error': "Le fichier 'document_image' est requis."}, status=400)
+
+        try:
+            image_bytes = document_image.read()
+            result = nova_document_verify(
+                tenant_id="1",
+                document_image_bytes=image_bytes,
+                filename=document_image.name or 'selfie.jpg',
+            )
+        except Exception as e:
+            return Response({
+                'error': f"Erreur lors de la vérification du document: {str(e)}",
+                'verified': False,
+                'can_retry': True,
+            }, status=503)
+
+        return Response(result)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# VUE 4 : Vérification Face ID (selfie) — inchangée (flux /face/enroll + /face/verify)
 # ══════════════════════════════════════════════════════════════════════════════
 class KYCFaceVerifyView(APIView):
-  
+
     permission_classes = [AllowAny]
 
     def extract_and_enhance_face_from_image(self, document_image_bytes, face_bbox=None):
@@ -434,27 +489,23 @@ class KYCFaceVerifyView(APIView):
             import io
             import cv2
             import numpy as np
-            
-            # Ouvrir l'image complète
+
             image = Image.open(io.BytesIO(document_image_bytes))
-            
-            # Convertir en RGB
+
             if image.mode in ('RGBA', 'P'):
                 image = image.convert('RGB')
-            
-            # Convertir en array OpenCV
+
             img_cv = np.array(image)
             img_cv = cv2.cvtColor(img_cv, cv2.COLOR_RGB2BGR)
-            
-            # Détecter le visage avec Haar Cascade
+
             face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
             gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
             faces = face_cascade.detectMultiScale(gray, 1.1, 5)
-            
+
             if len(faces) == 0:
                 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_alt2.xml')
                 faces = face_cascade.detectMultiScale(gray, 1.1, 5)
-            
+
             if len(faces) > 0:
                 x, y, w, h = max(faces, key=lambda rect: rect[2] * rect[3])
                 margin = int(max(w, h) * 0.2)
@@ -464,22 +515,22 @@ class KYCFaceVerifyView(APIView):
                 h = min(image.height - y, h + 2 * margin)
                 face_img = image.crop((x, y, x + w, y + h))
                 face_img = face_img.resize((512, 512), Image.LANCZOS)
-                
+
                 enhancer = ImageEnhance.Contrast(face_img)
                 face_img = enhancer.enhance(1.8)
                 enhancer = ImageEnhance.Sharpness(face_img)
                 face_img = enhancer.enhance(1.5)
-                
+
                 img_byte_arr = io.BytesIO()
                 face_img.save(img_byte_arr, format='JPEG', quality=95)
                 img_byte_arr.seek(0)
-                
+
                 print(f"[KYC] Visage détecté et extrait: {face_img.width}x{face_img.height}")
                 return img_byte_arr.getvalue()
-            
+
             print("[KYC] Aucun visage détecté dans l'image")
             return None
-            
+
         except Exception as e:
             print(f"[KYC] Erreur extraction visage: {e}")
             return None
@@ -500,62 +551,55 @@ class KYCFaceVerifyView(APIView):
         except Utilisateur.DoesNotExist:
             return Response({'error': 'Utilisateur introuvable.'}, status=404)
 
-        # ── Vérif 1: étape OCR complétée ─────────────────────────────────────
         if user.kyc_status not in ('ocr_done', 'data_confirmed'):
             return Response({
-                'error': 'Veuillez d\'abord confirmer les données de votre document.',
+                'error': "Veuillez d'abord confirmer les données de votre document.",
                 'kyc_status': user.kyc_status,
             }, status=400)
 
-        # ── Vérif 2: image de référence présente ─────────────────────────────
         document_full_b64 = getattr(user, 'document_full_image', None) or user.face_image_document
-        
+
         if not document_full_b64:
             return Response({
-                'error': 'Aucune image du document trouvée. Recommencez l\'OCR.',
+                'error': "Aucune image du document trouvée. Recommencez l'OCR.",
                 'verified': False,
             }, status=400)
 
         document_bytes = base64_to_bytes(document_full_b64)
-        
+
         if not document_bytes:
             return Response({
-                'error': 'Image du document invalide. Recommencez l\'OCR.',
+                'error': "Image du document invalide. Recommencez l'OCR.",
                 'verified': False,
             }, status=400)
 
         print(f"[KYC] Image document: {len(document_bytes)} bytes")
 
-        # Vérifier la qualité de l'image
         try:
             from PIL import Image
             import io
             test_image = Image.open(io.BytesIO(document_bytes))
             print(f"[KYC] Image document: {test_image.width}x{test_image.height}, mode: {test_image.mode}")
-            
+
             if test_image.width < 300 or test_image.height < 200:
                 return Response({
-                    'error': 'La qualité de l\'image du document est insuffisante.',
+                    'error': "La qualité de l'image du document est insuffisante.",
                     'verified': False,
-                    'suggestion': 'Veuillez recommencer avec une meilleure photo.'
+                    'suggestion': 'Veuillez recommencer avec une meilleure photo.',
                 }, status=400)
-                
+
         except Exception as e:
             print(f"[KYC] Erreur lecture image: {e}")
 
         selfie_bytes = selfie_file.read()
-        
-        # Sauvegarder le selfie
+
         selfie_file.seek(0)
         user.selfie_profil = ContentFile(selfie_bytes, name=f'selfie_{user_id}.jpg')
         user.save(update_fields=['selfie_profil'])
 
-        # ══════════════════════════════════════════════════════════════════════
-        # Étape 1: Enrôler le visage du document dans Nova (si pas déjà fait)
-        # ══════════════════════════════════════════════════════════════════════
         enroll_success = False
         already_enrolled = False
-        
+
         try:
             enroll_result = nova_enroll(
                 user_id=str(user_id),
@@ -564,19 +608,18 @@ class KYCFaceVerifyView(APIView):
             )
             print(f"[KYC] Nova enroll result: {enroll_result}")
             enroll_success = True
-            
+
         except Exception as e:
             error_msg = str(e)
             print(f"[KYC] Erreur Nova enroll: {error_msg}")
-            
-            # NOUVEAU: Vérifier si l'utilisateur est déjà enrôlé
+
             if "User already enrolled" in error_msg or "already enrolled" in error_msg.lower():
                 print(f"[KYC] Utilisateur {user_id} déjà enrôlé dans Nova - continuer")
                 already_enrolled = True
-                enroll_success = True  # On considère que c'est un succès
+                enroll_success = True
             elif "failed to extract features" in error_msg.lower():
                 return Response({
-                    'error': 'Le visage sur le document n\'a pas pu être détecté.',
+                    'error': "Le visage sur le document n'a pas pu être détecté.",
                     'verified': False,
                     'can_retry': True,
                     'suggestion': 'Assurez-vous que la photo du document montre clairement le visage, sans reflets ni ombres.',
@@ -589,17 +632,13 @@ class KYCFaceVerifyView(APIView):
                     'can_retry': True,
                 }, status=503)
 
-        # Si l'enrôlement a échoué pour une autre raison
         if not enroll_success:
             return Response({
-                'error': 'Impossible d\'enrôler le visage. Veuillez réessayer.',
+                'error': "Impossible d'enrôler le visage. Veuillez réessayer.",
                 'verified': False,
                 'can_retry': True,
             }, status=503)
 
-        # ══════════════════════════════════════════════════════════════════════
-        # Étape 2: Vérifier le selfie contre le visage enrôlé
-        # ══════════════════════════════════════════════════════════════════════
         try:
             verify_result = nova_verify(
                 user_id=str(user_id),
@@ -615,24 +654,19 @@ class KYCFaceVerifyView(APIView):
                 'can_retry': True,
             }, status=503)
 
-        # ── Extraire les résultats Nova ───────────────────────────────────────
         nova_status   = verify_result.get('status', '')
         nova_decision = verify_result.get('decision', '')
         scores        = verify_result.get('scores', {})
         similarity    = scores.get('similarity_score', 0.0)
         liveness      = scores.get('liveness_score', 0.0)
-        
+
         similarity_pct = round(similarity * 100, 1)
-        
-        # Sauvegarder le score
+
         user.face_similarity_score = similarity_pct
         user.save(update_fields=['face_similarity_score'])
 
         is_valid = (nova_status == 'verified' and nova_decision == 'allow')
 
-        # ══════════════════════════════════════════════════════════════════════
-        # CAS 1: VALIDÉ → activer le compte
-        # ══════════════════════════════════════════════════════════════════════
         if is_valid:
             user.photo_profil = ContentFile(selfie_bytes, name=f'profil_{user_id}.jpg')
             user.is_kyc_verified    = True
@@ -653,7 +687,6 @@ class KYCFaceVerifyView(APIView):
             except Exception as e:
                 print(f"[KYC] Warning solde: {e}")
 
-            # Notification de bienvenue
             try:
                 from notifications.models import Notification
                 Notification.objects.create(
@@ -688,16 +721,13 @@ class KYCFaceVerifyView(APIView):
                 'redirect_to':      '/dashboard',
             })
 
-        # ══════════════════════════════════════════════════════════════════════
-        # CAS 2: REFUSÉ → bloquer
-        # ══════════════════════════════════════════════════════════════════════
         else:
             risk_flags = verify_result.get('explainability', {}).get('risk_flags', [])
-            
+
             if liveness < 0.2:
-                reason = 'Vérification anti-spoofing échouée. Assurez-vous d\'utiliser une vraie caméra.'
+                reason = "Vérification anti-spoofing échouée. Assurez-vous d'utiliser une vraie caméra."
             elif similarity < 0.75:
-                reason = 'Le visage ne correspond pas au document d\'identité.'
+                reason = "Le visage ne correspond pas au document d'identité."
             else:
                 reason = 'Vérification refusée par le système de sécurité.'
 
@@ -711,17 +741,18 @@ class KYCFaceVerifyView(APIView):
                 'liveness_score':   round(liveness * 100, 1),
                 'nova_decision':    nova_decision,
                 'risk_flags':       risk_flags,
-                'message':          f' {reason}',
+                'message':          f'{reason}',
                 'suggestion':       'Prenez un selfie bien éclairé, de face, sans lunettes ni masque.',
                 'can_retry':        True,
             }, status=400)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
-# VUE 4 : Statut KYC de l'utilisateur connecté
+# VUE 5 : Statut KYC de l'utilisateur connecté
 # ══════════════════════════════════════════════════════════════════════════════
 class KYCStatusView(APIView):
     """
     Retourne les données KYC de l'utilisateur connecté.
-    Inchangé par rapport à ton code original (c'était correct).
     """
     permission_classes = [IsAuthenticated]
 
@@ -744,12 +775,12 @@ class KYCStatusView(APIView):
                 pass
 
         essential_fields = {
-            'nom':        user.nom_fr or '',
-            'prenom':     user.prenom_fr or '',
+            'nom':         user.nom_fr or '',
+            'prenom':      user.prenom_fr or '',
             'father_name': user.father_name or '',
-            'nni':        user.nni or '',
-            'birth_date': str(user.birth_date) if user.birth_date else '',
-            'gender':     user.gender or '',
+            'nni':         user.nni or '',
+            'birth_date':  str(user.birth_date) if user.birth_date else '',
+            'gender':      user.gender or '',
         }
         filled_fields  = {k: bool(v and str(v).strip()) for k, v in essential_fields.items()}
         fields_count   = sum(filled_fields.values())
@@ -762,24 +793,25 @@ class KYCStatusView(APIView):
         )
 
         return Response({
-            'is_kyc_verified':      user.is_kyc_verified,
-            'kyc_status':           user.kyc_status,
-            'can_proceed_to_face':  can_proceed_to_face,
-            'has_minimum_fields':   fields_count >= 2,
-            'fields_count':         fields_count,
-            'filled_fields':        filled_fields,
-            'missing_fields':       missing_fields,
-            'has_face_reference':   bool(user.face_image_document),
-            'nni':                  user.nni or '',
-            'nom_fr':               user.nom_fr or '',
-            'father_name':          user.father_name or '',
-            'prenom_fr':            user.prenom_fr or '',
-            'birth_date':           str(user.birth_date) if user.birth_date else '',
-            'birth_place':          user.birth_place or '',
-            'gender':               user.gender or '',
-            'nationality':          user.nationality or 'MRT',
-            'document_type':        user.kyc_document_type or '',
+            'is_kyc_verified':       user.is_kyc_verified,
+            'kyc_status':            user.kyc_status,
+            'can_proceed_to_face':   can_proceed_to_face,
+            'has_minimum_fields':    fields_count >= 2,
+            'fields_count':          fields_count,
+            'filled_fields':         filled_fields,
+            'missing_fields':        missing_fields,
+            'has_face_reference':    bool(user.face_image_document),
+            'nni':                   user.nni or '',
+            'numero_passeport':      getattr(user, 'numero_passeport', '') or '',
+            'nom_fr':                user.nom_fr or '',
+            'father_name':           user.father_name or '',
+            'prenom_fr':             user.prenom_fr or '',
+            'birth_date':            str(user.birth_date) if user.birth_date else '',
+            'birth_place':           user.birth_place or '',
+            'gender':                user.gender or '',
+            'nationality':           user.nationality or 'MRT',
+            'document_type':         user.kyc_document_type or '',
             'face_similarity_score': user.face_similarity_score,
-            'selfie_url':           selfie_url or profil_url,
-            'kyc_completed_at':     str(user.kyc_completed_at) if user.kyc_completed_at else '',
+            'selfie_url':            selfie_url or profil_url,
+            'kyc_completed_at':      str(user.kyc_completed_at) if user.kyc_completed_at else '',
         })

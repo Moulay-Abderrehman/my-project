@@ -720,6 +720,11 @@ export default function Budgets() {
   const [abonnementExpire, setAbonnementExpire] = useState(false);
   const [abonnementCharge, setAbonnementCharge] = useState(true);
 
+  // 🆕 Plan d'abonnement de l'utilisateur ('essai' | 'standard' | 'entreprise' | null)
+  // Les limites quotidiennes (2 budgets / 2 dépenses par jour) ne s'appliquent
+  // QUE si planAbonnement === 'essai'. Standard et Entreprise sont illimités.
+  const [planAbonnement, setPlanAbonnement] = useState(null);
+
   const [pageMessage, setPageMessage] = useState(null);
 
   const isVisitorMode = isVisitor; // 🆕
@@ -727,8 +732,20 @@ export default function Budgets() {
   const categoriesSortie = categories.filter(cat => cat.type === 'sortie' || cat.type === 'depense' || cat.type === 'expense');
   const hasCategoriesSortie = categoriesSortie.length > 0;
 
-  const peutCreerBudget = () => getDailyCount(BUDGET_COUNT_KEY) < BUDGET_DAILY_LIMIT;
-  const peutAjouterDepense = () => getDailyCount(DEPENSE_COUNT_KEY) < DEPENSE_DAILY_LIMIT;
+  // 🆕 Est-ce que l'utilisateur est en période d'essai ? (seul cas où la limite s'applique)
+  const estEnEssai = planAbonnement === 'essai';
+
+  // 🆕 CORRECTIF : la limite quotidienne (localStorage) ne s'applique plus
+  // qu'aux comptes en période d'essai. Standard / Entreprise => toujours true.
+  const peutCreerBudget = () => {
+    if (!estEnEssai) return true;
+    return getDailyCount(BUDGET_COUNT_KEY) < BUDGET_DAILY_LIMIT;
+  };
+
+  const peutAjouterDepense = () => {
+    if (!estEnEssai) return true;
+    return getDailyCount(DEPENSE_COUNT_KEY) < DEPENSE_DAILY_LIMIT;
+  };
 
   const ouvrirActionBloquee = (actionType = 'signup') => {
     const messages = {
@@ -759,6 +776,11 @@ export default function Budgets() {
     try {
       const response = await api.get('/abonnements/statut/');
       setAbonnementExpire(!response.data.est_actif);
+      // 🆕 On récupère le nom du plan renvoyé par le backend.
+      // Adapter le nom du champ ci-dessous si l'API utilise un autre nom
+      // (ex: response.data.plan, response.data.type_abonnement, etc.)
+      const plan = response.data.plan_nom || response.data.plan || response.data.type_abonnement || null;
+      setPlanAbonnement(plan ? String(plan).toLowerCase() : null);
     } catch (error) {
       console.error('Erreur vérification abonnement:', error);
       setAbonnementExpire(true);
