@@ -451,7 +451,14 @@ export default function KYCFlow() {
   };
 
   // ════════════════════════════════════════════════════════════════════════════
-  // ⚡ FIX: handleVerifyFace corrigé avec vérification de l'existence de result
+  // ⚡ FIX: handleVerifyFace — le catch distingue maintenant :
+  //   1) une vraie réponse du backend disant "non vérifié" (err.response présent)
+  //   2) une coupure réseau / timeout côté client (err.response absent), auquel
+  //      cas le backend a très bien pu terminer le traitement de son côté et
+  //      valider le KYC (c'est exactement ce qui causait le bug rapporté :
+  //      le "Broken pipe" côté serveur alors que le KYC était déjà "approved").
+  //   Dans ce 2e cas on ne montre plus "Visage non reconnu" (message trompeur),
+  //   on informe l'utilisateur de vérifier son statut ou de réessayer.
   // ════════════════════════════════════════════════════════════════════════════
   const handleVerifyFace = async () => {
     if (!selfieBlob) return;
@@ -488,16 +495,35 @@ export default function KYCFlow() {
         });
       }
     } catch (err) {
-      const errData = err.response?.data || {};
-      if (errData && typeof errData === 'object') {
-        errData.document_type = docType;
+      // Pas de err.response => la requête n'a jamais reçu de réponse HTTP
+      // (timeout, connexion coupée, "Broken pipe" serveur, etc.). Le backend
+      // peut très bien avoir terminé et validé le KYC malgré tout : on ne
+      // doit surtout pas afficher "visage non reconnu" dans ce cas, car cela
+      // induit l'utilisateur en erreur alors que son compte est déjà validé.
+      if (!err.response) {
+        console.warn('[KYC] Requête de vérification interrompue (pas de réponse reçue):', err);
+        showBanner(
+          "La connexion a été interrompue pendant la vérification. Si votre compte a bien été validé, reconnectez-vous ; sinon, réessayez le selfie.",
+          'warning'
+        );
+        setFaceResult({
+          verified: false,
+          similarity_score: 0,
+          message: "La connexion a été interrompue avant la fin de la vérification. Réessayez, ou reconnectez-vous si votre compte est déjà validé.",
+          connection_interrupted: true,
+        });
+      } else {
+        const errData = err.response?.data;
+        if (errData && typeof errData === 'object') {
+          errData.document_type = docType;
+        }
+        setFaceResult(errData || {
+          verified: false,
+          similarity_score: 0,
+          message: 'Erreur de vérification.'
+        });
+        showBanner(errData?.message || 'Visage non reconnu. Réessayez.', 'error');
       }
-      setFaceResult(errData || {
-        verified: false,
-        similarity_score: 0,
-        message: 'Erreur de vérification.'
-      });
-      showBanner(errData?.message || 'Visage non reconnu. Réessayez.', 'error');
     } finally {
       setLoading(false);
     }
@@ -953,10 +979,12 @@ export default function KYCFlow() {
                     <AlertCircle size={23} className="flex-shrink-0 text-[#d55053]" />
                     <div>
                       <div className="mb-1 text-[14px] font-bold text-[#d55053]">
-                        {faceResult.document_type === 'passport' && 'Vérification passeport échouée'}
-                        {faceResult.document_type === 'cni' && "Vérification carte d'identité échouée"}
-                        {faceResult.document_type === 'sejour' && 'Vérification carte de séjour échouée'}
-                        {!faceResult.document_type && 'Échec de la vérification'}
+                        {faceResult.connection_interrupted
+                          ? 'Connexion interrompue'
+                          : (faceResult.document_type === 'passport' && 'Vérification passeport échouée') ||
+                            (faceResult.document_type === 'cni' && "Vérification carte d'identité échouée") ||
+                            (faceResult.document_type === 'sejour' && 'Vérification carte de séjour échouée') ||
+                            'Échec de la vérification'}
                       </div>
                       <div className="text-[13px] leading-snug text-[#d55053]">
                         {faceResult.message || (
@@ -969,7 +997,7 @@ export default function KYCFlow() {
                     </div>
                   </div>
 
-                  {faceResult.similarity_score !== undefined && (
+                  {faceResult.similarity_score !== undefined && !faceResult.connection_interrupted && (
                     <div className="mb-3">
                       <div className="mb-1 flex justify-between">
                         <span className="text-[12px] text-[#356267]/60">Similarité faciale</span>
@@ -994,7 +1022,7 @@ export default function KYCFlow() {
                     </div>
                   )}
 
-                  {faceResult.liveness_score !== undefined && (
+                  {faceResult.liveness_score !== undefined && !faceResult.connection_interrupted && (
                     <div className="mb-3">
                       <div className="mb-1 flex justify-between">
                         <span className="text-[12px] text-[#356267]/60">Anti-spoofing (liveness)</span>
@@ -1023,7 +1051,17 @@ export default function KYCFlow() {
                     </div>
                   )}
 
-                  {!faceResult.suggestion && (
+                  {faceResult.connection_interrupted && (
+                    <div className="mt-3 flex items-start gap-2 rounded-lg bg-[#c2f2f2]/30 px-3 py-2.5">
+                      <Info size={16} className="flex-shrink-0 text-[#356267]" />
+                      <span className="text-[11px] leading-snug text-[#356267]">
+                        Si vous pensez que votre identité a déjà été vérifiée, essayez de vous reconnecter.
+                        Sinon, reprenez un nouveau selfie.
+                      </span>
+                    </div>
+                  )}
+
+                  {!faceResult.connection_interrupted && !faceResult.suggestion && (
                     <div className="mt-3 flex items-start gap-2 rounded-lg bg-[#c2f2f2]/30 px-3 py-2.5">
                       <Info size={16} className="flex-shrink-0 text-[#356267]" />
                       <span className="text-[11px] leading-snug text-[#356267]">
@@ -1035,7 +1073,7 @@ export default function KYCFlow() {
                     </div>
                   )}
 
-                  {faceResult.suggestion && (
+                  {!faceResult.connection_interrupted && faceResult.suggestion && (
                     <div className="mt-3 flex items-start gap-2 rounded-lg bg-[#c2f2f2]/30 px-3 py-2.5">
                       <Info size={16} className="flex-shrink-0 text-[#356267]" />
                       <span className="text-[11px] leading-snug text-[#356267]">

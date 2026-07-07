@@ -5,6 +5,7 @@
 
 import io
 import base64
+import threading
 import requests as req_lib
 
 from django.utils import timezone
@@ -166,6 +167,41 @@ def base64_to_bytes(b64_string: str) -> bytes | None:
         return base64.b64decode(b64_string)
     except Exception:
         return None
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TÂCHE ASYNCHRONE : notification + email de bienvenue (ne doit JAMAIS bloquer
+# la réponse HTTP renvoyée au frontend — c'est ce qui causait le "Broken pipe" :
+# l'envoi SMTP synchrone prenait trop de temps, le client abandonnait la requête
+# avant que la réponse ne parte, alors que le KYC était déjà validé en base).
+# ══════════════════════════════════════════════════════════════════════════════
+def _envoyer_notifications_bienvenue_async(user_id):
+    from .models import Utilisateur
+
+    try:
+        user = Utilisateur.objects.get(id=user_id)
+    except Utilisateur.DoesNotExist:
+        print(f"[KYC][async] Utilisateur {user_id} introuvable pour notif/email bienvenue")
+        return
+
+    try:
+        from notifications.models import Notification
+        Notification.objects.create(
+            utilisateur=user,
+            type='info',
+            message=(
+                "🎉 Bienvenue à FinanceApp ! Votre identité a été vérifiée "
+                "et votre compte est désormais validé."
+            ),
+        )
+    except Exception as e:
+        print(f"[KYC][async] Warning notification bienvenue: {e}")
+
+    try:
+        from .utils import envoyer_email_bienvenue_kyc_valide
+        envoyer_email_bienvenue_kyc_valide(user)
+    except Exception as e:
+        print(f"[KYC][async] Warning email bienvenue: {e}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -474,7 +510,9 @@ class KYCDocumentVerifyView(APIView):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# VUE 4 : Vérification Face ID (selfie) — inchangée (flux /face/enroll + /face/verify)
+# VUE 4 : Vérification Face ID (selfie) — logique de décision inchangée.
+# Seule différence : la notification + l'email de bienvenue sont envoyés en
+# arrière-plan (thread) pour ne plus bloquer/retarder la réponse HTTP.
 # ══════════════════════════════════════════════════════════════════════════════
 class KYCFaceVerifyView(APIView):
 
@@ -687,24 +725,16 @@ class KYCFaceVerifyView(APIView):
             except Exception as e:
                 print(f"[KYC] Warning solde: {e}")
 
-            try:
-                from notifications.models import Notification
-                Notification.objects.create(
-                    utilisateur=user,
-                    type='info',
-                    message=(
-                        "🎉 Bienvenue à FinanceApp ! Votre identité a été vérifiée "
-                        "et votre compte est désormais validé."
-                    ),
-                )
-            except Exception as e:
-                print(f"[KYC] Warning notification bienvenue: {e}")
-
-            try:
-                from .utils import envoyer_email_bienvenue_kyc_valide
-                envoyer_email_bienvenue_kyc_valide(user)
-            except Exception as e:
-                print(f"[KYC] Warning email bienvenue: {e}")
+            # ── Notification + email de bienvenue : lancés en tâche de fond ──
+            # (auparavant exécutés en synchrone ici, ce qui pouvait faire
+            # dépasser le timeout du client et couper la connexion — "Broken
+            # pipe" — avant que la réponse "verified: true" ne lui parvienne,
+            # alors même que le KYC était déjà validé en base de données).
+            threading.Thread(
+                target=_envoyer_notifications_bienvenue_async,
+                args=(user.id,),
+                daemon=True,
+            ).start()
 
             from rest_framework_simplejwt.tokens import RefreshToken
             refresh = RefreshToken.for_user(user)
