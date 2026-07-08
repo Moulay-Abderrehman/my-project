@@ -197,11 +197,22 @@ def _envoyer_notifications_bienvenue_async(user_id):
     except Exception as e:
         print(f"[KYC][async] Warning notification bienvenue: {e}")
 
-    try:
-        from .utils import envoyer_email_bienvenue_kyc_valide
-        envoyer_email_bienvenue_kyc_valide(user)
-    except Exception as e:
-        print(f"[KYC][async] Warning email bienvenue: {e}")
+    # ────────────────────────────────────────────────────────────────────────
+    # SERVICE EMAIL DÉSACTIVÉ (TEMPORAIRE) :
+    # L'envoi de l'email de bienvenue via `envoyer_email_bienvenue_kyc_valide`
+    # a été commenté car le service SMTP est trop lent et faisait dépasser le
+    # timeout de la requête HTTP côté frontend, bloquant ainsi l'affichage de
+    # la validation KYC pour l'utilisateur alors que son compte était déjà
+    # validé en base de données.
+    # → Réactiver uniquement une fois le service email rendu plus rapide,
+    #   ou en le faisant passer par une vraie file de tâches (Celery/RQ)
+    #   plutôt qu'un thread simple.
+    # ────────────────────────────────────────────────────────────────────────
+    # try:
+    #     from .utils import envoyer_email_bienvenue_kyc_valide
+    #     envoyer_email_bienvenue_kyc_valide(user)
+    # except Exception as e:
+    #     print(f"[KYC][async] Warning email bienvenue: {e}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -730,6 +741,10 @@ class KYCFaceVerifyView(APIView):
             # dépasser le timeout du client et couper la connexion — "Broken
             # pipe" — avant que la réponse "verified: true" ne lui parvienne,
             # alors même que le KYC était déjà validé en base de données).
+            # NOTE : l'envoi d'email a été désactivé à l'intérieur de cette
+            # fonction (voir commentaire "SERVICE EMAIL DÉSACTIVÉ" plus haut)
+            # car le service SMTP était trop lent et bloquait la validation
+            # KYC côté frontend.
             threading.Thread(
                 target=_envoyer_notifications_bienvenue_async,
                 args=(user.id,),

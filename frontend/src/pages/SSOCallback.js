@@ -2,7 +2,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import toast from 'react-hot-toast';
 
 export default function SSOCallback() {
   const navigate = useNavigate();
@@ -10,6 +9,7 @@ export default function SSOCallback() {
   const { chargerAbonnement, chargerNotifs } = useAuth();
   const [statut, setStatut] = useState('Finalisation de la connexion...');
   const [erreur, setErreur] = useState('');
+  const [succes, setSucces] = useState('');
 
   useEffect(() => {
     // Récupérer les paramètres d'URL
@@ -21,8 +21,8 @@ export default function SSOCallback() {
     console.log('[SSOCallback] Paramètres reçus:', { accessToken: !!accessToken, refreshToken: !!refreshToken, userParam: !!userParam, error });
 
     if (error) {
-      toast.error('Connexion SSO annulée.');
-      navigate('/');
+      setErreur('Connexion SSO annulée.');
+      setTimeout(() => navigate('/'), 3000);
       return;
     }
 
@@ -40,19 +40,19 @@ export default function SSOCallback() {
         chargerAbonnement();
         chargerNotifs();
         
-        toast.success(`✅ Bienvenue ${user.prenom || user.nom || '!'}`);
+        setSucces(`✅ Bienvenue ${user.prenom || user.nom || '!'}`);
+        setStatut('Connexion réussie, redirection...');
         navigate('/dashboard');
       } catch (err) {
         console.error('[SSOCallback] Erreur parsing:', err);
         setErreur('Les données utilisateur sont corrompues.'); //ajoute
-        toast.error('Erreur lors de la connexion SSO');
         setTimeout(() => navigate('/'), 3000);  //navigate('/');
       }
       return;
     }
 
     // Si pas de tokens, afficher une erreur
-    toast.error('Connexion SSO incomplète. Veuillez réessayer.');
+    setErreur('Connexion SSO incomplète. Veuillez réessayer.');
     setTimeout(() => navigate('/'), 3000);
   }, []);
 
@@ -68,6 +68,10 @@ export default function SSOCallback() {
         @keyframes spin {
           to { transform: rotate(360deg); }
         }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
       `}</style>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -81,6 +85,25 @@ export default function SSOCallback() {
           Finance<span style={{ color: '#dbeafe' }}>App</span>
         </span>
       </div>
+
+      {/* Message personnalisé (remplace les toasts) */}
+      {(erreur || succes) && (
+        <div style={{
+          animation: 'fadeIn 0.3s ease-out',
+          background: erreur ? 'rgba(254, 226, 226, 0.95)' : 'rgba(220, 252, 231, 0.95)',
+          border: `1px solid ${erreur ? '#fca5a5' : '#86efac'}`,
+          color: erreur ? '#b91c1c' : '#15803d',
+          padding: '10px 18px',
+          borderRadius: 12,
+          fontSize: 13,
+          fontWeight: 600,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+          maxWidth: 380,
+          textAlign: 'center',
+        }}>
+          {erreur || succes}
+        </div>
+      )}
 
       <div style={{
         background: 'rgba(255,255,255,0.95)', borderRadius: 20,

@@ -1,7 +1,12 @@
 # backend/comptes/sso.py
 import requests
 import uuid
+import hashlib
+import base64
+import secrets
+import json
 from django.conf import settings
+from django.core.cache import cache
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny
@@ -13,6 +18,14 @@ from .serializers import UtilisateurSerializer
 from logs.utils import enregistrer_log
 
 
+def generer_pkce_pair():
+    """Génère un couple (code_verifier, code_challenge) conforme PKCE / RFC 7636"""
+    code_verifier = base64.urlsafe_b64encode(secrets.token_bytes(40)).rstrip(b'=').decode('utf-8')
+    digest = hashlib.sha256(code_verifier.encode('utf-8')).digest()
+    code_challenge = base64.urlsafe_b64encode(digest).rstrip(b'=').decode('utf-8')
+    return code_verifier, code_challenge
+
+
 class SSORedirectView(APIView):
     """Endpoint qui renvoie l'URL de redirection vers le serveur SSO"""
     permission_classes = [AllowAny]
@@ -22,15 +35,24 @@ class SSORedirectView(APIView):
         if not domain:
             return Response({'error': 'Domaine requis'}, status=400)
 
+        # State unique = domain + identifiant aléatoire, sert de clé au cache PKCE
+        state = f"{domain}:{uuid.uuid4().hex}"
+
+        code_verifier, code_challenge = generer_pkce_pair()
+        # Stocké 10 minutes, le temps que l'utilisateur s'authentifie côté SSO
+        cache.set(f"sso_pkce_{state}", code_verifier, timeout=600)
+
         auth_url = (
             f"{settings.SSO_AUTHORIZATION_URL}"
             f"?response_type=code"
             f"&client_id={settings.SSO_CLIENT_ID}"
             f"&redirect_uri={settings.SSO_REDIRECT_URI}"
             f"&scope=openid%20profile%20email"
-            f"&state={domain}"
+            f"&state={state}"
+            f"&code_challenge={code_challenge}"
+            f"&code_challenge_method=S256"
         )
-        
+
         return Response({'auth_url': auth_url})
 
 
@@ -40,8 +62,24 @@ class SSOCallbackView(APIView):
 
     def get(self, request):
         code = request.GET.get('code')
+        state = request.GET.get('state')
+        error = request.GET.get('error')
+
+        if error:
+            print(f"[SSO] Erreur renvoyée par le serveur SSO: {error} - {request.GET.get('error_description')}")
+            return Response({'error': request.GET.get('error_description', error)}, status=400)
+
         if not code:
             return Response({'error': 'Code manquant'}, status=400)
+
+        # Récupération du code_verifier stocké lors de l'étape redirect
+        code_verifier = cache.get(f"sso_pkce_{state}") if state else None
+        if not code_verifier:
+            print(f"[SSO] code_verifier introuvable ou expiré pour state={state}")
+            return Response({'error': 'Session SSO expirée, veuillez réessayer'}, status=400)
+
+        # Usage unique : on supprime immédiatement l'entrée du cache
+        cache.delete(f"sso_pkce_{state}")
 
         print(f"[SSO] Code reçu: {code}")
 
@@ -55,6 +93,7 @@ class SSOCallbackView(APIView):
                     'redirect_uri': settings.SSO_REDIRECT_URI,
                     'client_id': settings.SSO_CLIENT_ID,
                     'client_secret': settings.SSO_CLIENT_SECRET,
+                    'code_verifier': code_verifier,
                 },
                 verify=False
             )
@@ -89,7 +128,7 @@ class SSOCallbackView(APIView):
         except Exception as e:
             print(f"[SSO] Exception userinfo: {str(e)}")
             return Response({'error': 'Erreur lors de la récupération du profil'}, status=500)
-        
+
         email = userinfo.get('email')
         prenom = userinfo.get('first_name', '')
         nom = userinfo.get('last_name', '')
@@ -107,7 +146,7 @@ class SSOCallbackView(APIView):
             is_new = True
             if not telephone:
                 telephone = f"+222_sso_{uuid.uuid4().hex[:8]}"
-            
+
             user = Utilisateur.objects.create(
                 telephone=telephone,
                 nom=nom or 'SSO',
@@ -119,7 +158,7 @@ class SSOCallbackView(APIView):
             user.email_verifie = True
             user.save()
             print(f"[SSO] Nouvel utilisateur créé: {user.email}")
-            
+
             # Créer le solde et l'abonnement essai
             from transactions.models import Solde
             from .utils import creer_abonnement_essai
@@ -130,7 +169,7 @@ class SSOCallbackView(APIView):
         refresh = RefreshToken.for_user(user)
         access = str(refresh.access_token)
         refresh_token = str(refresh)
-        
+
         enregistrer_log(user, "CONNEXION_SSO" + ("_NOUVEAU" if is_new else ""), f"Connexion via SSO : {email}", request)
 
         # Étape 5 : Rediriger vers le frontend avec les tokens
@@ -138,14 +177,10 @@ class SSOCallbackView(APIView):
         params = {
             'access': access,
             'refresh': refresh_token,
-            'user': UtilisateurSerializer(user).data
+            'user': json.dumps(UtilisateurSerializer(user).data),
         }
-        
-        # Convertir l'objet user en JSON sérialisé
-        import json
-        params['user'] = json.dumps(UtilisateurSerializer(user).data)
-        
+
         redirect_url = f"{frontend_url}?{urlencode(params)}"
         print(f"[SSO] Redirection vers: {redirect_url[:100]}...")
-        
+
         return HttpResponseRedirect(redirect_url)

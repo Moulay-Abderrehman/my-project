@@ -11,6 +11,11 @@ const DEPENSE_DAILY_LIMIT = 2;
 const BUDGET_COUNT_KEY = 'financeapp_budgets_crees_par_jour';
 const DEPENSE_COUNT_KEY = 'financeapp_depenses_par_jour';
 
+// ── Couleur par défaut utilisée par la modale complète (BudgetModal) ─────────
+// Le formulaire de création rapide (ci-dessous) doit envoyer la même valeur
+// par défaut pour le champ 'couleur', sinon la création échoue côté API.
+const DEFAULT_BUDGET_COLOR = '#356267';
+
 function getTodayKey() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -450,7 +455,7 @@ function BudgetModal({ budget, categories, onClose, onSuccess, canCreate, onLimi
     montant_prevu: budget?.montant_prevu || '',
     date_debut: budget?.date_debut || '',
     date_fin: budget?.date_fin || '',
-    couleur: budget?.couleur || '#356267',
+    couleur: budget?.couleur || DEFAULT_BUDGET_COLOR,
   });
   const [loading, setLoading] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
@@ -552,8 +557,19 @@ function BudgetModal({ budget, categories, onClose, onSuccess, canCreate, onLimi
         return;
       }
 
-      const msg = errorData?.detail || errorData?.non_field_errors?.[0] || 'Erreur lors de l\'opération.';
-      setMessage({ type: 'error', text: msg });
+      // ⚡ FIX: en cas d'erreur 400 de validation, errorData contient un
+      // dictionnaire de champs (ex: {"couleur": ["Ce champ est requis."]})
+      // et non un champ 'detail'. On l'affiche désormais pour ne plus
+      // masquer la vraie cause derrière un message générique.
+      let msg = errorData?.detail || errorData?.non_field_errors?.[0] || errorData?.message;
+      if (!msg && errorData && typeof errorData === 'object') {
+        const premierChamp = Object.keys(errorData)[0];
+        if (premierChamp) {
+          const valeur = errorData[premierChamp];
+          msg = Array.isArray(valeur) ? valeur[0] : String(valeur);
+        }
+      }
+      setMessage({ type: 'error', text: msg || 'Erreur lors de l\'opération.' });
     } finally {
       setLoading(false);
     }
@@ -1181,6 +1197,12 @@ export default function Budgets() {
               montant_prevu: parseFloat(formData.get('montant_prevu')),
               date_debut: formData.get('date_debut'),
               date_fin: formData.get('date_fin'),
+              // ⚡ FIX: ce champ manquait ici alors que le modèle/serializer
+              // Budget l'attend (voir BudgetModal, qui l'envoie toujours).
+              // Sans lui, l'API répondait 400 Bad Request et le formulaire
+              // affichait "Erreur lors de la création." sans plus de détail —
+              // ce n'était PAS un blocage lié à la limite d'essai (0/2 ce jour-là).
+              couleur: DEFAULT_BUDGET_COLOR,
             };
             try {
               await api.post('/budgets/', data);
@@ -1205,8 +1227,20 @@ export default function Budgets() {
                 return;
               }
 
-              const msg = errorData?.detail || 'Erreur lors de la création.';
-              setPageMessage({ type: 'error', text: msg });
+              // ⚡ FIX: on affiche désormais le vrai détail de l'erreur de
+              // validation (les erreurs 400 de DRF sont un dictionnaire de
+              // champs, ex: {"couleur": ["Ce champ est requis."]}, et non un
+              // champ 'detail') au lieu du message générique précédent qui
+              // masquait la cause réelle du blocage.
+              let msg = errorData?.detail;
+              if (!msg && errorData && typeof errorData === 'object') {
+                const premierChamp = Object.keys(errorData)[0];
+                if (premierChamp) {
+                  const valeur = errorData[premierChamp];
+                  msg = Array.isArray(valeur) ? valeur[0] : String(valeur);
+                }
+              }
+              setPageMessage({ type: 'error', text: msg || 'Erreur lors de la création.' });
             }
           }} className="flex flex-col gap-2.5">
             <select name="categorie" required className="min-h-[44px] px-3.5 border border-[#10214b]/10 rounded-xl text-sm outline-none focus:border-[#356267]">
